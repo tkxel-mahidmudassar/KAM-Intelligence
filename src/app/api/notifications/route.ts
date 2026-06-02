@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRoleFromRequest, ok, noContent, serverError, guard, kamWhere } from "@/lib/api";
+import { getRoleFromRequest, getUserIdFromRequest, ok, noContent, serverError, guard, kamWhere } from "@/lib/api";
 
 // GET /api/notifications
 export async function GET(req: NextRequest) {
@@ -9,8 +9,9 @@ export async function GET(req: NextRequest) {
     const denied = guard(role, "signal:view");
     if (denied) return denied;
 
-    const kamUser = await prisma.user.findFirst({ where: { role: "KAM" }, orderBy: { createdAt: "asc" } });
-    const where   = kamWhere(role, kamUser?.id ?? "");
+    const headerUserId = getUserIdFromRequest(req);
+    const kamUserId = headerUserId ?? (await prisma.user.findFirst({ where: { role: "KAM" }, orderBy: { createdAt: "asc" } }))?.id ?? "";
+    const where = kamWhere(role, kamUserId);
 
     const sevenDaysOut = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 

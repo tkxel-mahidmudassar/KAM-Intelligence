@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
-import { makeStep, type AgentResult, type AgentStep } from "./types";
+import { makeStep, type AgentResult, type AgentStep, type AgentSource } from "./types";
 import type { Action, Signal } from "@prisma/client";
 
 interface TriageResult {
@@ -27,11 +27,17 @@ export async function runSignalTriageAgent(
   ]);
 
   if (!signal || !account) {
-    return { output: { signal: signal!, suggestedAction: undefined }, steps, model: "skipped", totalLatencyMs: 0 };
+    return { output: { signal: signal!, suggestedAction: undefined }, sources: [], steps, model: "skipped", totalLatencyMs: 0 };
   }
 
   const scoreHistory = account.kamScores.map((s) => `${s.overall}/100 (${s.health})`).join(", ");
   const openActions  = account.actions.map((a) => a.title).join("; ") || "none";
+
+  const sources: AgentSource[] = [
+    { type: "signal",  label: `Signal being triaged: ${signal.title}`, value: `${signal.severity} | ${signal.type}` },
+    { type: "score",   label: "Account score history", value: scoreHistory || "none" },
+    { type: "action",  label: "Open actions", value: openActions },
+  ];
 
   // Step A: assess signal validity
   const promptA = `You are a KAM signal triage agent assessing whether a newly raised signal represents a genuine risk.
@@ -75,6 +81,7 @@ Return JSON only: { "genuine": true/false, "confidence": 0.0-1.0, "reasoning": "
   if (!assessment.genuine || assessment.confidence < 0.5) {
     return {
       output: { signal: updatedSignal, suggestedAction: undefined },
+      sources,
       steps,
       model: responseA.model,
       totalLatencyMs: Date.now() - agentStart,
@@ -127,6 +134,7 @@ Return JSON only: { "title": "imperative title under 80 chars", "description": "
 
   return {
     output: { signal: updatedSignal, suggestedAction },
+    sources,
     steps,
     model: responseB.model,
     totalLatencyMs: Date.now() - agentStart,

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
-import { makeStep, type AgentResult, type AgentStep } from "./types";
+import { makeStep, type AgentResult, type AgentStep, type AgentSource } from "./types";
 import type { QbrSession } from "@prisma/client";
 
 type QbrSessionWithItems = QbrSession & { items: { id: string; order: number; category: string | null; title: string; content: string | null; status: string | null }[] };
@@ -34,6 +34,17 @@ export async function runQbrPrepAgent(
   const lastSession = account.qbrSessions[0];
   const monthYear   = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const sessionTitle = requestedTitle || `${account.name} ${sessionType} - ${monthYear}`;
+
+  const sources: AgentSource[] = [
+    { type: "score",     label: "Score history",          value: scores || "none" },
+    { type: "score",     label: "Account health",         value: account.health },
+    ...(account.contractEnd ? [{ type: "score" as const, label: "Contract end", value: account.contractEnd.toISOString().split("T")[0] }] : []),
+    ...account.signals.map((s): AgentSource => ({ type: "signal", label: `Signal: ${s.title}`, value: s.severity })),
+    ...account.actions.slice(0, 5).map((a): AgentSource => ({ type: "action", label: `Action: ${a.title}`, value: a.status })),
+    ...account.touchpoints.slice(0, 4).map((t): AgentSource => ({ type: "touchpoint", label: `Touchpoint: ${t.type}`, value: new Date(t.date).toLocaleDateString() })),
+    ...(account.kycVersions[0]?.executiveSummary ? [{ type: "kyc" as const, label: "KYC summary", value: account.kycVersions[0].executiveSummary?.slice(0, 80) }] : []),
+    ...(lastSession ? [{ type: "score" as const, label: `Previous session: ${lastSession.title}`, value: lastSession.status }] : []),
+  ];
 
   // Step A: account state summary
   const promptA = `You are a QBR preparation agent. Summarise the state of this account.
@@ -158,6 +169,7 @@ Generate 5-8 agenda items. Return JSON only:
 
   return {
     output: session as QbrSessionWithItems,
+    sources,
     steps,
     model: responseB.model,
     totalLatencyMs: Date.now() - agentStart,

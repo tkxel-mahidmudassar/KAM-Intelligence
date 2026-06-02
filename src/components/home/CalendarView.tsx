@@ -120,7 +120,7 @@ function DayCell({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) {
-  const { role } = useRole();
+  const { role, userId } = useRole();
   const today = new Date();
 
   const [year,  setYear]  = useState(today.getFullYear());
@@ -140,9 +140,11 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
     to.setDate(to.getDate() + 6);
 
     try {
+      const headers: Record<string, string> = { "x-role": role };
+      if (userId) headers["x-user-id"] = userId;
       const res  = await fetch(
         `/api/calendar?from=${toDateKey(from)}&to=${toDateKey(to)}`,
-        { headers: { "x-role": role } },
+        { headers },
       );
       const json = await res.json();
       setGrouped(json.data ?? {});

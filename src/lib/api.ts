@@ -7,11 +7,16 @@ import type { Role } from "@/types";
 
 // ─── Role resolution (POC: read from x-role header, default KAM) ─────────────
 
-const VALID_ROLES: Role[] = ["KAM", "MANAGER", "EXECUTIVE"];
+const VALID_ROLES: Role[] = ["KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
 
 export function getRoleFromRequest(req: NextRequest): Role {
   const header = req.headers.get("x-role") ?? "";
   return (VALID_ROLES.includes(header as Role) ? header : "KAM") as Role;
+}
+
+/** Returns the logged-in user ID from the x-user-id header (set by the client from localStorage). */
+export function getUserIdFromRequest(req: NextRequest): string | null {
+  return req.headers.get("x-user-id") ?? null;
 }
 
 // ─── Standard response helpers ────────────────────────────────────────────────

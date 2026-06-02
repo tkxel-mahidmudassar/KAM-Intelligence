@@ -137,8 +137,9 @@ const MANAGER_PERMISSIONS: Permission[] = [
   "kyc:approve",
   "kyc:reject",
 
-  // Users — view team members
+  // Users — view and update team members (MANAGER can change KAM roles; cannot create/delete)
   "user:view",
+  "user:update",
 
   // Portfolio — manager-level views
   "portfolio:view",

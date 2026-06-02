@@ -1,5 +1,5 @@
 // ─── Roles ───────────────────────────────────────────────────────────────────
-export type Role = "KAM" | "MANAGER" | "EXECUTIVE";
+export type Role = "KAM" | "MANAGER" | "EXECUTIVE" | "ADMIN";
 
 // ─── RAG Status ──────────────────────────────────────────────────────────────
 export type RagStatus = "HEALTHY" | "AT_RISK" | "CRITICAL";

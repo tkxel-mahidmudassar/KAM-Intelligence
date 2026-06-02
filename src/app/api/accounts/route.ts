@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRoleFromRequest, ok, created, badRequest, serverError, guard, kamWhere } from "@/lib/api";
+import { getRoleFromRequest, getUserIdFromRequest, ok, created, badRequest, serverError, guard, kamWhere } from "@/lib/api";
 import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
 import { getJiraAdapter } from "@/lib/adapters/jira";
 
@@ -11,12 +11,14 @@ export async function GET(req: NextRequest) {
     const denied = guard(role, "account:view");
     if (denied) return denied;
 
-    // POC: use first KAM user as the session user (Sarah Chen — owns CRITICAL/AT_RISK accounts)
-    const kamUser = await prisma.user.findFirst({
+    // Resolve the current KAM user ID: prefer x-user-id header (set from login context),
+    // fall back to first KAM user for backwards compat (POC identity hack)
+    const headerUserId = getUserIdFromRequest(req);
+    const kamUserId = headerUserId ?? (await prisma.user.findFirst({
       where: { role: "KAM" },
       orderBy: { createdAt: "asc" },
-    });
-    const where = kamWhere(role, kamUser?.id ?? "");
+    }))?.id ?? "";
+    const where = kamWhere(role, kamUserId);
 
     const accounts = await prisma.account.findMany({
       where,

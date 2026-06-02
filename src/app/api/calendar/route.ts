@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRoleFromRequest, ok, badRequest, serverError, guard, kamWhere } from "@/lib/api";
+import { getRoleFromRequest, getUserIdFromRequest, ok, badRequest, serverError, guard, kamWhere } from "@/lib/api";
 
 export interface CalendarItem {
   id: string;
@@ -37,9 +37,10 @@ export async function GET(req: NextRequest) {
 
     if (isNaN(from.getTime()) || isNaN(to.getTime())) return badRequest("Invalid date format");
 
-    // Resolve KAM scope
-    const kamUser = await prisma.user.findFirst({ where: { role: "KAM" }, orderBy: { createdAt: "asc" } });
-    const where   = kamWhere(role, kamUser?.id ?? "");
+    // Resolve KAM scope — prefer x-user-id header over POC identity hack
+    const headerUserId = getUserIdFromRequest(req);
+    const kamUserId = headerUserId ?? (await prisma.user.findFirst({ where: { role: "KAM" }, orderBy: { createdAt: "asc" } }))?.id ?? "";
+    const where = kamWhere(role, kamUserId);
 
     // Fetch all data sources in parallel
     const [actions, qbrSessions, touchpoints, renewals, signals] = await Promise.all([

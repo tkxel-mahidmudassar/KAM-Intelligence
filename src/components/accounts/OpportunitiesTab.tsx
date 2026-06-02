@@ -9,6 +9,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useRole } from "@/context/RoleContext";
 import { AgentTracePanel } from "@/components/ui/AgentTracePanel";
+import { SourcesPanel } from "@/components/ui/SourcesPanel";
+import type { AgentSource } from "@/lib/ai/agents/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,9 +47,10 @@ interface OpportunitiesTabProps {
   onDelete:     (id: string) => Promise<void>;
   onAiGenerate: () => Promise<void>;
   onReview:     (id: string, action: "approve" | "decline", note?: string) => Promise<void>;
-  agentSteps?:  import("@/components/ui/AgentTracePanel").AgentStep[];
-  agentModel?:  string;
+  agentSteps?:   import("@/components/ui/AgentTracePanel").AgentStep[];
+  agentModel?:   string;
   agentLatency?: number;
+  agentSources?: AgentSource[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -606,7 +609,7 @@ function PendingReviewCard({
 
 export function OpportunitiesTab({
   opportunities, accountId, onCreate, onAdvance, onEdit, onDelete, onAiGenerate, onReview,
-  agentSteps, agentModel, agentLatency,
+  agentSteps, agentModel, agentLatency, agentSources,
 }: OpportunitiesTabProps) {
   const { role }   = useRole();
   const canWrite   = role === "KAM" || role === "MANAGER";
@@ -676,6 +679,9 @@ export function OpportunitiesTab({
               />
             ))}
           </div>
+          {agentSources && agentSources.length > 0 && (
+            <SourcesPanel sources={agentSources} label="Data sources used by AI" />
+          )}
           {agentSteps && agentSteps.length > 0 && (
             <AgentTracePanel steps={agentSteps} model={agentModel} totalLatencyMs={agentLatency} />
           )}

@@ -66,6 +66,7 @@ interface AccountDetail {
     detectedAt: string;
     isResolved: boolean;
     resolvedAt: string | null;
+    pendingReview: boolean;
   }>;
   actions: Array<{
     id: string;
@@ -166,8 +167,18 @@ export default function AccountPage() {
   const [scoreOverrides, setScoreOverrides]   = useState<ScoreOverride[]>([]);
   const [touchpoints,  setTouchpoints]  = useState<Touchpoint[]>([]);
   const [escalations,    setEscalations]    = useState<Escalation[]>([]);
-  const [opportunities,  setOpportunities]  = useState<Opportunity[]>([]);
-  const [contacts,       setContacts]       = useState<Contact[]>([]);
+  const [opportunities,   setOpportunities]  = useState<Opportunity[]>([]);
+  const [contacts,        setContacts]       = useState<Contact[]>([]);
+  const [oppAgentSources, setOppAgentSources] = useState<import("@/lib/ai/agents/types").AgentSource[]>([]);
+  const [kycAgentSources, setKycAgentSources] = useState<import("@/lib/ai/agents/types").AgentSource[]>([]);
+  const [kycAgentSteps,   setKycAgentSteps]   = useState<import("@/components/ui/AgentTracePanel").AgentStep[]>([]);
+  const [kycAgentModel,   setKycAgentModel]   = useState<string | undefined>(undefined);
+  const [qbrAgentSources, setQbrAgentSources] = useState<import("@/lib/ai/agents/types").AgentSource[]>([]);
+  const [qbrAgentSteps,   setQbrAgentSteps]   = useState<import("@/components/ui/AgentTracePanel").AgentStep[]>([]);
+  const [qbrAgentModel,   setQbrAgentModel]   = useState<string | undefined>(undefined);
+  const [oppAgentSteps,   setOppAgentSteps]   = useState<import("@/components/ui/AgentTracePanel").AgentStep[]>([]);
+  const [oppAgentModel,   setOppAgentModel]   = useState<string | undefined>(undefined);
+  const [oppAgentLatency, setOppAgentLatency] = useState<number | undefined>(undefined);
 
   const fetchAccount = useCallback(async () => {
     try {
@@ -249,9 +260,35 @@ export default function AccountPage() {
     });
     setAccount((prev) => prev ? {
       ...prev,
+      signals: prev.signals.filter((s) => s.id !== signalId),
+    } : prev);
+  };
+
+  // Acknowledge a pending-review signal (mark as reviewed, enters live feed)
+  const handleAcknowledgeSignal = async (signalId: string) => {
+    await fetch(`/api/signals/${signalId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-role": role },
+      body: JSON.stringify({ pendingReview: false }),
+    });
+    setAccount((prev) => prev ? {
+      ...prev,
       signals: prev.signals.map((s) =>
-        s.id === signalId ? { ...s, isResolved: true, resolvedAt: new Date().toISOString() } : s
-      ).filter((s) => !s.isResolved),
+        s.id === signalId ? { ...s, pendingReview: false } : s
+      ),
+    } : prev);
+  };
+
+  // Dismiss a pending-review signal (resolve without acknowledging)
+  const handleDismissSignal = async (signalId: string) => {
+    await fetch(`/api/signals/${signalId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-role": role },
+      body: JSON.stringify({ isResolved: true, pendingReview: false }),
+    });
+    setAccount((prev) => prev ? {
+      ...prev,
+      signals: prev.signals.filter((s) => s.id !== signalId),
     } : prev);
   };
 
@@ -462,17 +499,20 @@ export default function AccountPage() {
   };
 
   const handleKycAiDraft = async () => {
-    const res  = await fetch("/api/ai/kyc", {
+    const res  = await fetch("/api/ai/agents/kyc", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-role": role },
       body: JSON.stringify({ accountId: id }),
     });
     const json = await res.json();
-    if (json.data?.kyc) {
-      setAccount((prev) => prev ? {
-        ...prev,
-        kycVersions: [json.data.kyc, ...prev.kycVersions],
-      } : prev);
+    if (json.data) {
+      const kyc = json.data.output ?? json.data.kyc;
+      if (kyc) {
+        setAccount((prev) => prev ? { ...prev, kycVersions: [kyc, ...prev.kycVersions] } : prev);
+      }
+      if (json.data.sources) setKycAgentSources(json.data.sources);
+      if (json.data.steps)   setKycAgentSteps(json.data.steps);
+      if (json.data.model)   setKycAgentModel(json.data.model);
     }
   };
 
@@ -568,8 +608,12 @@ export default function AccountPage() {
       body: JSON.stringify({ accountId: id }),
     });
     const json = await res.json();
-    if (json.data?.output) {
-      setOpportunities((prev) => [...json.data.output, ...prev]);
+    if (json.data) {
+      if (json.data.output?.length) setOpportunities((prev) => [...json.data.output, ...prev]);
+      if (json.data.sources)  setOppAgentSources(json.data.sources);
+      if (json.data.steps)    setOppAgentSteps(json.data.steps);
+      if (json.data.model)    setOppAgentModel(json.data.model);
+      if (json.data.totalLatencyMs) setOppAgentLatency(json.data.totalLatencyMs);
     }
   };
 
@@ -692,17 +736,20 @@ export default function AccountPage() {
   };
 
   const handleQbrGenerate = async (title: string, type: string): Promise<void> => {
-    const res  = await fetch("/api/ai/qbr/generate", {
+    const res  = await fetch("/api/ai/agents/qbr", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-role": role },
-      body: JSON.stringify({ accountId: id, title, type }),
+      body: JSON.stringify({ accountId: id, sessionType: type, requestedTitle: title }),
     });
     const json = await res.json();
     if (json.data) {
-      setAccount((prev) => prev ? {
-        ...prev,
-        qbrSessions: [json.data, ...prev.qbrSessions],
-      } : prev);
+      const session = json.data.output ?? json.data;
+      if (session?.id) {
+        setAccount((prev) => prev ? { ...prev, qbrSessions: [session, ...prev.qbrSessions] } : prev);
+      }
+      if (json.data.sources) setQbrAgentSources(json.data.sources);
+      if (json.data.steps)   setQbrAgentSteps(json.data.steps);
+      if (json.data.model)   setQbrAgentModel(json.data.model);
     }
   };
 
@@ -735,9 +782,11 @@ export default function AccountPage() {
     );
   }
 
-  const latestScore = account.kamScores?.[0] ?? null;
-  const openSignals = account.signals.filter((s) => !s.isResolved);
-  const openActions = account.actions.filter((a) => a.status !== "DONE");
+  const latestScore    = account.kamScores?.[0] ?? null;
+  const pendingSignals = account.signals.filter((s) => !s.isResolved && s.pendingReview);
+  const liveSignals    = account.signals.filter((s) => !s.isResolved && !s.pendingReview);
+  const openSignals    = account.signals.filter((s) => !s.isResolved); // all open (for tab badge)
+  const openActions    = account.actions.filter((a) => a.status !== "DONE");
 
   return (
     <div className="space-y-4">
@@ -857,9 +906,12 @@ export default function AccountPage() {
 
           <TabsContent value="signals">
             <SignalsTab
-              signals={openSignals}
+              signals={liveSignals}
+              pendingSignals={pendingSignals}
               accountId={id}
               onResolve={handleResolveSignal}
+              onAcknowledge={handleAcknowledgeSignal}
+              onDismiss={handleDismissSignal}
               onCreateSignal={handleCreateSignal}
             />
           </TabsContent>
@@ -883,6 +935,9 @@ export default function AccountPage() {
               onCreateNew={handleKycCreateNew}
               onUpdate={handleKycUpdate}
               onAiDraft={handleKycAiDraft}
+              agentSources={kycAgentSources.length > 0 ? kycAgentSources : undefined}
+              agentSteps={kycAgentSteps.length > 0 ? kycAgentSteps : undefined}
+              agentModel={kycAgentModel}
             />
           </TabsContent>
 
@@ -903,6 +958,9 @@ export default function AccountPage() {
               accountId={account.id}
               onGenerateSummary={handleQbrAiSummary}
               onGenerateSession={handleQbrGenerate}
+              agentSources={qbrAgentSources.length > 0 ? qbrAgentSources : undefined}
+              agentSteps={qbrAgentSteps.length > 0 ? qbrAgentSteps : undefined}
+              agentModel={qbrAgentModel}
             />
           </TabsContent>
 
@@ -929,6 +987,10 @@ export default function AccountPage() {
               onDelete={handleDeleteOpportunity}
               onAiGenerate={handleAiGenerateOpportunities}
               onReview={handleReviewOpportunity}
+              agentSources={oppAgentSources.length > 0 ? oppAgentSources : undefined}
+              agentSteps={oppAgentSteps.length > 0 ? oppAgentSteps : undefined}
+              agentModel={oppAgentModel}
+              agentLatency={oppAgentLatency}
             />
           </TabsContent>
 

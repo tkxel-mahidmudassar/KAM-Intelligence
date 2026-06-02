@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
 import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
-import { makeStep, type AgentResult, type AgentStep } from "./types";
+import { makeStep, type AgentResult, type AgentStep, type AgentSource } from "./types";
 import type { KycVersion } from "@prisma/client";
 
 export async function runKycDraftAgent(
@@ -27,6 +27,18 @@ export async function runKycDraftAgent(
   ]);
 
   if (!account) throw new Error("Account not found");
+
+  // Build sources from all fetched data
+  const sources: AgentSource[] = [
+    { type: "score",   label: "Overall score",   value: account.kamScores[0] ? `${account.kamScores[0].overall}/100` : "N/A" },
+    { type: "score",   label: "Account health",   value: account.health },
+    ...account.contacts.map((c): AgentSource => ({ type: "contact", label: `Contact: ${c.name}`, value: c.title ?? undefined })),
+    ...account.kpiDimensions.slice(0, 8).map((k): AgentSource => ({ type: "kpi", label: k.name, value: `${k.value}${k.unit ?? ""}` })),
+    ...account.signals.map((s): AgentSource => ({ type: "signal", label: `Signal: ${s.title}`, value: s.severity })),
+    ...account.documents.map((d): AgentSource => ({ type: "document", label: `Document: ${d.name}`, value: d.extractedText ? `${d.extractedText.slice(0, 60)}…` : undefined })),
+    ...account.touchpoints.slice(0, 4).map((t): AgentSource => ({ type: "touchpoint", label: `Touchpoint: ${t.type}`, value: new Date(t.date).toLocaleDateString() })),
+    ...(sf.data.opportunities.length > 0 ? [{ type: "adapter" as const, label: "Salesforce opportunities", value: `${sf.data.opportunities.length} open` }] : []),
+  ];
 
   const docSummaries = account.documents
     .map((d) => `[${d.name}]: ${d.extractedText?.slice(0, 300) ?? ""}`)
@@ -138,6 +150,7 @@ Return JSON only with these exact keys:
 
   return {
     output: kyc,
+    sources,
     steps,
     model: responseB.model,
     totalLatencyMs: Date.now() - agentStart,

@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { X, Zap } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { FloatingAssistant } from "@/components/assistant/FloatingAssistant";
+import { useRole } from "@/context/RoleContext";
 
 function DemoBanner() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Show banner unless dismissed this session
     const dismissed = sessionStorage.getItem("demo-banner-dismissed");
     if (!dismissed) setVisible(true);
   }, []);
@@ -33,7 +34,7 @@ function DemoBanner() {
       <Zap className="h-3 w-3 shrink-0 opacity-80" />
       <span className="opacity-90">
         <strong className="font-semibold opacity-100">KAM Intelligence POC</strong>
-        &nbsp;·&nbsp;Live mock data · AI co-pilot via Gemini 2.5 Flash · Role switcher top-right
+        &nbsp;&middot;&nbsp;Live mock data &middot; AI co-pilot via Gemini 2.5 Flash &middot; Role switcher top-right
       </span>
       <button
         onClick={dismiss}
@@ -47,6 +48,28 @@ function DemoBanner() {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { userId, hydrated } = useRole();
+
+  // Redirect to login if not authenticated (after hydration)
+  useEffect(() => {
+    if (hydrated && !userId) {
+      router.replace("/login");
+    }
+  }, [hydrated, userId, router]);
+
+  // Render a blank screen while hydrating (avoids flash before redirect)
+  if (!hydrated || !userId) {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ background: "var(--bg-base)" }}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-xl bg-[#0755E9] animate-pulse" />
+          <p className="text-[12px] text-[var(--text-muted)]">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <DemoBanner />

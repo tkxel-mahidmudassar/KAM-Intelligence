@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
-import { makeStep, type AgentResult, type AgentStep } from "./types";
+import { makeStep, type AgentResult, type AgentStep, type AgentSource } from "./types";
 import type { Action } from "@prisma/client";
 import type { KpiScores } from "@/lib/scoring/triggers";
 
@@ -29,13 +29,20 @@ export async function runScoreActionsAgent(
       _count: { select: { actions: true } },
     },
   });
-  if (!account) return { output: [], steps, model: "skipped", totalLatencyMs: 0 };
+  if (!account) return { output: [], sources: [], steps, model: "skipped", totalLatencyMs: 0 };
 
   const scoreHistory = account.kamScores.map((s) => s.overall).join(", ");
   const weakDims = Object.entries(scores)
     .filter(([, v]) => v < 60)
     .map(([k, v]) => `${k}: ${v}/100`)
     .join(", ");
+
+  const sources: AgentSource[] = [
+    { type: "score", label: "Score history (newest first)", value: scoreHistory || "none" },
+    ...(weakDims ? [{ type: "kpi" as const, label: "Weak KPI dimensions", value: weakDims }] : []),
+    ...(newSignalTitles.length > 0 ? newSignalTitles.map((t): AgentSource => ({ type: "signal", label: `New signal: ${t}` })) : []),
+    { type: "action", label: "Open action count", value: `${account._count.actions} actions` },
+  ];
 
   const prompt = `You are a KAM Intelligence action-planning agent.
 
@@ -75,7 +82,7 @@ Return a JSON array only:
     const arr = JSON.parse(raw);
     if (Array.isArray(arr)) suggestions = arr.slice(0, 4);
   } catch {
-    return { output: [], steps, model: response.model, totalLatencyMs: Date.now() - agentStart };
+    return { output: [], sources, steps, model: response.model, totalLatencyMs: Date.now() - agentStart };
   }
 
   const VALID_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
@@ -101,6 +108,7 @@ Return a JSON array only:
 
   return {
     output: created,
+    sources,
     steps,
     model: response.model,
     totalLatencyMs: Date.now() - agentStart,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Brain, Zap, Check, RefreshCw, Server, SlidersHorizontal, AlertCircle, Save, Bell, Mail, Monitor, ChevronDown } from "lucide-react";
+import { Brain, Zap, Check, RefreshCw, Server, SlidersHorizontal, AlertCircle, Save, Bell, Mail, Monitor, ChevronDown, Users, Shield, Plus } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 import { cn } from "@/lib/utils";
 
@@ -494,12 +494,41 @@ interface AppSettings {
   notificationPrefs?: NotificationPrefs;
 }
 
+interface TeamUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatarUrl: string | null;
+  _count: { managedAccounts: number };
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  KAM:       "#0755E9",
+  MANAGER:   "#7C3AED",
+  EXECUTIVE: "#0EA5E9",
+  ADMIN:     "#F59E0B",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  KAM: "Account Manager", MANAGER: "Manager", EXECUTIVE: "Executive", ADMIN: "Admin",
+};
+
+function avatarInitials(name: string) {
+  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
 export default function SettingsPage() {
   const { role } = useRole();
   const [settings, setSettings]   = useState<AppSettings | null>(null);
   const [loading, setLoading]     = useState(true);
   const [resetting, setResetting] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const [team, setTeam]           = useState<TeamUser[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [editingRole, setEditingRole] = useState<string | null>(null);
+
+  const canViewTeam = role === "MANAGER" || role === "ADMIN";
 
   useEffect(() => {
     fetch("/api/settings", { headers: { "x-role": role } })
@@ -508,6 +537,33 @@ export default function SettingsPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [role]);
+
+  useEffect(() => {
+    if (!canViewTeam) return;
+    setTeamLoading(true);
+    fetch("/api/users", { headers: { "x-role": role } })
+      .then((r) => r.json())
+      .then((j) => setTeam(j.data?.users ?? []))
+      .catch(console.error)
+      .finally(() => setTeamLoading(false));
+  }, [role, canViewTeam]);
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    setEditingRole(userId);
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-role": role },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const json = await res.json();
+      if (json.data) {
+        setTeam((prev) => prev.map((u) => u.id === userId ? { ...u, role: json.data.role } : u));
+      }
+    } finally {
+      setEditingRole(null);
+    }
+  };
 
   const handleReset = async () => {
     if (!confirm("Reset demo data? This will re-seed all accounts, signals, and actions.")) return;
@@ -675,6 +731,85 @@ export default function SettingsPage() {
           <p className="text-[12px] text-[var(--text-muted)]">Could not load settings</p>
         )}
       </SettingSection>
+
+      {/* Team */}
+      {canViewTeam && (
+        <SettingSection title="Team" icon={Users} iconColor="#0755E9">
+          <p className="text-[12px] text-[var(--text-muted)] mb-4">
+            View and manage team members. Managers can change KAM roles.
+          </p>
+          {teamLoading ? (
+            <div className="space-y-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-10 rounded-lg bg-[var(--bg-surface-2)] animate-pulse" />
+              ))}
+            </div>
+          ) : team.length === 0 ? (
+            <p className="text-[12px] text-[var(--text-muted)]">No team members found.</p>
+          ) : (
+            <div className="space-y-2">
+              {team.map((user) => {
+                const color = ROLE_COLORS[user.role] ?? "#6B7280";
+                return (
+                  <div
+                    key={user.id}
+                    className="flex items-center gap-3 rounded-xl border border-[var(--border-subtle)] p-3 bg-[var(--bg-surface-1)]"
+                  >
+                    {/* Avatar */}
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                      style={{ background: color }}
+                    >
+                      {avatarInitials(user.name)}
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{user.name}</p>
+                      <p className="text-[11px] text-[var(--text-muted)] truncate">{user.email}</p>
+                    </div>
+                    {/* Account count */}
+                    <span className="hidden sm:block text-[11px] text-[var(--text-muted)] shrink-0">
+                      {user._count.managedAccounts} account{user._count.managedAccounts !== 1 ? "s" : ""}
+                    </span>
+                    {/* Role badge / changer */}
+                    {role === "ADMIN" ? (
+                      <div className="relative shrink-0">
+                        <select
+                          value={user.role}
+                          disabled={editingRole === user.id}
+                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                          className="appearance-none pl-3 pr-7 py-1 text-[11px] font-semibold rounded-full border outline-none cursor-pointer"
+                          style={{ color, borderColor: `${color}40`, background: `${color}10` }}
+                        >
+                          {["KAM", "MANAGER", "EXECUTIVE", "ADMIN"].map((r) => (
+                            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3" style={{ color }} />
+                      </div>
+                    ) : (
+                      <span
+                        className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border"
+                        style={{ color, borderColor: `${color}40`, background: `${color}10` }}
+                      >
+                        {ROLE_LABELS[user.role] ?? user.role}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="mt-3 p-3 rounded-lg bg-[var(--bg-surface-2)] border border-[var(--border-subtle)]">
+            <div className="flex items-center gap-2">
+              <Shield className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Full user creation and deletion requires Admin access. Contact your system administrator.
+              </p>
+            </div>
+          </div>
+        </SettingSection>
+      )}
 
       {/* Demo Controls */}
       <SettingSection title="Demo Controls" icon={RefreshCw} iconColor="#8B5CF6">

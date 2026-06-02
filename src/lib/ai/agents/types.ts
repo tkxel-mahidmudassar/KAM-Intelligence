@@ -5,8 +5,16 @@ export interface AgentStep {
   latencyMs: number;
 }
 
+/** A structured reference to a specific data point the AI used when generating output. */
+export interface AgentSource {
+  type: "kpi" | "signal" | "score" | "kyc" | "document" | "adapter" | "action" | "touchpoint" | "contact" | "opportunity";
+  label: string;   // e.g. "CSAT score: 18/100", "Signal: Revenue drop detected"
+  value?: string;  // optional secondary value or context
+}
+
 export interface AgentResult<T> {
   output: T;
+  sources: AgentSource[];
   steps: AgentStep[];
   model: string;
   totalLatencyMs: number;

@@ -9,6 +9,10 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/context/RoleContext";
+import { SourcesPanel } from "@/components/ui/SourcesPanel";
+import { AgentTracePanel } from "@/components/ui/AgentTracePanel";
+import type { AgentSource } from "@/lib/ai/agents/types";
+import type { AgentStep } from "@/components/ui/AgentTracePanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +43,9 @@ interface KYCTabProps {
   onCreateNew: (fields: Partial<KycVersion>) => Promise<void>;
   onUpdate:    (id: string, fields: Partial<KycVersion>) => Promise<void>;
   onAiDraft:   () => Promise<void>;
+  agentSources?: AgentSource[];
+  agentSteps?:   AgentStep[];
+  agentModel?:   string;
 }
 
 interface KycFields {
@@ -413,7 +420,7 @@ function KycVersionDiff({ older, newer }: { older: KycVersion; newer: KycVersion
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, onCreateNew, onUpdate, onAiDraft }: KYCTabProps) {
+export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, onCreateNew, onUpdate, onAiDraft, agentSources, agentSteps, agentModel }: KYCTabProps) {
   const { role } = useRole();
   const canSubmit  = role === "KAM" || role === "MANAGER";
   const canApprove = role === "MANAGER";
@@ -606,6 +613,14 @@ export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, 
 
         {/* ── Completeness panel ──────────────────────────────────────────── */}
         {!creating && <KycCompletenessPanel kyc={latest} />}
+
+        {/* ── AI source attribution ────────────────────────────────────────── */}
+        {!editing && agentSources && agentSources.length > 0 && (
+          <SourcesPanel sources={agentSources} label="Data sources used to draft this KYC" />
+        )}
+        {!editing && agentSteps && agentSteps.length > 0 && (
+          <AgentTracePanel steps={agentSteps} model={agentModel} />
+        )}
 
         {/* ── Edit form ───────────────────────────────────────────────────── */}
         {editing && (

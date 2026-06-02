@@ -8,6 +8,10 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/context/RoleContext";
+import { SourcesPanel } from "@/components/ui/SourcesPanel";
+import { AgentTracePanel } from "@/components/ui/AgentTracePanel";
+import type { AgentSource } from "@/lib/ai/agents/types";
+import type { AgentStep } from "@/components/ui/AgentTracePanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +41,9 @@ interface QBRTabProps {
   accountId: string;
   onGenerateSummary: (sessionId: string) => Promise<string>;
   onGenerateSession: (title: string, type: string) => Promise<void>;
+  agentSources?: AgentSource[];
+  agentSteps?:   AgentStep[];
+  agentModel?:   string;
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -342,7 +349,7 @@ function QbrSessionCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function QBRTab({ sessions, accountId, onGenerateSummary, onGenerateSession }: QBRTabProps) {
+export function QBRTab({ sessions, accountId, onGenerateSummary, onGenerateSession, agentSources, agentSteps, agentModel }: QBRTabProps) {
   const { role }             = useRole();
   const [showModal, setShowModal] = useState(false);
   const canCreate = role === "KAM" || role === "MANAGER";
@@ -357,6 +364,15 @@ export function QBRTab({ sessions, accountId, onGenerateSummary, onGenerateSessi
       )}
 
       <div className="space-y-3">
+
+        {/* ── AI source attribution (shown after a session is generated) ──── */}
+        {agentSources && agentSources.length > 0 && (
+          <SourcesPanel sources={agentSources} label="Data sources used to generate this session" />
+        )}
+        {agentSteps && agentSteps.length > 0 && (
+          <AgentTracePanel steps={agentSteps} model={agentModel} />
+        )}
+
         {/* Header row */}
         <div className="flex items-center justify-between">
           <p className="text-[12px] text-[var(--text-muted)]">

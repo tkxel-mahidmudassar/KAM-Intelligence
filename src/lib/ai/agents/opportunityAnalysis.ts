@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
 import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
-import { makeStep, type AgentResult, type AgentStep } from "./types";
+import { makeStep, type AgentResult, type AgentStep, type AgentSource } from "./types";
 import type { Opportunity } from "@prisma/client";
 
 interface ExpansionVector {
@@ -39,11 +39,23 @@ export async function runOpportunityAnalysisAgent(
     getSalesforceAdapter().fetch(accountId),
   ]);
 
-  if (!account) return { output: [], steps, model: "skipped", totalLatencyMs: 0 };
+  if (!account) return { output: [], sources: [], steps, model: "skipped", totalLatencyMs: 0 };
 
   const existingLines = account.opportunities.map((o) => o.serviceLine).join(", ") || "none";
   const score = account.kamScores[0];
   const sfOpps = sf.data.opportunities.map((o) => `${o.name} ($${o.amount?.toLocaleString() ?? 0}, ${o.stage})`).join(", ") || "none";
+
+  // Build sources list from fetched DB data
+  const sources: AgentSource[] = [
+    { type: "score",   label: "Overall score",   value: score ? `${score.overall}/100 (${account.health})` : "N/A" },
+    { type: "score",   label: "Whitespace score", value: score?.whitespace != null ? `${score.whitespace}/100` : "N/A" },
+    { type: "score",   label: "CSAT score",       value: score?.csat != null ? `${score.csat}/100` : "N/A" },
+    ...account.signals.map((s): AgentSource => ({ type: "signal", label: `Signal: ${s.title}`, value: s.severity })),
+    ...account.kpiDimensions.slice(0, 6).map((k): AgentSource => ({ type: "kpi", label: k.name, value: `${k.value}${k.unit ?? ""}` })),
+    ...(account.kycVersions[0]?.strategicGoals ? [{ type: "kyc" as const, label: "Strategic goals", value: account.kycVersions[0].strategicGoals?.slice(0, 80) }] : []),
+    ...(existingLines !== "none" ? [{ type: "opportunity" as const, label: "Existing service lines", value: existingLines }] : []),
+    ...(sfOpps !== "none" ? [{ type: "adapter" as const, label: "Salesforce opportunities", value: sfOpps.slice(0, 100) }] : []),
+  ];
 
   // Step A: identify expansion vectors
   const promptA = `You are a KAM Intelligence expansion analyst.
@@ -82,7 +94,7 @@ Identify 4-6 realistic expansion vectors. Return JSON array only:
   }
 
   if (vectors.length === 0) {
-    return { output: [], steps, model: responseA.model, totalLatencyMs: Date.now() - agentStart };
+    return { output: [], sources, steps, model: responseA.model, totalLatencyMs: Date.now() - agentStart };
   }
 
   // Step B: score and flesh out each vector
@@ -151,6 +163,7 @@ For each vector, produce a full opportunity object. Return JSON array only:
 
   return {
     output: created,
+    sources,
     steps,
     model: responseB.model,
     totalLatencyMs: Date.now() - agentStart,
