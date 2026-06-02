@@ -48,12 +48,21 @@ export async function POST(req: NextRequest) {
     if (denied) return denied;
 
     const body = await req.json();
-    const { name, industry, region, country, arr, kamId } = body;
+    const { name, industry, region, country, arr, kamId, contractStart, contractEnd } = body;
 
     if (!name) return badRequest("name is required");
 
     const account = await prisma.account.create({
-      data: { name, industry, region, country, arr: arr ?? 0, kamId },
+      data: {
+        name,
+        industry,
+        region,
+        country,
+        arr: arr ?? 0,
+        kamId:         kamId         || null,
+        contractStart: contractStart ? new Date(contractStart) : null,
+        contractEnd:   contractEnd   ? new Date(contractEnd)   : null,
+      },
     });
 
     return created(account);

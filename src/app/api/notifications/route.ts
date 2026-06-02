@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const where = kamWhere(role, kamUserId);
 
     const sevenDaysOut = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const allInsights  = req.nextUrl.searchParams.get("allInsights") === "true";
 
     const [
       pendingSignals,
@@ -21,6 +22,8 @@ export async function GET(req: NextRequest) {
       pendingOverrides,
       upcomingQBRs,
       unreadInsights,
+      allInsightsFeed,
+      allSignalsFeed,
     ] = await Promise.all([
       // AI-raised signals pending review (KAM)
       prisma.signal.findMany({
@@ -47,7 +50,7 @@ export async function GET(req: NextRequest) {
       }),
 
       // Pending score overrides (MANAGER+)
-      (role === "MANAGER" || role === "EXECUTIVE")
+      (role === "MANAGER" || role === "EXECUTIVE" || role === "ADMIN")
         ? prisma.scoreOverride.findMany({
             where: { status: "PENDING" },
             include: { account: { select: { id: true, name: true, health: true } } },
@@ -68,17 +71,43 @@ export async function GET(req: NextRequest) {
         take: 5,
       }),
 
-      // Unread AI insights (non-log)
+      // Unread AI insights for the notification badge (non-log)
       prisma.aIPulseInsight.findMany({
         where: {
           isDismissed: false,
-          isRead: false,
-          title: { not: { startsWith: "[LOG]" } },
+          isRead:      false,
+          title:       { not: { startsWith: "[LOG]" } },
         },
         include: { account: { select: { id: true, name: true } } },
         orderBy: { generatedAt: "desc" },
         take: 10,
       }),
+
+      // Full insight feed for AI Pulse page (allInsights=true)
+      allInsights
+        ? prisma.aIPulseInsight.findMany({
+            where: {
+              isDismissed: false,
+              title:       { not: { startsWith: "[LOG]" } },
+            },
+            include: { account: { select: { id: true, name: true, health: true, arr: true } } },
+            orderBy: { generatedAt: "desc" },
+            take: 100,
+          })
+        : Promise.resolve(null),
+
+      // Full signal feed for AI Pulse page (allInsights=true)
+      allInsights
+        ? prisma.signal.findMany({
+            where: {
+              isResolved:  false,
+              account:     where.kamId ? { kamId: where.kamId } : undefined,
+            },
+            include: { account: { select: { id: true, name: true, health: true } } },
+            orderBy: [{ severity: "asc" }, { detectedAt: "desc" }],
+            take: 100,
+          })
+        : Promise.resolve(null),
     ]);
 
     const total = pendingSignals.length + pendingOpps.length + pendingOverrides.length + upcomingQBRs.length + unreadInsights.length;
@@ -90,6 +119,9 @@ export async function GET(req: NextRequest) {
       upcomingQBRs,
       unreadInsights,
       total,
+      // Full feeds for AI Pulse page
+      insights: allInsightsFeed ?? unreadInsights,
+      signals:  allSignalsFeed  ?? pendingSignals,
     });
   } catch (err) {
     return serverError(err);
