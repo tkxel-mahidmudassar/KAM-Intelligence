@@ -589,7 +589,7 @@ export default function AccountPage() {
   // ── Contact handlers ────────────────────────────────────────────────────────
 
   const handleCreateContact = async (data: Omit<Contact, "id" | "accountId">) => {
-    const res  = await fetch("/api/contacts", {
+    const res = await fetch("/api/contacts", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-role": role },
       body: JSON.stringify({ ...data, accountId: id }),
@@ -943,6 +943,16 @@ export default function AccountPage() {
 
           <TabsContent value="questionnaire">
             <QuestionnaireTab accountId={account.id} />
+          </TabsContent>
+
+          <TabsContent value="contacts">
+            <ContactsTab
+              contacts={contacts}
+              accountId={account.id}
+              onAdd={handleCreateContact}
+              onUpdate={handleUpdateContact}
+              onDelete={handleDeleteContact}
+            />
           </TabsContent>
         </div>
       </Tabs>

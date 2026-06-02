@@ -270,7 +270,7 @@ export function NotificationDrawer({ isOpen, onClose, onUnreadChange }: Notifica
       // Optimistic update
       setSignals((prev) => {
         const updated = prev.map((s) => s.id === signal.id ? { ...s, isRead: true } : s);
-        updateBadge(updated, insights);
+        updateBadge(updated, insights, pendingSignals, pendingOpps, pendingOverrides);
         return updated;
       });
       fetch(`/api/signals/${signal.id}`, {
@@ -288,7 +288,7 @@ export function NotificationDrawer({ isOpen, onClose, onUnreadChange }: Notifica
     if (!insight.isRead) {
       setInsights((prev) => {
         const updated = prev.map((i) => i.id === insight.id ? { ...i, isRead: true } : i);
-        updateBadge(signals, updated);
+        updateBadge(signals, updated, pendingSignals, pendingOpps, pendingOverrides);
         return updated;
       });
       fetch(`/api/ai/pulse/${insight.id}`, {
@@ -306,7 +306,7 @@ export function NotificationDrawer({ isOpen, onClose, onUnreadChange }: Notifica
     e.stopPropagation();
     setInsights((prev) => {
       const updated = prev.filter((i) => i.id !== insightId);
-      updateBadge(signals, updated);
+      updateBadge(signals, updated, pendingSignals, pendingOpps, pendingOverrides);
       return updated;
     });
     fetch(`/api/ai/pulse/${insightId}`, {

@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next dev",
     "lint": "next lint",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate && next build",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node --project prisma/tsconfig.json prisma/seed/index.ts",
