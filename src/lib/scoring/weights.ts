@@ -1,0 +1,14 @@
+// Shared score weight constants — used by settings API and score route
+export const DEFAULT_WEIGHTS = {
+  csat:           20,
+  relationship:   15,
+  risk:           15,
+  contractHealth: 15,
+  projectHealth:  10,
+  resourceHealth: 10,
+  financial:      10,
+  whitespace:      5,
+} as const;
+
+export type WeightKey = keyof typeof DEFAULT_WEIGHTS;
+export const WEIGHT_KEYS = Object.keys(DEFAULT_WEIGHTS) as WeightKey[];

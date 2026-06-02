@@ -1,0 +1,544 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  KAM
+  MANAGER
+  EXECUTIVE
+  ADMIN
+}
+
+enum AccountHealth {
+  HEALTHY
+  AT_RISK
+  CRITICAL
+}
+
+enum ActionStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  DISMISSED
+}
+
+enum ActionPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ActionSource {
+  AI_PROPOSED
+  HUMAN_CREATED
+}
+
+enum SignalType {
+  REVENUE_DROP
+  ENGAGEMENT_LOW
+  TICKET_SPIKE
+  NPS_DECLINE
+  CONTRACT_EXPIRY
+  CHURN_RISK
+  UPSELL_OPPORTUNITY
+  RELATIONSHIP_CHANGE
+  HEALTH_ALERT
+  CUSTOM
+}
+
+enum SignalSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum DocumentType {
+  CONTRACT
+  SOW
+  MSA
+  NDA
+  PROPOSAL
+  QBR_DECK
+  OTHER
+}
+
+enum QbrType {
+  QBR
+  DBR
+  EBR
+}
+
+enum QbrStatus {
+  DRAFT
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum KycStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum InsightType {
+  RISK
+  OPPORTUNITY
+  TREND
+  ANOMALY
+  RECOMMENDATION
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(KAM)
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  managedAccounts Account[]      @relation("AccountKam")
+  actions         Action[]       @relation("ActionOwner")
+  qbrSessions     QbrSession[]   @relation("QbrCreator")
+  kycVersions     KycVersion[]   @relation("KycAuthor")
+  activityLogs    ActivityLog[]
+
+  @@map("users")
+}
+
+// ─── Account ──────────────────────────────────────────────────────────────────
+
+model Account {
+  id              String        @id @default(uuid())
+  name            String
+  industry        String?
+  region          String?
+  country         String?
+  logoUrl         String?
+  website         String?
+  arr             Float         @default(0)
+  contractStart   DateTime?
+  contractEnd     DateTime?
+  health          AccountHealth @default(HEALTHY)
+  healthUpdatedAt DateTime?
+  kamId           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  kam          User?            @relation("AccountKam", fields: [kamId], references: [id])
+  contacts     AccountContact[]
+  kpiDimensions KpiDimension[]
+  kamScores    KamScore[]
+  actions      Action[]
+  signals      Signal[]
+  documents    Document[]
+  kycVersions  KycVersion[]
+  qbrSessions  QbrSession[]
+  insights               AIPulseInsight[]
+  activityLogs           ActivityLog[]
+  touchpoints            Touchpoint[]
+  scoreOverrides         ScoreOverride[]
+  questionnaireResponses QuestionnaireResponse[]
+  escalations            Escalation[]
+  opportunities          Opportunity[]
+
+  @@map("accounts")
+}
+
+// ─── Account Contact ──────────────────────────────────────────────────────────
+
+model AccountContact {
+  id        String   @id @default(uuid())
+  accountId String
+  name      String
+  title     String?
+  email     String?
+  phone     String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("account_contacts")
+}
+
+// ─── KPI Dimensions ───────────────────────────────────────────────────────────
+
+model KpiDimension {
+  id         String   @id @default(uuid())
+  accountId  String
+  name       String
+  category   String
+  value      Float
+  target     Float?
+  unit       String?
+  trend      String?
+  trendPct   Float?
+  period     String?
+  source     String?
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("kpi_dimensions")
+}
+
+// ─── KAM Score ────────────────────────────────────────────────────────────────
+
+model KamScore {
+  id             String        @id @default(uuid())
+  accountId      String
+  overall        Float
+  // 8-KPI model (PRD v3)
+  csat           Float?   // 20% weight — customer satisfaction, NPS, utilisation
+  relationship   Float?   // 15% weight — stakeholder engagement, exec coverage
+  risk           Float?   // 15% weight — churn signals, escalations, ticket load
+  contractHealth Float?   // 15% weight — ARR utilisation, invoicing, renewal proximity
+  projectHealth  Float?   // 10% weight — delivery velocity, sprint health
+  resourceHealth Float?   // 10% weight — active users, platform adoption
+  financial      Float?   // 10% weight — revenue utilisation, overdue invoices
+  whitespace     Float?   //  5% weight — expansion / upsell opportunity indicator
+  health         AccountHealth
+  aiNarrative    String?  @db.Text
+  computedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("kam_scores")
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────────
+
+model Action {
+  id            String         @id @default(uuid())
+  accountId     String
+  ownerId       String?
+  title         String
+  description   String?        @db.Text
+  status        ActionStatus   @default(OPEN)
+  priority      ActionPriority @default(MEDIUM)
+  source        ActionSource   @default(HUMAN_CREATED)
+  aiConfidence  Float?
+  dueDate       DateTime?
+  completedAt   DateTime?
+  dismissedAt   DateTime?
+  dismissReason String?
+  tags          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  account  Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  owner    User?           @relation("ActionOwner", fields: [ownerId], references: [id])
+  comments ActionComment[]
+
+  @@map("actions")
+}
+
+model ActionComment {
+  id        String   @id @default(uuid())
+  actionId  String
+  authorId  String?
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  action Action @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@map("action_comments")
+}
+
+// ─── Signals ──────────────────────────────────────────────────────────────────
+
+model Signal {
+  id             String         @id @default(uuid())
+  accountId      String
+  type           SignalType
+  severity       SignalSeverity  @default(WARNING)
+  title          String
+  description    String?        @db.Text
+  source         String?
+  metadata       Json?
+  isRead         Boolean        @default(false)
+  isResolved     Boolean        @default(false)
+  resolvedAt     DateTime?
+  resolvedNote   String?        @db.Text
+  pendingReview  Boolean        @default(false)
+  detectedAt     DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("signals")
+}
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+model Document {
+  id            String       @id @default(uuid())
+  accountId     String
+  name          String
+  type          DocumentType @default(OTHER)
+  fileUrl       String?
+  fileSize      Int?
+  mimeType      String?
+  extractedText        String?  @db.LongText
+  chromaDocId          String?
+  tags                 String?
+  uploadedById         String?
+  extractedSignals     Json?
+  affectedScores       Json?
+  affectedKycSections  Json?
+  signalStatus         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+// ─── KYC Versions ─────────────────────────────────────────────────────────────
+
+model KycVersion {
+  id                   String    @id @default(uuid())
+  accountId            String
+  authorId             String?
+  version              Int       @default(1)
+  status               KycStatus @default(DRAFT)
+  executiveSummary     String?   @db.Text
+  businessModel        String?   @db.Text
+  keyStakeholders      String?   @db.Text
+  strategicGoals       String?   @db.Text
+  riskFactors          String?   @db.Text
+  expansionOpportunity String?   @db.Text
+  // Section 7-9 (PRD v3 additions)
+  csatHistory          String?   @db.Text  // CSAT & satisfaction history, NPS trend
+  competitiveLandscape String?   @db.Text  // Competitors, displacement risk
+  financialOverview    String?   @db.Text  // Contract terms, billing, ARR composition
+  submittedAt          DateTime?
+  approvedAt           DateTime?
+  rejectionReason      String?   @db.Text
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  author  User?   @relation("KycAuthor", fields: [authorId], references: [id])
+
+  @@map("kyc_versions")
+}
+
+// ─── QBR / DBR Sessions ───────────────────────────────────────────────────────
+
+model QbrSession {
+  id           String    @id @default(uuid())
+  accountId    String
+  createdById  String?
+  type         QbrType   @default(QBR)
+  status       QbrStatus @default(DRAFT)
+  title        String
+  scheduledAt  DateTime?
+  conductedAt  DateTime?
+  attendees    String?   @db.Text
+  notes        String?   @db.Text
+  aiSummary    String?   @db.Text
+  recordingUrl String?
+  audience     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  account   Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdBy User?      @relation("QbrCreator", fields: [createdById], references: [id])
+  items     QbrItem[]
+
+  @@map("qbr_sessions")
+}
+
+model QbrItem {
+  id        String   @id @default(uuid())
+  sessionId String
+  order     Int      @default(0)
+  category  String?
+  title     String
+  content   String?  @db.Text
+  status    String?
+  createdAt DateTime @default(now())
+
+  session QbrSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("qbr_items")
+}
+
+// ─── AI Pulse Insights ────────────────────────────────────────────────────────
+
+model AIPulseInsight {
+  id           String      @id @default(uuid())
+  accountId    String?
+  type         InsightType
+  title        String
+  summary      String      @db.Text
+  detail       String?     @db.LongText
+  confidence   Float?
+  model        String?
+  promptTokens Int?
+  outputTokens Int?
+  isRead       Boolean     @default(false)
+  isDismissed  Boolean     @default(false)
+  generatedAt  DateTime    @default(now())
+  createdAt    DateTime    @default(now())
+
+  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@map("ai_pulse_insights")
+}
+
+// ─── Touchpoints ──────────────────────────────────────────────────────────────
+
+model Touchpoint {
+  id               String   @id @default(uuid())
+  accountId        String
+  type             String
+  date             DateTime
+  loggedBy         String?
+  notes            String?  @db.Text
+  linkedDocumentId String?
+  stakeholders     String?
+  createdAt        DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("touchpoints")
+}
+
+// ─── Score Overrides ──────────────────────────────────────────────────────────
+
+model ScoreOverride {
+  id             String   @id @default(uuid())
+  accountId      String
+  kpiKey         String
+  previousValue  Float
+  requestedValue Float
+  approvedValue  Float?
+  reason         String   @db.Text
+  requestedById  String?
+  approvedById   String?
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("score_overrides")
+}
+
+// ─── Questionnaire Responses ──────────────────────────────────────────────────
+
+model QuestionnaireResponse {
+  id           String   @id @default(uuid())
+  accountId    String
+  section      String
+  questionId   String
+  response     String   @db.Text
+  inputType    String
+  prepopulated Boolean  @default(false)
+  confidence   Float?
+  confirmedBy  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("questionnaire_responses")
+}
+
+// ─── Escalations ──────────────────────────────────────────────────────────────
+
+model Escalation {
+  id              String    @id @default(uuid())
+  accountId       String
+  type            String
+  severity        String    @default("MEDIUM")
+  description     String    @db.Text
+  linkedProject   String?
+  openedById      String?
+  resolutionNotes String?   @db.Text
+  status          String    @default("OPEN")
+  openedAt        DateTime  @default(now())
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("escalations")
+}
+
+// ─── Opportunities ────────────────────────────────────────────────────────────
+
+model Opportunity {
+  id             String    @id @default(uuid())
+  accountId      String
+  serviceLine    String
+  description    String    @db.Text
+  estimatedValue Float?
+  effort         String?
+  probability    Float?
+  status         String    @default("IDENTIFIED")
+  source         String    @default("AI")
+  nextAction     String?
+  pendingReview  Boolean   @default(false)
+  reviewedAt     DateTime?
+  reviewNote     String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("opportunities")
+}
+
+// ─── App Config (global settings, single row) ─────────────────────────────────
+
+model AppConfig {
+  id                  String   @id @default("global")
+  // Score weights — percentages (integers), must sum to 100
+  // Keys: csat | relationship | risk | contractHealth | projectHealth | resourceHealth | financial | whitespace
+  scoreWeights        Json?
+  // Notification preferences — per-event toggles, frequency, channels
+  notificationPrefs   Json?
+  updatedAt           DateTime @updatedAt
+  updatedBy           String?
+
+  @@map("app_config")
+}
+
+// ─── Activity Log ─────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  accountId String?
+  action    String
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@map("activity_logs")
+}

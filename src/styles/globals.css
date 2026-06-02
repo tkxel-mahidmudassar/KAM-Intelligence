@@ -1,0 +1,192 @@
+/* ─── Plus Jakarta Sans ─────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
+@import "tailwindcss";
+
+/* ─── Tailwind theme tokens ──────────────────────────────────────────────── */
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Tkxel blue family */
+  --color-brand-50:  #eef4fe;
+  --color-brand-100: #d5e5fd;
+  --color-brand-400: #4b8af3;
+  --color-brand-500: #0755E9;
+  --color-brand-600: #0647C7;
+  --color-brand-700: #0539A0;
+  --color-brand-800: #062D7E;
+
+  /* Status */
+  --color-healthy:         #22C55E;
+  --color-healthy-bg-l:    #F0FDF4;
+  --color-healthy-bg-d:    rgba(34,197,94,0.12);
+  --color-healthy-border-l:#BBF7D0;
+  --color-healthy-border-d:rgba(34,197,94,0.25);
+  --color-healthy-text-l:  #15803D;
+  --color-healthy-text-d:  #4ADE80;
+
+  --color-atrisk:          #F59E0B;
+  --color-atrisk-bg-l:     #FFFBEB;
+  --color-atrisk-bg-d:     rgba(245,158,11,0.12);
+  --color-atrisk-border-l: #FDE68A;
+  --color-atrisk-border-d: rgba(245,158,11,0.25);
+  --color-atrisk-text-l:   #B45309;
+  --color-atrisk-text-d:   #FCD34D;
+
+  --color-critical:        #EF4444;
+  --color-critical-bg-l:   #FEF2F2;
+  --color-critical-bg-d:   rgba(239,68,68,0.12);
+  --color-critical-border-l:#FECACA;
+  --color-critical-border-d:rgba(239,68,68,0.25);
+  --color-critical-text-l: #B91C1C;
+  --color-critical-text-d: #F87171;
+
+  /* Tkxel orange — used very sparingly */
+  --color-orange: #FF6900;
+}
+
+/* ─── Mode-aware custom properties ──────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Background — warm gradient base so glass cards have something to blur */
+  --bg-gradient: radial-gradient(ellipse at 18% 0%, rgba(7,85,233,0.07) 0%, transparent 55%),
+                 radial-gradient(ellipse at 85% 90%, rgba(7,85,233,0.04) 0%, transparent 50%),
+                 #F5F4F2;
+  --bg-base:     #F5F4F2;
+
+  /* Glass card surface */
+  --glass-bg:      rgba(255,255,255,0.72);
+  --glass-border:  rgba(255,255,255,0.90);
+  --glass-blur:    blur(20px);
+  --glass-shadow:  0 4px 24px -4px rgba(27,35,46,0.10), 0 1px 4px -1px rgba(27,35,46,0.08);
+
+  /* Elevated glass (modals, dropdowns) */
+  --glass-elevated-bg:     rgba(255,255,255,0.88);
+  --glass-elevated-border: rgba(255,255,255,0.95);
+  --glass-elevated-shadow: 0 24px 48px -8px rgba(27,35,46,0.18), 0 8px 16px -4px rgba(27,35,46,0.10);
+
+  /* Surfaces (non-glass fallback) */
+  --bg-surface:   rgba(255,255,255,0.80);
+  --bg-surface-1: #FFFFFF;              /* solid — modals, elevated panels   */
+  --bg-surface-2: rgba(248,247,246,0.80);
+  --bg-surface-3: #EAE8E4;
+  --modal-input-bg: #F0EFED;            /* form inputs inside modals (light) */
+
+  /* Borders */
+  --border-subtle:  rgba(0,0,0,0.07);
+  --border-default: rgba(0,0,0,0.12);
+  --border-strong:  rgba(0,0,0,0.20);
+
+  /* Text */
+  --text-primary:   #13191F;
+  --text-secondary: #3D4753;
+  --text-muted:     #7A8494;
+  --text-disabled:  #B8BFC8;
+  --text-inverse:   #FFFFFF;
+
+  /* Sidebar — always dark */
+  --sidebar-bg:         #020816;
+  --sidebar-border:     rgba(255,255,255,0.06);
+  --sidebar-text:       #8A94A8;
+  --sidebar-text-hover: #C8D0E0;
+  --sidebar-text-active:#FFFFFF;
+  --sidebar-active-bg:  rgba(7,85,233,0.20);
+  --sidebar-active-border: #0755E9;
+
+  /* Focus ring */
+  --ring-brand: 0 0 0 3px rgba(7,85,233,0.20);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(0,0,0,0.15);
+}
+
+/* ── Dark mode ── */
+.dark {
+  color-scheme: dark;
+
+  /* Rich dark gradient — blue glow so glassmorphism actually shows up */
+  --bg-gradient: radial-gradient(ellipse at 20% -5%,  rgba(7,85,233,0.18) 0%, transparent 45%),
+                 radial-gradient(ellipse at 80% 95%,  rgba(7,85,233,0.10) 0%, transparent 45%),
+                 radial-gradient(ellipse at 55% 45%,  rgba(7,85,233,0.05) 0%, transparent 40%),
+                 #020816;
+  --bg-base: #020816;
+
+  /* Dark glass — takes blue-tinted glow from the background */
+  --glass-bg:      rgba(255,255,255,0.04);
+  --glass-border:  rgba(255,255,255,0.08);
+  --glass-blur:    blur(20px);
+  --glass-shadow:  0 4px 24px -4px rgba(0,0,0,0.40), 0 1px 4px -1px rgba(0,0,0,0.30),
+                   inset 0 1px 0 0 rgba(255,255,255,0.06);
+
+  --glass-elevated-bg:     rgba(255,255,255,0.07);
+  --glass-elevated-border: rgba(255,255,255,0.12);
+  --glass-elevated-shadow: 0 24px 48px -8px rgba(0,0,0,0.70), 0 8px 16px -4px rgba(0,0,0,0.40),
+                            inset 0 1px 0 0 rgba(255,255,255,0.08);
+
+  --bg-surface:   rgba(255,255,255,0.04);
+  --bg-surface-1: #111C2E;              /* solid — modals, elevated panels   */
+  --bg-surface-2: rgba(255,255,255,0.06);
+  --bg-surface-3: rgba(255,255,255,0.09);
+  --modal-input-bg: rgba(255,255,255,0.08); /* form inputs inside modals (dark) */
+
+  --border-subtle:  rgba(255,255,255,0.07);
+  --border-default: rgba(255,255,255,0.11);
+  --border-strong:  rgba(255,255,255,0.20);
+
+  --text-primary:   #EDF0F7;
+  --text-secondary: #8E97AB;
+  --text-muted:     #505B6E;
+  --text-disabled:  #2E3848;
+  --text-inverse:   #13191F;
+
+  --sidebar-bg:         #07080F;
+  --sidebar-border:     rgba(255,255,255,0.05);
+  --sidebar-text:       #5A6478;
+  --sidebar-text-hover: #A0ABBE;
+  --sidebar-text-active:#FFFFFF;
+  --sidebar-active-bg:  rgba(7,85,233,0.18);
+  --sidebar-active-border: #4D8BFF;
+
+  --ring-brand: 0 0 0 3px rgba(77,139,255,0.25);
+
+  --scrollbar-thumb: rgba(255,255,255,0.10);
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-gradient);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    line-height: 1.55;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+    min-height: 100%;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
+
+  /* Focus */
+  :focus-visible { outline: 2px solid #0755E9; outline-offset: 2px; }
+  .dark :focus-visible { outline-color: #4D8BFF; }
+
+  /* Theme transition — only for color/bg, not layout */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, box-shadow;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
+  }
+}

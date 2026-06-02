@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"/Users/mahid.mudassar/Documents/KAM Intelligence/\" 2>/dev/null)"
+    ]
+  }
+}
