@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Brain, Zap, Check, RefreshCw, Server, SlidersHorizontal, AlertCircle, Save, Bell, Mail, Monitor, ChevronDown, Users, Shield, Plus } from "lucide-react";
+import { Brain, Zap, Check, RefreshCw, Server, SlidersHorizontal, AlertCircle, Save, Bell, Mail, Monitor, ChevronDown, Users, Shield, BookOpen } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 import { cn } from "@/lib/utils";
+import { PlaybookLibrary } from "@/components/playbooks/PlaybookLibrary";
 
 // ─── KPI weight metadata ──────────────────────────────────────────────────────
 
@@ -519,7 +520,7 @@ function avatarInitials(name: string) {
 }
 
 export default function SettingsPage() {
-  const { role } = useRole();
+  const { role, userId } = useRole();
   const [settings, setSettings]   = useState<AppSettings | null>(null);
   const [loading, setLoading]     = useState(true);
   const [resetting, setResetting] = useState(false);
@@ -609,6 +610,11 @@ export default function SettingsPage() {
             initialWeights={settings?.scoreWeights ?? DEFAULT_WEIGHTS}
           />
         )}
+      </SettingSection>
+
+      {/* Playbooks */}
+      <SettingSection title="Playbooks" icon={BookOpen} iconColor="#0755E9">
+        <PlaybookLibrary role={role} userId={userId} />
       </SettingSection>
 
       {/* Notification Preferences */}

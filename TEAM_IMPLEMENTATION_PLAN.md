@@ -102,7 +102,7 @@ Implementation notes:
 
 ## Phase 3: Global Playbook-Grounded Recommendations
 
-Status: planned and ready for implementation.
+Status: in progress.
 
 ### Product Goal
 
@@ -131,13 +131,14 @@ KAMs should be able to upload trusted internal playbooks. Recommendations and co
 - Playbook-generated actions should populate the calendar immediately without an approval badge/state.
 - Recommendations should be generated on playbook upload, account score/KPI change, and daily AI Pulse refresh.
 - Recommendations should appear across the board: account page, homepage card modals, AI Pulse, calendar day details, and Action Board.
+- Replacement behavior: replacing a playbook overwrites the existing playbook row rather than creating visible version history.
+- Upload limit: 20 MB per playbook file.
+- Archived playbooks are hidden by default in Settings and visible only when users with write access enable `Show archived`.
 
 ### Pending Decisions
 
 - Whether a global playbook can be deactivated for a single account, or whether global means all accounts until archived globally.
-- Maximum upload size per file.
 - Whether Excel parsing should process all sheets by default or only selected sheets.
-- Whether archived playbooks remain downloadable.
 - Whether older playbook versions should be visible in the UI.
 - Whether global playbooks should later support portfolio-specific scoping.
 
@@ -147,42 +148,57 @@ KAMs should be able to upload trusted internal playbooks. Recommendations and co
 
 Owner: TBD
 
+Status: implemented and QA validated.
+
 Responsibilities:
 
-- Add a Playbooks area to Settings.
-- Add upload UI for PDF, DOCX, TXT, Markdown, and Excel.
-- Show playbook list with title, file type, upload date, uploader, processing status, active/archive state, and extracted rule count.
-- Allow Associate and KAM users to upload/replace/archive playbooks.
-- Allow Exec users to view only.
-- Make it clear that global playbooks apply to all accounts automatically.
+- Added a Playbooks area to Settings.
+- Added upload UI for PDF, DOCX, TXT, Markdown, and Excel.
+- Shows playbook list with title, file type, upload date, uploader, processing status, active/archive state, and extracted rule count.
+- Allows Associate and KAM users to upload/replace/archive playbooks.
+- Allows Exec users to view only.
+- Makes it clear that global playbooks apply to all accounts automatically.
 
-Recommended UI:
+Implemented UI:
 
-- Clean Settings tab/section named Playbooks.
-- Upload dropzone plus compact playbook table.
+- Clean Settings section named Playbooks.
+- Upload panel plus compact playbook table.
 - Status chips: Processing, Active, Failed, Archived.
-- Archive action in a menu, not a loud primary button.
+- Row action menu with Replace and Archive.
+- Optional `Show archived` toggle, off by default.
 
-Primary likely files:
+Primary files touched:
 
 - `src/app/(dashboard)/settings/page.tsx`
 - `src/lib/permissions/*`
-- New `src/components/playbooks/*`
-- New `src/app/api/playbooks/*`
+- `src/components/playbooks/PlaybookLibrary.tsx`
+- `src/app/api/playbooks/*`
+
+Verification completed:
+
+- Railway MySQL migration applied successfully.
+- `GET /api/playbooks` returns active playbooks and hides archived rows by default.
+- `POST /api/playbooks/upload` supports global upload and enforces 20 MB/type validation.
+- `POST /api/playbooks/[id]/replace` overwrites the existing playbook row.
+- `PATCH /api/playbooks/[id]` archives a playbook.
+- API QA passed for KAM list, Exec upload denial, unsupported type rejection, oversized file rejection, valid upload, replace, archive, hidden archived rows, KAM archived reveal, and Exec archived restriction.
+- Browser QA passed for Associate/KAM upload and row action visibility, Exec view-only behavior, and row menu Replace/Archive controls.
 
 ### Module 2: Playbook Storage And Data Model
 
 Owner: TBD
 
+Status: partially implemented.
+
 Responsibilities:
 
-- Add database models for playbooks, extracted rules, and recommendation provenance.
-- Store file metadata and extracted text/rules.
-- Track active/archive status.
-- Track processing status and errors.
-- Preserve source locators for citations.
+- Added database models for playbooks and extracted rules.
+- Store file metadata, storage path, status, extracted text, processing error, processed/archive timestamps, and uploader.
+- Track active/archive/processing/failed status.
+- Preserve source locator fields on `PlaybookRule`.
+- Recommendation provenance model is still pending for Module 5/7 integration.
 
-Proposed entities:
+Implemented entities:
 
 - `Playbook`
   - `id`
@@ -198,6 +214,9 @@ Proposed entities:
   - `processedAt`
   - `createdAt`
   - `updatedAt`
+  - `extractedText`
+  - `processingError`
+  - `archivedAt`
 
 - `PlaybookRule`
   - `id`
@@ -214,6 +233,8 @@ Proposed entities:
   - `sourceExcerpt`
   - `createdAt`
 
+Pending entities:
+
 - `Recommendation`
   - `id`
   - `accountId`
@@ -228,9 +249,18 @@ Proposed entities:
   - `confidence`
   - `createdAt`
 
+Notes:
+
+- Module 1 accepts PDF, DOCX, TXT, Markdown, and Excel uploads now.
+- TXT and Markdown text is captured immediately.
+- Full PDF/DOCX/Excel extraction and structured rule generation remain Module 3 and Module 4 work.
+- Uploaded playbook files are currently stored under `public/uploads/playbooks/` following the existing document upload pattern; production storage hardening remains future security work.
+
 ### Module 3: File Parsing And Text Extraction
 
 Owner: TBD
+
+Status: pending, with TXT/Markdown MVP text capture already available from Module 1.
 
 Responsibilities:
 
@@ -250,6 +280,8 @@ Implementation notes:
 ### Module 4: Rule Extraction Engine
 
 Owner: TBD
+
+Status: pending.
 
 Responsibilities:
 
@@ -282,6 +314,8 @@ Output quality expectations:
 
 Owner: TBD
 
+Status: pending.
+
 Responsibilities:
 
 - Create a simple orchestration flow for recommendations.
@@ -311,6 +345,8 @@ Agent stance:
 
 Owner: TBD
 
+Status: pending.
+
 Responsibilities:
 
 - Add compact Active Playbooks section to each account page.
@@ -333,6 +369,8 @@ Primary likely files:
 ### Module 7: Recommendation Surfaces
 
 Owner: TBD
+
+Status: pending.
 
 Responsibilities:
 
@@ -367,6 +405,8 @@ Primary likely files:
 
 Owner: TBD
 
+Status: pending.
+
 Responsibilities:
 
 - Add or reuse an action source/status for playbook-generated pre-approved actions.
@@ -392,6 +432,8 @@ Primary likely files:
 
 Owner: TBD
 
+Status: pending.
+
 Responsibilities:
 
 - AI Pulse is for daily workflows.
@@ -410,6 +452,8 @@ Primary likely files:
 
 Owner: TBD
 
+Status: pending, recommended Phase 4 unless prioritized earlier.
+
 Responsibilities:
 
 - Add My Profile so users can manage their own profile settings.
@@ -426,6 +470,8 @@ Notes:
 
 Owner: TBD
 
+Status: partially completed for Module 1 only.
+
 Responsibilities:
 
 - Add focused tests for playbook upload permissions.
@@ -437,10 +483,10 @@ Responsibilities:
 
 Minimum acceptance checklist:
 
-- Associate can upload global playbook from Settings.
-- KAM can upload global playbook from Settings.
-- Exec can view but cannot upload/replace.
-- Uploaded playbook enters Processing then Active or Failed.
+- Associate can upload global playbook from Settings. Completed for Module 1.
+- KAM can upload global playbook from Settings. Completed for Module 1.
+- Exec can view but cannot upload/replace. Completed for Module 1.
+- Uploaded playbook enters Processing then Active or Failed. Partially complete: Module 1 stores and marks uploads Active after metadata/text capture; deeper async processing states remain Module 3/4.
 - Active playbook applies to all accounts automatically.
 - Account page shows Active Playbooks.
 - Recommendation includes subtle Playbook-guided label.
@@ -493,10 +539,9 @@ Important product language:
 
 ## Immediate Next Steps
 
-1. Confirm pending decisions for global playbook account-level deactivation, upload limits, Excel parsing behavior, and archive visibility.
-2. Add Prisma schema for playbooks, playbook rules, and recommendation provenance.
-3. Build Settings Playbooks upload/list/archive UI.
-4. Implement file extraction pipeline for the five supported file categories.
-5. Implement rule extraction and playbook-first recommendation orchestration.
-6. Wire playbook recommendations into account page, homepage modals, AI Pulse, Action Board, and calendar.
-7. Add tests and browser verification for all acceptance checklist items.
+1. Implement Module 3 full extraction for PDF, DOCX, TXT, Markdown, and Excel, including page/section/sheet locators.
+2. Implement Module 4 rule extraction with category classification, dedupe, and source citations.
+3. Add the `Recommendation` provenance model and Module 5 playbook-first recommendation orchestrator.
+4. Wire Active Playbooks into account overview.
+5. Surface playbook-guided recommendations in account page, homepage modals, AI Pulse, calendar day details, and Action Board.
+6. Add focused automated tests for upload permissions, parsing success/failure, archive behavior, playbook-first priority, and action/calendar creation.

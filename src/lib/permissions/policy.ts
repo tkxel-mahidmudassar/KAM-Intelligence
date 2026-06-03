@@ -29,7 +29,8 @@ export type Resource =
   | "escalation"
   | "opportunity"
   | "questionnaire"
-  | "portfolio";
+  | "portfolio"
+  | "playbook";
 
 export type Action =
   | "view"
@@ -41,6 +42,7 @@ export type Action =
   | "reject"
   | "dismiss"
   | "resolve"
+  | "archive"
   | "export"
   | "manage";
 
@@ -122,6 +124,12 @@ const KAM_PERMISSIONS: Permission[] = [
   // Questionnaire — fill and submit responses
   "questionnaire:view",
   "questionnaire:create",
+
+  // Playbooks — global trusted guidance library
+  "playbook:view",
+  "playbook:create",
+  "playbook:update",
+  "playbook:archive",
 ];
 
 const MANAGER_PERMISSIONS: Permission[] = [
@@ -192,6 +200,7 @@ const EXECUTIVE_PERMISSIONS: Permission[] = [
   "opportunity:view",
   "questionnaire:view",
   "portfolio:view",
+  "playbook:view",
 
   // Executives can export for board reporting
   "account:export",
@@ -215,6 +224,7 @@ const ADMIN_PERMISSIONS: Permission[] = [
   "user:view", "user:create", "user:update", "user:delete", "user:manage",
   "activityLog:view", "activityLog:export",
   "portfolio:view",
+  "playbook:view", "playbook:create", "playbook:update", "playbook:archive",
 ];
 
 // ─── Permission sets (O(1) lookup) ────────────────────────────────────────────
