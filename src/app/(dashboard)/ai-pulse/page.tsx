@@ -215,43 +215,79 @@ function StatsBar({ insights, signals }: { insights: Insight[]; signals: Signal[
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AiPulsePage() {
-  const { role } = useRole();
-  const [data, setData]       = useState<NotificationData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab]         = useState<"insights" | "signals">("insights");
+  const { role, userId } = useRole();
+  const [data, setData]             = useState<NotificationData | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [generatingStep, setGeneratingStep] = useState<string>("");
+  const [tab, setTab]               = useState<"insights" | "signals">("insights");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res  = await fetch("/api/notifications?allInsights=true", { headers: { "x-role": role } });
+      const res  = await fetch("/api/notifications?allInsights=true", {
+        headers: { "x-role": role, "x-user-id": userId ?? "" },
+      });
       const json = await res.json();
       setData(json.data);
+      return json.data;
     } catch (e) {
       console.error(e);
+      return null;
     } finally {
       setLoading(false);
     }
   };
 
-  const generateInsight = async () => {
-    setLoading(true);
+  const runAgent = async () => {
+    setGenerating(true);
+    setGeneratingStep("Gathering account data...");
     try {
-      // Generate a new portfolio-wide AI insight via Gemini
-      await fetch("/api/ai/pulse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-role": role },
-        body: JSON.stringify({}),
+      // Step feedback — update message while waiting
+      const steps = [
+        { delay: 1500,  msg: "Searching Google News, Reddit & financial sources..." },
+        { delay: 5000,  msg: "Analysing risks across portfolio..." },
+        { delay: 9000,  msg: "Identifying expansion opportunities..." },
+        { delay: 13000, msg: "Detecting trends and anomalies..." },
+        { delay: 17000, msg: "Generating recommendations..." },
+      ];
+      const timers = steps.map(({ delay, msg }) => setTimeout(() => setGeneratingStep(msg), delay));
+
+      await fetch("/api/ai/agents/pulse", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "x-role": role, "x-user-id": userId ?? "" },
+        body:    JSON.stringify({}),
       });
-      // Refresh display after generating
+
+      timers.forEach(clearTimeout);
+      setGeneratingStep("Done — loading insights...");
+      setLastGenerated(new Date());
       await fetchData();
     } catch (e) {
       console.error(e);
-      setLoading(false);
+    } finally {
+      setGenerating(false);
+      setGeneratingStep("");
     }
   };
 
-  useEffect(() => { fetchData(); }, [role]);
+  // On mount: load data, then auto-trigger agent if no insights exist or all are >24h old
+  useEffect(() => {
+    (async () => {
+      const d = await fetchData();
+      const insights: Insight[] = d?.insights ?? [];
+      const hasRecent = insights.some((i) => {
+        const age = Date.now() - new Date(i.generatedAt).getTime();
+        return age < 24 * 60 * 60 * 1000; // < 24 hours
+      });
+      if (!hasRecent && !generating) {
+        runAgent();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
 
   const insights = data?.insights ?? [];
   const signals  = data?.signals  ?? [];
@@ -260,6 +296,8 @@ export default function AiPulsePage() {
   const filteredInsights = typeFilter === "ALL"
     ? insights
     : insights.filter((i) => i.type === typeFilter);
+
+  const isBusy = loading || generating;
 
   return (
     <div className="space-y-5">
@@ -270,29 +308,49 @@ export default function AiPulsePage() {
             AI Pulse
           </h1>
           <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
-            Portfolio-wide AI insights and risk signals
+            {generating
+              ? generatingStep || "Generating insights..."
+              : lastGenerated
+              ? `Last generated ${Math.round((Date.now() - lastGenerated.getTime()) / 60000)} min ago`
+              : "Live portfolio intelligence grounded in public news"}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={fetchData}
-            disabled={loading}
+            disabled={isBusy}
             className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-lg border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-default)] transition-all disabled:opacity-50"
           >
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
           </button>
           <button
-            onClick={generateInsight}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-lg text-white transition-all disabled:opacity-50"
-            style={{ background: loading ? "#0755E988" : "#0755E9" }}
+            onClick={runAgent}
+            disabled={isBusy}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-lg text-white transition-all disabled:opacity-60"
+            style={{ background: isBusy ? "#0755E988" : "#0755E9" }}
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            Generate AI Insight
+            {generating
+              ? <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              : <Sparkles className="h-3.5 w-3.5" />
+            }
+            {generating ? "Analysing..." : "Regenerate Insights"}
           </button>
         </div>
       </div>
+
+      {/* Generating banner */}
+      {generating && (
+        <div className="rounded-xl border border-[#0755E9]/30 bg-[#0755E9]/6 px-4 py-3 flex items-center gap-3">
+          <span className="h-4 w-4 rounded-full border-2 border-[#0755E9]/30 border-t-[#0755E9] animate-spin shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-[#0755E9]">{generatingStep || "Starting analysis..."}</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+              Searching Google News, Reddit, Yahoo Finance &amp; Business Recorder for each account, then running 5 typed Gemini calls in parallel
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       {loading ? (
@@ -361,7 +419,7 @@ export default function AiPulsePage() {
       )}
 
       {/* Content */}
-      {loading ? (
+      {isBusy && insights.length === 0 ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} className="h-[110px]" />)}
         </div>
@@ -370,7 +428,7 @@ export default function AiPulsePage() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Brain className="h-12 w-12 text-[var(--text-disabled)] mb-3" />
             <p className="text-[14px] font-medium text-[var(--text-primary)]">No insights yet</p>
-            <p className="text-[12px] text-[var(--text-muted)] mt-1">AI insights will appear as accounts are analysed</p>
+            <p className="text-[12px] text-[var(--text-muted)] mt-1">Click &quot;Regenerate Insights&quot; to analyse your portfolio with live public news</p>
           </div>
         ) : (
           <div className="space-y-3">
