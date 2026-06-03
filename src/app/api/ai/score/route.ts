@@ -8,6 +8,7 @@ import { getRoleFromRequest, ok, badRequest, notFound, serverError, guard } from
 import { AccountHealth } from "@prisma/client";
 import { runTriggerEngine } from "@/lib/scoring/triggers";
 import { DEFAULT_WEIGHTS, WEIGHT_KEYS } from "@/lib/scoring/weights";
+import { calculateKpiSubscores, clampScore, type KpiScoreKey } from "@/lib/scoring/kpi";
 import { logAudit } from "@/lib/audit";
 import { runScoreActionsAgent } from "@/lib/ai/agents/scoreActions";
 
@@ -34,16 +35,6 @@ function healthFromScore(overall: number): AccountHealth {
   if (overall >= 70) return AccountHealth.HEALTHY;
   if (overall >= 45) return AccountHealth.AT_RISK;
   return AccountHealth.CRITICAL;
-}
-
-function clamp(v: number): number {
-  return Math.min(100, Math.max(0, Math.round(v)));
-}
-
-function avgKpis(kpis: { value: number; target: number }[]): number {
-  if (!kpis.length) return 50;
-  const scores = kpis.map((k) => Math.min(100, (k.value / (k.target || 1)) * 100));
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
 
 // POST /api/ai/score  { accountId }
@@ -81,48 +72,9 @@ export async function POST(req: NextRequest) {
     const kpis = account.kpiDimensions.map((k) => ({
       name: k.name, category: k.category, value: k.value, target: k.target ?? k.value,
     }));
-    const byCategory = (cat: string) => kpis.filter((k) => k.category === cat);
-
-    // ── 1. CSAT (20%) — NPS + platform utilisation ───────────────────────────
-    const npsScore    = clamp(((w.npsScore ?? 30) + 100) / 2);          // normalise -100..100 → 0..100
-    const utilScore   = clamp(w.utilizationPct);
-    const csatKpis    = byCategory("engagement");
-    const csat        = clamp((npsScore * 0.5 + utilScore * 0.3 + avgKpis(csatKpis.length ? csatKpis : [{ value: 50, target: 50 }]) * 0.2));
-
-    // ── 2. Relationship (15%) ─────────────────────────────────────────────────
-    const relKpis     = byCategory("relationship");
-    const relationship = clamp(avgKpis(relKpis.length ? relKpis : [{ value: 50, target: 50 }]));
-
-    // ── 3. Risk (15%) — ticket load, critical issues ──────────────────────────
-    const ticketScore = clamp(100 - j.openTickets * 3);
-    const critScore   = clamp(100 - j.criticalTickets * 10);
-    const risk        = clamp(ticketScore * 0.6 + critScore * 0.4);
-
-    // ── 4. Contract Health (15%) — ARR utilisation, renewal proximity ─────────
-    const revScore    = clamp(f.revenueUtilizationPct);
-    const overdueScore = clamp(100 - (f.overdueAmount / Math.max(account.arr / 12, 1)) * 100);
-    const daysLeft    = account.contractEnd
-      ? Math.ceil((new Date(account.contractEnd).getTime() - Date.now()) / 864e5)
-      : 365;
-    const renewalScore = clamp(daysLeft > 180 ? 90 : daysLeft > 90 ? 70 : daysLeft > 30 ? 40 : 20);
-    const contractHealth = clamp(revScore * 0.4 + overdueScore * 0.3 + renewalScore * 0.3);
-
-    // ── 5. Project Health (10%) — sprint velocity, delivery ───────────────────
-    const sprintVelocity  = j.activeSprint?.velocity ?? 70;
-    const velocityScore   = clamp(sprintVelocity);
-    const resolutionScore = clamp(100 - j.avgResolutionDays * 5);
-    const projectHealth   = clamp(velocityScore * 0.6 + resolutionScore * 0.4);
-
-    // ── 6. Resource Health (10%) — active user adoption ──────────────────────
-    const adoptionPct    = w.totalLicenses > 0 ? (w.activeUsers / w.totalLicenses) * 100 : 50;
-    const resourceHealth = clamp((adoptionPct * 0.6 + utilScore * 0.4));
-
-    // ── 7. Financial (10%) — revenue utilisation ──────────────────────────────
-    const financial      = clamp((revScore * 0.7 + overdueScore * 0.3));
-
-    // ── 8. Whitespace (5%) — expansion opportunity indicator ─────────────────
-    const arrTier  = account.arr >= 500_000 ? 80 : account.arr >= 200_000 ? 65 : account.arr >= 100_000 ? 50 : 35;
-    const whitespace = clamp(arrTier + (csat > 70 ? 15 : csat > 50 ? 5 : 0));
+    const calculated = calculateKpiSubscores({ account, kpis, jira: j, worksphere: w, finance: f });
+    const baseScores = calculated.scores;
+    const scoreBreakdown = { ...calculated.breakdown };
 
     // ── Questionnaire blending (blend adapter scores with confirmed responses) ─
     // Fetch confirmed OR AI-prepopulated responses
@@ -175,17 +127,17 @@ export async function POST(req: NextRequest) {
     // 70% adapter, 30% questionnaire when both are available
     const blend = (raw: number, dim: string): number => {
       if (!qCnt[dim]) return raw;
-      return clamp(raw * 0.7 + (qSum[dim] / qCnt[dim]) * 0.3);
+      return clampScore(raw * 0.7 + (qSum[dim] / qCnt[dim]) * 0.3);
     };
 
-    const finalCsat           = blend(csat,           "csat");
-    const finalRelationship   = blend(relationship,   "relationship");
-    const finalRisk           = blend(risk,           "risk");
-    const finalContractHealth = blend(contractHealth, "contractHealth");
-    const finalProjectHealth  = blend(projectHealth,  "projectHealth");
-    const finalResourceHealth = blend(resourceHealth, "resourceHealth");
-    const finalFinancial      = blend(financial,      "financial");
-    const finalWhitespace     = blend(whitespace,     "whitespace");
+    const finalCsat           = blend(baseScores.csat,           "csat");
+    const finalRelationship   = blend(baseScores.relationship,   "relationship");
+    const finalRisk           = blend(baseScores.risk,           "risk");
+    const finalContractHealth = blend(baseScores.contractHealth, "contractHealth");
+    const finalProjectHealth  = blend(baseScores.projectHealth,  "projectHealth");
+    const finalResourceHealth = blend(baseScores.resourceHealth, "resourceHealth");
+    const finalFinancial      = blend(baseScores.financial,      "financial");
+    const finalWhitespace     = blend(baseScores.whitespace,     "whitespace");
 
     const questionnaireContributed = Object.keys(qCnt).length > 0;
 
@@ -197,7 +149,7 @@ export async function POST(req: NextRequest) {
 
     const overrideMap: Record<string, number> = {};
     for (const o of approvedOverrides) {
-      if (o.approvedValue !== null) overrideMap[o.kpiKey] = clamp(o.approvedValue);
+      if (o.approvedValue !== null) overrideMap[o.kpiKey] = clampScore(o.approvedValue);
     }
 
     const applyOverride = (val: number, key: string): number =>
@@ -214,8 +166,33 @@ export async function POST(req: NextRequest) {
 
     const overriddenDimensions = Object.keys(overrideMap);
 
+    const scoredByKey: Record<KpiScoreKey, number> = {
+      csat: scoredCsat,
+      relationship: scoredRelationship,
+      risk: scoredRisk,
+      contractHealth: scoredContractHealth,
+      projectHealth: scoredProjectHealth,
+      resourceHealth: scoredResourceHealth,
+      financial: scoredFinancial,
+      whitespace: scoredWhitespace,
+    };
+
+    for (const key of Object.keys(scoredByKey) as KpiScoreKey[]) {
+      const contributed = qCnt[key] ? `Questionnaire blend applied from ${qCnt[key]} response(s).` : null;
+      const overridden = overrideMap[key] !== undefined ? `Approved manual override applied: ${overrideMap[key]}.` : null;
+      scoreBreakdown[key] = {
+        ...scoreBreakdown[key],
+        score: scoredByKey[key],
+        drivers: [
+          ...scoreBreakdown[key].drivers,
+          ...(contributed ? [{ label: "Questionnaire", value: contributed, score: scoredByKey[key] }] : []),
+          ...(overridden ? [{ label: "Override", value: overridden, score: scoredByKey[key] }] : []),
+        ],
+      };
+    }
+
     // ── Overall weighted score ────────────────────────────────────────────────
-    const overall = clamp(
+    const overall = clampScore(
       scoredCsat           * W.csat           +
       scoredRelationship   * W.relationship   +
       scoredRisk           * W.risk           +
@@ -228,18 +205,20 @@ export async function POST(req: NextRequest) {
     const health = healthFromScore(overall);
 
     // ── AI narrative ──────────────────────────────────────────────────────────
+    const breakdownLines = (Object.keys(scoreBreakdown) as KpiScoreKey[])
+      .map((key) => {
+        const item = scoreBreakdown[key];
+        const drivers = item.drivers.map((d) => `${d.label}: ${d.value}${typeof d.score === "number" ? ` (${d.score}/100)` : ""}`).join("; ");
+        return `${item.label}: ${item.score}/100, weight ${item.weight}%, rationale: ${item.rationale}. Drivers: ${drivers}`;
+      })
+      .join("\n");
+
     const prompt = `You are a KAM Intelligence engine. Write a 2-3 sentence executive narrative for this account health score. Be specific, factual, and action-oriented. No bullet points.
 
 Account: ${account.name}
 Overall Score: ${overall}/100 (${health})
-CSAT: ${scoredCsat}/100 (NPS: ${w.npsScore ?? "N/A"}, Platform utilisation: ${w.utilizationPct}%)
-Relationship: ${scoredRelationship}/100
-Risk: ${scoredRisk}/100 (Open tickets: ${j.openTickets}, Critical: ${j.criticalTickets})
-Contract Health: ${scoredContractHealth}/100 (Revenue utilisation: ${f.revenueUtilizationPct}%, Overdue: $${f.overdueAmount})
-Project Health: ${scoredProjectHealth}/100 (Sprint velocity: ${sprintVelocity}%, Avg resolution: ${j.avgResolutionDays}d)
-Resource Health: ${scoredResourceHealth}/100 (Active users: ${w.activeUsers}/${w.totalLicenses})
-Financial: ${scoredFinancial}/100
-Whitespace: ${scoredWhitespace}/100
+KPI breakdown:
+${breakdownLines}
 Contract ends: ${account.contractEnd?.toISOString().split("T")[0] ?? "N/A"}
 ${questionnaireContributed ? "(Scores include blending with confirmed questionnaire responses)" : ""}${overriddenDimensions.length > 0 ? `\n(Manual overrides applied to: ${overriddenDimensions.join(", ")})` : ""}`;
 
@@ -324,7 +303,7 @@ ${questionnaireContributed ? "(Scores include blending with confirmed questionna
 
     await logAudit({ role, accountId, action: "score.computed", entity: "KamScore", entityId: score.id, metadata: { role, overall, health, questionnaireContributed, overriddenDimensions, csat: scoredCsat, relationship: scoredRelationship, risk: scoredRisk, contractHealth: scoredContractHealth, projectHealth: scoredProjectHealth, resourceHealth: scoredResourceHealth, financial: scoredFinancial, whitespace: scoredWhitespace } });
 
-    return ok({ score, questionnaireContributed, overriddenDimensions, model: aiModel, latencyMs: aiLatency });
+    return ok({ score, breakdown: scoreBreakdown, questionnaireContributed, overriddenDimensions, model: aiModel, latencyMs: aiLatency });
   } catch (err) {
     return serverError(err);
   }

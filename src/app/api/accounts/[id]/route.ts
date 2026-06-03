@@ -64,9 +64,19 @@ export async function GET(req: NextRequest, { params }: Params) {
       ...account,
       adapters: {
         salesforce: sf.data,
-        jira: jira.data,
-        worksphere: worksphere.data,
-        finance: finance.data,
+        jira: {
+          ...jira.data,
+          sprintVelocity: jira.data.activeSprint?.velocity ?? 0,
+        },
+        worksphere: {
+          ...worksphere.data,
+          totalUsers: worksphere.data.totalLicenses,
+          lastMeetingDate: worksphere.data.recentMeetings[0]?.date ?? null,
+        },
+        finance: {
+          ...finance.data,
+          outstandingInvoices: finance.data.invoices.filter((invoice) => invoice.status !== "paid").length,
+        },
       },
     });
   } catch (err) {

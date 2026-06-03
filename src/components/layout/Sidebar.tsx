@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutGrid, Zap, BarChart3, BarChart2, Users, Settings, Home, ClipboardList, CheckSquare, MessageSquare,
+  LayoutGrid, Zap, BarChart3, BarChart2, Users, Settings, Home, ClipboardList, CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/context/RoleContext";
@@ -30,13 +30,6 @@ const NAV_MAIN: NavItem[] = [
     label: "AI Pulse",
     icon: Zap,
     color: "#9333EA",
-    iconColor: "#fff",
-  },
-  {
-    href: "/assistant",
-    label: "AI Assistant",
-    icon: MessageSquare,
-    color: "#0891B2",
     iconColor: "#fff",
   },
   {

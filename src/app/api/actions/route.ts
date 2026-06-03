@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRoleFromRequest, ok, created, badRequest, serverError, guard, kamWhere } from "@/lib/api";
+import { getRoleFromRequest, getUserIdFromRequest, ok, created, badRequest, serverError, guard, kamWhere } from "@/lib/api";
+import { logAudit } from "@/lib/audit";
 
 // GET /api/actions?accountId=xxx&status=OPEN
 export async function GET(req: NextRequest) {
@@ -17,11 +18,15 @@ export async function GET(req: NextRequest) {
 
     // KAM scope: when fetching all actions (no accountId), limit to KAM's own accounts
     let kamAccountIds: string[] | undefined;
-    if (role === "KAM" && !accountId) {
-      const kamUser = await prisma.user.findFirst({ where: { role: "KAM" }, orderBy: { createdAt: "asc" } });
-      const scope = kamWhere(role, kamUser?.id ?? "");
+    if (role === "KAM") {
+      const headerUserId = getUserIdFromRequest(req);
+      const fallbackKam = headerUserId ? null : await prisma.user.findFirst({ where: { role: "KAM" }, orderBy: { createdAt: "asc" } });
+      const scope = kamWhere(role, headerUserId ?? fallbackKam?.id ?? "");
       if (scope.kamId) {
-        const accs = await prisma.account.findMany({ where: scope, select: { id: true } });
+        const accs = await prisma.account.findMany({
+          where: accountId ? { id: accountId, ...scope } : scope,
+          select: { id: true },
+        });
         kamAccountIds = accs.map((a) => a.id);
       }
     }
@@ -56,7 +61,7 @@ export async function POST(req: NextRequest) {
     if (denied) return denied;
 
     const body = await req.json();
-    const { accountId, title, description, priority, dueDate, ownerId, tags } = body;
+    const { accountId, title, description, priority, dueDate, ownerId, tags, source } = body;
 
     if (!accountId) return badRequest("accountId is required");
     if (!title)     return badRequest("title is required");
@@ -70,8 +75,17 @@ export async function POST(req: NextRequest) {
         priority:    priority ?? "MEDIUM",
         dueDate:     dueDate ? new Date(dueDate) : null,
         tags:        tags ?? null,
-        source:      "HUMAN_CREATED",
+        source:      source === "AI_PROPOSED" ? "AI_PROPOSED" : "HUMAN_CREATED",
       },
+    });
+
+    await logAudit({
+      role,
+      accountId,
+      action: source === "AI_PROPOSED" ? "action.suggestion_approved" : "action.created",
+      entity: "Action",
+      entityId: action.id,
+      metadata: { title, priority: action.priority, source: action.source },
     });
 
     return created(action);

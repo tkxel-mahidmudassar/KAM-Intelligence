@@ -66,6 +66,7 @@ interface AdapterData {
     revenueUtilizationPct: number;
     outstandingInvoices: number;
     overdueAmount: number;
+    outstandingBalance?: number;
   };
 }
 
@@ -368,16 +369,116 @@ const KPI_CATEGORY_MAP: Record<string, string[]> = {
   whitespace:     ["financial"],
 };
 
+interface KpiExplanation {
+  rationale: string;
+  formula: string;
+  drivers: string[];
+  fallback?: string;
+}
+
+const KPI_EXPLANATIONS: Record<string, Omit<KpiExplanation, "drivers">> = {
+  csat: {
+    rationale: "Direct client satisfaction and most important relationship-quality signal.",
+    formula: "NPS, explicit CSAT/engagement KPI, and recent touchpoint sentiment.",
+  },
+  relationship: {
+    rationale: "Depth and breadth of stakeholder penetration and executive access.",
+    formula: "Relationship KPIs, stakeholder breadth, meeting cadence, and sentiment.",
+  },
+  risk: {
+    rationale: "Early warning across delivery, commercial, relationship, and internal risk.",
+    formula: "Delivery risk, commercial overdue exposure, relationship health, and CSAT.",
+  },
+  contractHealth: {
+    rationale: "Renewal risk, contractual protection, and commercial foundation.",
+    formula: "Renewal proximity, overdue exposure, revenue utilization, and contract completeness.",
+  },
+  projectHealth: {
+    rationale: "Delivery execution quality and backlog/velocity health.",
+    formula: "Sprint velocity, backlog health, resolution speed, and support/project KPIs.",
+  },
+  resourceHealth: {
+    rationale: "Team stability, fit, turnover, and bench risk.",
+    formula: "Resource KPI if present; otherwise MVP mock blended with project and relationship health.",
+    fallback: "Resource health is mocked in MVP until live Worksphere resource data is available.",
+  },
+  financial: {
+    rationale: "Payment timeliness, outstanding invoices, and revenue trend.",
+    formula: "Overdue exposure, payment timeliness, revenue trend, outstanding balance, and financial KPIs.",
+  },
+  whitespace: {
+    rationale: "Growth opportunity signal; lower in health score but high in opportunity ranking.",
+    formula: "Expansion signal, CSAT readiness, relationship readiness, and utilization/adoption.",
+  },
+};
+
+function buildKpiExplanation(key: string, adapters: AdapterData, dimensions: KpiDimension[]): KpiExplanation {
+  const base = KPI_EXPLANATIONS[key] ?? {
+    rationale: "Internal KPI score based on account data.",
+    formula: "Weighted internal data signals.",
+  };
+  const kpiList = dimensions.length > 0
+    ? dimensions.map((d) => `${d.name}: ${d.value}${d.unit ?? ""}${d.target ? ` / ${d.target}${d.unit ?? ""}` : ""}`)
+    : ["No matching KPI rows; using adapter/default fallback"];
+
+  const adapterDrivers: Record<string, string[]> = {
+    csat: [
+      `NPS: ${adapters.worksphere.npsScore ?? "N/A"}`,
+      `Utilization context: ${adapters.worksphere.utilizationPct}%`,
+      ...kpiList,
+    ],
+    relationship: [
+      `Last meeting: ${adapters.worksphere.lastMeetingDate ?? "N/A"}`,
+      ...kpiList,
+    ],
+    risk: [
+      `Open tickets: ${adapters.jira.openTickets}`,
+      `Critical tickets: ${adapters.jira.criticalTickets}`,
+      `Average resolution: ${adapters.jira.avgResolutionDays}d`,
+      `Overdue amount: $${adapters.finance.overdueAmount.toLocaleString()}`,
+    ],
+    contractHealth: [
+      `Revenue utilization: ${adapters.finance.revenueUtilizationPct}%`,
+      `Overdue amount: $${adapters.finance.overdueAmount.toLocaleString()}`,
+      ...kpiList,
+    ],
+    projectHealth: [
+      `Sprint velocity: ${adapters.jira.sprintVelocity ?? "N/A"}%`,
+      `Open tickets: ${adapters.jira.openTickets}`,
+      `Average resolution: ${adapters.jira.avgResolutionDays}d`,
+      ...kpiList,
+    ],
+    resourceHealth: [
+      `Active users: ${adapters.worksphere.activeUsers}/${adapters.worksphere.totalUsers}`,
+      "MVP resource stability proxy until live resource data is available",
+      ...kpiList,
+    ],
+    financial: [
+      `Revenue utilization: ${adapters.finance.revenueUtilizationPct}%`,
+      `Outstanding invoices: ${adapters.finance.outstandingInvoices}`,
+      `Overdue amount: $${adapters.finance.overdueAmount.toLocaleString()}`,
+      ...kpiList,
+    ],
+    whitespace: [
+      `Utilization/adoption: ${adapters.worksphere.utilizationPct}%`,
+      ...kpiList,
+    ],
+  };
+
+  return { ...base, drivers: adapterDrivers[key] ?? kpiList };
+}
+
 // ─── KPI Scoring Row (sparkline + expand for tasks) ──────────────────────────
 
 function KpiScoringRow({
-  meta, score, history, dimensions, actions, onRequestOverride, canOverride, overrideActive,
+  meta, score, history, dimensions, actions, explanation, onRequestOverride, canOverride, overrideActive,
 }: {
   meta:             { key: string; label: string; weight: number };
   score:            number | null;
   history:          number[];       // oldest→newest, up to 6 values
   dimensions:       KpiDimension[];
   actions:          Action[];
+  explanation:       KpiExplanation;
   onRequestOverride?: () => void;
   canOverride:      boolean;
   overrideActive?:  boolean;
@@ -463,6 +564,22 @@ function KpiScoringRow({
       {/* Expand panel */}
       {expanded && (
         <div className="px-4 pb-3 pt-1 bg-[var(--bg-surface-2)]/40 space-y-3">
+          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-1)] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-disabled)]">Scoring Logic</p>
+            <p className="mt-1 text-[11px] text-[var(--text-primary)] leading-relaxed">{explanation.rationale}</p>
+            <p className="mt-1 text-[11px] text-[var(--text-muted)] leading-relaxed">{explanation.formula}</p>
+            {explanation.fallback && (
+              <p className="mt-1 text-[10px] text-[#F59E0B] leading-relaxed">{explanation.fallback}</p>
+            )}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {explanation.drivers.slice(0, 5).map((driver) => (
+                <span key={driver} className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface-2)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]">
+                  {driver}
+                </span>
+              ))}
+            </div>
+          </div>
+
           {/* KPI dimensions */}
           {dimensions.length > 0 && (
             <div className="space-y-1.5">
@@ -775,6 +892,7 @@ export function OverviewTab({
                   history={kpiHistory(m.key as keyof KamScore)}
                   dimensions={dims}
                   actions={actions}
+                  explanation={buildKpiExplanation(m.key as string, adapters, dims)}
                   canOverride={isKam && !!onRequestOverride}
                   overrideActive={hasApprovedOverride}
                   onRequestOverride={onRequestOverride ? () => {

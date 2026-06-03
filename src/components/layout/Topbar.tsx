@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
 
 const ROLES: { value: Role; label: string }[] = [
-  { value: "KAM",       label: "KAM" },
-  { value: "MANAGER",   label: "Manager" },
+  { value: "KAM",       label: "Associate" },
+  { value: "MANAGER",   label: "KAM" },
   { value: "EXECUTIVE", label: "Exec" },
 ];
 

@@ -14,10 +14,11 @@ const TYPE_COLOR: Record<string, string> = {
   renewal:    "#F59E0B",
   signal:     "#EF4444",
   touchpoint: "#14B8A6",
+  pulse:      "#7C3AED",
 };
 
 const TYPE_LABEL: Record<string, string> = {
-  action: "Action", qbr: "QBR", renewal: "Renewal", signal: "Signal", touchpoint: "Touchpoint",
+  action: "Action", qbr: "QBR", renewal: "Renewal", signal: "Signal", touchpoint: "Touchpoint", pulse: "AI Pulse",
 };
 
 function toDateKey(d: Date): string {

@@ -511,7 +511,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 const ROLE_LABELS: Record<string, string> = {
-  KAM: "Account Manager", MANAGER: "Manager", EXECUTIVE: "Executive", ADMIN: "Admin",
+  KAM: "Associate", MANAGER: "KAM", EXECUTIVE: "Exec", ADMIN: "Admin",
 };
 
 function avatarInitials(name: string) {
@@ -736,7 +736,7 @@ export default function SettingsPage() {
       {canViewTeam && (
         <SettingSection title="Team" icon={Users} iconColor="#0755E9">
           <p className="text-[12px] text-[var(--text-muted)] mb-4">
-            View and manage team members. Managers can change KAM roles.
+            View and manage team members. Admins can change product role labels and access.
           </p>
           {teamLoading ? (
             <div className="space-y-2">

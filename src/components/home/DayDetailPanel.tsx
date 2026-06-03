@@ -17,6 +17,7 @@ const TYPE_COLOR: Record<string, string> = {
   renewal:    "#F59E0B",
   signal:     "#EF4444",
   touchpoint: "#14B8A6",
+  pulse:      "#7C3AED",
 };
 
 const TYPE_ICON: Record<string, React.ElementType> = {
@@ -25,10 +26,11 @@ const TYPE_ICON: Record<string, React.ElementType> = {
   renewal:    RefreshCw,
   signal:     AlertTriangle,
   touchpoint: Activity,
+  pulse:      Zap,
 };
 
 const TYPE_LABEL: Record<string, string> = {
-  action: "Action", qbr: "QBR", renewal: "Renewal", signal: "Signal", touchpoint: "Touchpoint",
+  action: "Action", qbr: "QBR", renewal: "Renewal", signal: "Signal", touchpoint: "Touchpoint", pulse: "AI Pulse",
 };
 
 function formatDate(iso: string): string {
@@ -46,6 +48,7 @@ function ItemRow({
   const Icon  = TYPE_ICON[item.type] ?? Zap;
 
   const isClickable = item.type === "action" || item.type === "signal";
+  const href = item.href ?? `/accounts/${item.accountId}`;
 
   return (
     <div
@@ -89,18 +92,21 @@ function ItemRow({
           )}
         </div>
         <Link
-          href={`/accounts/${item.accountId}`}
+          href={href}
           onClick={(e) => e.stopPropagation()}
           className="text-[10px] text-[#0755E9] hover:underline mt-0.5 block truncate"
         >
           {item.accountName}
         </Link>
+        {item.summary && (
+          <p className="mt-1 text-[10px] text-[var(--text-muted)] line-clamp-2">{item.summary}</p>
+        )}
       </div>
 
       {/* Arrow for non-modal items */}
       {!isClickable && (
         <Link
-          href={`/accounts/${item.accountId}`}
+          href={href}
           className="shrink-0 p-1 rounded text-[var(--text-disabled)] hover:text-[var(--text-primary)] transition-colors"
           title="Open account"
         >
@@ -128,7 +134,7 @@ export function DayDetailPanel({ date, items, onClose, onItemUpdated }: DayDetai
     return acc;
   }, {});
 
-  const typeOrder = ["signal", "renewal", "action", "qbr", "touchpoint"];
+  const typeOrder = ["signal", "pulse", "renewal", "action", "qbr", "touchpoint"];
 
   const handleSelect = (item: CalendarItem) => {
     if (item.type === "action") setActiveAction(item);
