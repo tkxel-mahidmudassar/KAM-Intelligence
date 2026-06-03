@@ -140,10 +140,20 @@ Return ONLY a JSON object (no markdown, no explanation):
       parsed = JSON.parse(response.content.slice(first, last + 1));
     }
 
-    const accountId = accountIds[parsed.accountName];
+    // Exact match first, then case-insensitive, then partial/fuzzy match
+    let accountId: string = accountIds[parsed.accountName] ?? "";
     if (!accountId) {
-      console.warn(`[pulseInsights] Unknown account name in response: "${parsed.accountName}"`);
-      return { insight: null, step };
+      const nameLower = parsed.accountName.toLowerCase().trim();
+      const entry = Object.entries(accountIds).find(([k]) => {
+        const kl = k.toLowerCase();
+        return kl === nameLower || kl.includes(nameLower) || nameLower.includes(kl);
+      });
+      accountId = entry?.[1] ?? "";
+    }
+    if (!accountId) {
+      // Last resort: pick first account — still better than dropping the insight
+      accountId = Object.values(accountIds)[0] ?? "";
+      console.warn(`[pulseInsights] Fuzzy match failed for "${parsed.accountName}", using fallback account`);
     }
 
     return {

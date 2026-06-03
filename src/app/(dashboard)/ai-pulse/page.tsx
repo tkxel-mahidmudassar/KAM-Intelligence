@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Brain, Zap, TrendingUp, AlertTriangle, Lightbulb, RefreshCw, ChevronRight, Sparkles, Clock } from "lucide-react";
 import Link from "next/link";
 import { useRole } from "@/context/RoleContext";
@@ -241,7 +241,7 @@ export default function AiPulsePage() {
     }
   };
 
-  const runAgent = async () => {
+  const runAgent = useCallback(async () => {
     setGenerating(true);
     setGeneratingStep("Gathering account data...");
     try {
@@ -271,22 +271,23 @@ export default function AiPulsePage() {
       setGenerating(false);
       setGeneratingStep("");
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, userId]);
 
   // On mount: load data, then auto-trigger agent if no insights exist or all are >24h old
   useEffect(() => {
     (async () => {
       const d = await fetchData();
-      const insights: Insight[] = d?.insights ?? [];
-      const hasRecent = insights.some((i) => {
+      const existing: Insight[] = d?.insights ?? [];
+      const hasRecent = existing.some((i) => {
         const age = Date.now() - new Date(i.generatedAt).getTime();
         return age < 24 * 60 * 60 * 1000; // < 24 hours
       });
-      if (!hasRecent && !generating) {
+      if (!hasRecent) {
         runAgent();
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
   const insights = data?.insights ?? [];
