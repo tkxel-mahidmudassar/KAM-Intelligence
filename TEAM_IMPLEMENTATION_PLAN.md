@@ -260,7 +260,7 @@ Notes:
 
 Owner: TBD
 
-Status: pending, with TXT/Markdown MVP text capture already available from Module 1.
+Status: implemented and QA validated.
 
 Responsibilities:
 
@@ -276,6 +276,21 @@ Implementation notes:
 - PDF should preserve page number for citations.
 - DOCX should preserve headings where possible.
 - TXT and Markdown can use heading/line offsets as source locators.
+
+Implemented behavior:
+
+- Added reusable server-side playbook extraction for PDF, DOCX/DOC, TXT, Markdown, XLS, and XLSX.
+- Upload and replace now create/update playbooks as `PROCESSING`, parse inline, then mark rows `ACTIVE` or `FAILED`.
+- Failed parsing preserves the playbook row, file metadata, and a concise `processingError` so users can replace the file.
+- Excel parsing processes all sheets and preserves sheet names plus row ranges in extracted source markers.
+- Extracted text is stored with compact source markers such as page, section, sheet, and line locators.
+
+Verification completed:
+
+- API QA passed for TXT, Markdown, PDF, DOCX replace/reparse, XLSX all-sheet extraction, and corrupt PDF failure.
+- Replace QA confirmed a failed DOCX row can be overwritten and reprocessed to `ACTIVE`.
+- Default playbook list was cleaned after QA by archiving test rows.
+- `prisma validate`, `tsc --noEmit`, `npm run build`, and `git diff --check` passed.
 
 ### Module 4: Rule Extraction Engine
 
@@ -539,9 +554,8 @@ Important product language:
 
 ## Immediate Next Steps
 
-1. Implement Module 3 full extraction for PDF, DOCX, TXT, Markdown, and Excel, including page/section/sheet locators.
-2. Implement Module 4 rule extraction with category classification, dedupe, and source citations.
-3. Add the `Recommendation` provenance model and Module 5 playbook-first recommendation orchestrator.
-4. Wire Active Playbooks into account overview.
-5. Surface playbook-guided recommendations in account page, homepage modals, AI Pulse, calendar day details, and Action Board.
-6. Add focused automated tests for upload permissions, parsing success/failure, archive behavior, playbook-first priority, and action/calendar creation.
+1. Implement Module 4 rule extraction with category classification, dedupe, and source citations.
+2. Add the `Recommendation` provenance model and Module 5 playbook-first recommendation orchestrator.
+3. Wire Active Playbooks into account overview.
+4. Surface playbook-guided recommendations in account page, homepage modals, AI Pulse, calendar day details, and Action Board.
+5. Add focused automated tests for upload permissions, parsing success/failure, archive behavior, playbook-first priority, and action/calendar creation.

@@ -335,7 +335,7 @@ export function PlaybookLibrary({ role, userId }: PlaybookLibraryProps) {
       </div>
 
       <p className={cn("text-[11px] text-[var(--text-disabled)]", !canWrite && "text-[var(--text-muted)]")}>
-        Playbooks are trusted internal files. Module 3 will add full parsing for PDF, DOCX, and Excel rule extraction.
+        Playbooks are trusted internal files. Extracted text is used by the next rule-generation module.
       </p>
     </div>
   );
