@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   CheckCircle2, Clock, AlertTriangle, Filter, ChevronRight,
-  Calendar, User, Building2, Plus, X,
+  Calendar, User, Building2, Plus, X, BookOpen, Brain,
 } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 import { SkeletonCard } from "@/components/ui/Skeleton";
@@ -126,6 +126,17 @@ function ActionCard({ action, onStatusChange }: {
           {overdue ? <AlertTriangle className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}
           {dueDateLabel(action.dueDate)}
         </span>
+        {/* Source badge */}
+        {action.source === "PLAYBOOK" && (
+          <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold border border-[#0755E9]/25 text-[#0755E9]" style={{ background: "rgba(7,85,233,0.07)" }}>
+            <BookOpen className="h-2.5 w-2.5" /> Playbook
+          </span>
+        )}
+        {action.source === "AI_PROPOSED" && (
+          <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold border border-[#6B7280]/20 text-[var(--text-muted)]" style={{ background: "rgba(107,114,128,0.06)" }}>
+            <Brain className="h-2.5 w-2.5" /> AI
+          </span>
+        )}
         {/* Owner */}
         {action.owner && (
           <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] ml-auto">

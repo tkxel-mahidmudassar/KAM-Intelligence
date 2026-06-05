@@ -72,8 +72,7 @@ Return JSON only:
     task: "kyc-agent-facts",
     messages: [{ role: "user", content: promptA }],
     maxTokens: 512,
-    temperature: 0.2,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("extract-key-facts", promptA, responseA.content, Date.now() - tA));
 
@@ -111,8 +110,7 @@ Return JSON only with these exact keys:
     task: "kyc-agent-draft",
     messages: [{ role: "user", content: promptB }],
     maxTokens: 4096,
-    temperature: 0.3,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("draft-kyc-document", promptB, responseB.content, Date.now() - tB));
 

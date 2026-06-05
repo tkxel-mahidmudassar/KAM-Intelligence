@@ -46,7 +46,7 @@ Notes: ${session.notes ?? "None"}`;
       task: "qbr-summary",
       messages: [{ role: "user", content: prompt }],
       maxTokens: 2048,
-      temperature: 0.2,
+      temperature: 0.5, // prose — client-facing, professional
     });
 
     // Persist summary back to session

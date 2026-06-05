@@ -71,8 +71,7 @@ Return JSON only:
     task: "qbr-agent-summary",
     messages: [{ role: "user", content: promptA }],
     maxTokens: 512,
-    temperature: 0.2,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("account-state-summary", promptA, responseA.content, Date.now() - tA));
 
@@ -106,8 +105,7 @@ Generate 5-8 agenda items. Return JSON only:
     task: "qbr-agent-agenda",
     messages: [{ role: "user", content: promptB }],
     maxTokens: 2048,
-    temperature: 0.4,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("generate-agenda", promptB, responseB.content, Date.now() - tB));
 

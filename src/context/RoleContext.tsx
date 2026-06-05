@@ -44,7 +44,7 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       const storedUid   = localStorage.getItem(LS_UID);
       const storedName  = localStorage.getItem(LS_UNAME);
       const storedEmail = localStorage.getItem(LS_EMAIL);
-      if (storedRole && ["KAM", "MANAGER", "EXECUTIVE", "ADMIN"].includes(storedRole)) {
+      if (storedRole && ["ASSOCIATE", "KAM", "MANAGER", "EXECUTIVE", "ADMIN"].includes(storedRole)) {
         setRoleState(storedRole);
       }
       if (storedUid)   setUserId(storedUid);

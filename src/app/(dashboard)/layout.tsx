@@ -34,7 +34,7 @@ function DemoBanner() {
       <Zap className="h-3 w-3 shrink-0 opacity-80" />
       <span className="opacity-90">
         <strong className="font-semibold opacity-100">KAM Intelligence POC</strong>
-        &nbsp;&middot;&nbsp;Live mock data &middot; AI co-pilot via Gemini 2.5 Flash &middot; Role switcher top-right
+        &nbsp;&middot;&nbsp;Live mock data &middot; AI co-pilot via Gemini 2.0 Flash &middot; Role switcher top-right
       </span>
       <button
         onClick={dismiss}

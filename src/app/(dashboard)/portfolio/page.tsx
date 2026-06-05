@@ -55,7 +55,7 @@ export default function PortfolioPage() {
   const [view, setView]                 = useState<"grid" | "list">("grid");
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const canCreate = role === "MANAGER";
+  const canCreate = role === "KAM" || role === "MANAGER";
 
   const reload = () => {
     setLoading(true);

@@ -7,10 +7,11 @@ import { getFinanceAdapter } from "@/lib/adapters/finance";
 import { getRoleFromRequest, ok, badRequest, notFound, serverError, guard } from "@/lib/api";
 import { AccountHealth } from "@prisma/client";
 import { runTriggerEngine } from "@/lib/scoring/triggers";
+import { expireRecommendationsForAccount } from "@/lib/scoring/expireRecommendations";
 import { DEFAULT_WEIGHTS, WEIGHT_KEYS } from "@/lib/scoring/weights";
 import { calculateKpiSubscores, clampScore, type KpiScoreKey } from "@/lib/scoring/kpi";
 import { logAudit } from "@/lib/audit";
-import { runScoreActionsAgent } from "@/lib/ai/agents/scoreActions";
+import { runMasterOrchestrator } from "@/lib/ai/agents/masterOrchestrator";
 
 // ─── Load weights from DB (fallback to defaults) ─────────────────────────────
 
@@ -232,7 +233,7 @@ ${questionnaireContributed ? "(Scores include blending with confirmed questionna
         task: "score-narrative",
         messages: [{ role: "user", content: prompt }],
         maxTokens: 2048,
-        temperature: 0.2,
+        temperature: 0.7, // prose narrative — factual but expressive
       });
       aiNarrative = aiResponse.content;
       aiModel     = aiResponse.model;
@@ -273,7 +274,6 @@ ${questionnaireContributed ? "(Scores include blending with confirmed questionna
       data: { health, healthUpdatedAt: new Date() },
     });
 
-    // ── Run trigger engine (non-blocking — errors are swallowed internally) ────
     const kpiScores = {
       csat:           scoredCsat,
       relationship:   scoredRelationship,
@@ -284,9 +284,23 @@ ${questionnaireContributed ? "(Scores include blending with confirmed questionna
       financial:      scoredFinancial,
       whitespace:     scoredWhitespace,
     };
+
+    // ── Run trigger engine (non-blocking) ────────────────────────────────────
     void runTriggerEngine(accountId, kpiScores);
 
-    // ── Run score actions agent (non-blocking) ────────────────────────────────
+    // ── Expire stale recommendations for this account (non-blocking) ─────────
+    void expireRecommendationsForAccount(accountId, {
+      csat:          scoredCsat,
+      relationship:  scoredRelationship,
+      risk:          scoredRisk,
+      contractHealth: scoredContractHealth,
+      financial:     scoredFinancial,
+      projectHealth: scoredProjectHealth,
+      resourceHealth: scoredResourceHealth,
+      whitespace:    scoredWhitespace,
+    });
+
+    // ── Fire master orchestrator for score_computed (non-blocking) ───────────
     void (async () => {
       try {
         const newSignals = await prisma.signal.findMany({
@@ -295,9 +309,14 @@ ${questionnaireContributed ? "(Scores include blending with confirmed questionna
           orderBy: { detectedAt: "desc" },
           take: 5,
         });
-        await runScoreActionsAgent(accountId, kpiScores, newSignals.map((s) => s.title));
+        await runMasterOrchestrator("score_computed", {
+          accountId,
+          role,
+          kpiScores,
+          newSignalTitles: newSignals.map((s) => s.title),
+        });
       } catch (err) {
-        console.error("[score] scoreActionsAgent failed:", err);
+        console.error("[score] master orchestrator failed:", err);
       }
     })();
 

@@ -11,6 +11,7 @@ datasource db {
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum Role {
+  ASSOCIATE
   KAM
   MANAGER
   EXECUTIVE
@@ -40,6 +41,7 @@ enum ActionPriority {
 enum ActionSource {
   AI_PROPOSED
   HUMAN_CREATED
+  PLAYBOOK
 }
 
 enum SignalType {
@@ -113,20 +115,26 @@ enum PlaybookStatus {
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  role      Role     @default(KAM)
-  avatarUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  email              String   @unique
+  name               String
+  role               Role     @default(KAM)
+  avatarUrl          String?
+  phone              String?
+  jobTitle           String?
+  managerId          String?  // For ASSOCIATE: their supervising KAM; for KAM: their MANAGER
+  notificationPrefs  Json?    // { healthDrops: bool, newSignals: bool, actionReminders: bool }
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
+  manager         User?          @relation("UserReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
+  reports         User[]         @relation("UserReportsTo")
   managedAccounts Account[]      @relation("AccountKam")
   actions         Action[]       @relation("ActionOwner")
   qbrSessions     QbrSession[]   @relation("QbrCreator")
   kycVersions     KycVersion[]   @relation("KycAuthor")
   activityLogs    ActivityLog[]
-  uploadedPlaybooks Playbook[]    @relation("PlaybookUploader")
+  playbooks       Playbook[]     @relation("PlaybookUploader")
 
   @@map("users")
 }
@@ -166,6 +174,10 @@ model Account {
   questionnaireResponses QuestionnaireResponse[]
   escalations            Escalation[]
   opportunities          Opportunity[]
+  recommendations        Recommendation[]
+  playbookExclusions     AccountPlaybookExclusion[]
+  ruleSuppression        AccountRuleSuppression[]
+  feedbacks              RecommendationFeedback[]
 
   @@map("accounts")
 }
@@ -406,12 +418,18 @@ model AIPulseInsight {
   detail       String?     @db.LongText
   confidence   Float?
   model        String?
+  task         String?     // e.g. "outcome-analysis", "score-narrative", "pulse-insight"
   promptTokens Int?
   outputTokens Int?
+  latencyMs    Int?        // LLM call latency in ms
   isRead       Boolean     @default(false)
   isDismissed  Boolean     @default(false)
   generatedAt  DateTime    @default(now())
   createdAt    DateTime    @default(now())
+
+  // Source attribution — what data drove this insight
+  // Shape: { newsHeadlines: NewsItem[], internalData: { health, overallScore, keyScores, signalTitles } }
+  sources      Json?
 
   account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
@@ -583,6 +601,211 @@ model AppConfig {
   updatedBy           String?
 
   @@map("app_config")
+}
+
+// ─── Playbooks ────────────────────────────────────────────────────────────────
+
+model Playbook {
+  id          String         @id @default(uuid())
+  title       String
+  scope       String         @default("GLOBAL")
+  fileName    String
+  fileType    String         // pdf | docx | txt | md | xlsx
+  mimeType    String
+  fileSize    Int
+  storagePath String
+  uploadedById String?
+  status      PlaybookStatus @default(PROCESSING)
+  processedAt DateTime?
+  errorMessage String?       @db.Text
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  uploadedBy  User?          @relation("PlaybookUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  rules       PlaybookRule[]
+  exclusions  AccountPlaybookExclusion[]
+
+  @@map("playbooks")
+}
+
+enum PlaybookStatus {
+  PROCESSING
+  ACTIVE
+  PENDING_REVIEW  // at least one rule needs manager approval before playbook is fully active
+  FAILED
+  ARCHIVED
+}
+
+model PlaybookRule {
+  id               String   @id @default(uuid())
+  playbookId       String
+  category         String   // CSAT | RELATIONSHIP | RISK | CONTRACT | PROJECT | RESOURCE | FINANCIAL | WHITESPACE | RENEWAL | DELIVERY | GROWTH
+  condition        String   @db.Text
+  recommendation   String   @db.Text
+  correctiveMeasure String? @db.Text
+  priority         Int      @default(2) // 1=HIGH 2=MEDIUM 3=LOW
+  sourceTitle      String?
+  sourcePage       Int?
+  sourceSection    String?
+  sourceSheet      String?
+  sourceExcerpt    String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  // Validation status (set by playbookExtractor field validators)
+  status                  String  @default("ACTIVE") // ACTIVE | PENDING_REVIEW
+  validationFailureReason String? @db.Text           // why the rule was sent to PENDING_REVIEW
+
+  // Source checker fields (set by sourceChecker agent — Item 7)
+  sourceConfidence  Float?  // 0.0-1.0; null until source checker has run
+  sourceMismatch    String? @db.Text  // mismatch reason if confidence < 0.7
+  suggestedCategory String? // source checker's suggested category correction if wrong
+
+  // Quality tracking (updated by Rule Quality Scorer agent)
+  qualityScore     Float?           // 0-100; null until >= 5 feedback signals exist
+  dismissCount     Int              @default(0)
+  actionCount      Int              @default(0)
+  qualityNote      Json?            // { summary, suggestions, flag?, analyzedAt }
+
+  playbook         Playbook          @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  recommendations  Recommendation[]
+  feedbacks        RecommendationFeedback[]
+  suppressions     AccountRuleSuppression[]
+
+  @@map("playbook_rules")
+}
+
+// Per-account playbook exclusion (user decision: global playbooks can be deactivated per account)
+model AccountPlaybookExclusion {
+  id         String   @id @default(uuid())
+  accountId  String
+  playbookId String
+  createdAt  DateTime @default(now())
+
+  account  Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  playbook Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, playbookId])
+  @@map("account_playbook_exclusions")
+}
+
+model Recommendation {
+  id               String             @id @default(uuid())
+  accountId        String
+  sourceType       RecommendationSource @default(AI_FALLBACK)
+  playbookRuleId   String?
+  title            String
+  summary          String             @db.Text
+  recommendedAction String?           @db.Text
+  priority         Int                @default(2) // 1=HIGH 2=MEDIUM 3=LOW
+  dueDate          DateTime?
+  status           RecommendationStatus @default(ACTIVE)
+  confidence       Float?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  // Expiry + score-version linkage (Item 6)
+  category          String?   // KPI dimension being addressed — used to watch for score recovery
+  expiresAt         DateTime? // set at creation; auto-expired when KPI recovers >= 70 OR 30 days elapsed
+  expiryReason      String?   // "CSAT recovered to 74" | "30 days elapsed"
+  triggeringScoreId String?   // FK to the KamScore that triggered this recommendation
+
+  account          Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  playbookRule     PlaybookRule?      @relation(fields: [playbookRuleId], references: [id], onDelete: SetNull)
+  feedbacks        RecommendationFeedback[]
+
+  @@map("recommendations")
+}
+
+enum RecommendationSource {
+  PLAYBOOK
+  AI_FALLBACK
+}
+
+enum RecommendationStatus {
+  ACTIVE
+  ACTIONED
+  DISMISSED
+  EXPIRED
+}
+
+// ─── Phase 5: Feedback Loop Models ───────────────────────────────────────────
+
+enum FeedbackType {
+  ACTIONED
+  DISMISSED
+  ACTION_COMPLETED
+  ACTION_DISMISSED
+}
+
+enum DismissReason {
+  IRRELEVANT
+  ALREADY_DONE
+  WRONG_TIMING
+  OTHER
+}
+
+enum RuleCandidateStatus {
+  PENDING
+  PROMOTED
+  DISMISSED
+}
+
+// Captures explicit + implicit feedback on recommendations
+model RecommendationFeedback {
+  id               String       @id @default(uuid())
+  recommendationId String
+  playbookRuleId   String?      // null for AI_FALLBACK recs
+  accountId        String
+  feedbackType     FeedbackType
+  dismissReason    DismissReason?
+  annotationText   String?      @db.Text  // LLM interpretation (skipped on failure)
+  annotationModel  String?
+  healthBefore     Float?
+  healthAfter      Float?
+  createdAt        DateTime     @default(now())
+
+  recommendation   Recommendation  @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  playbookRule     PlaybookRule?   @relation(fields: [playbookRuleId], references: [id], onDelete: SetNull)
+  account          Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("recommendation_feedbacks")
+}
+
+// Per-account rule suppression — created on explicit KAM request after 2+ dismissals
+model AccountRuleSuppression {
+  id             String    @id @default(uuid())
+  accountId      String
+  playbookRuleId String
+  reason         String    // e.g. "Dismissed 2x — KAM suppressed"
+  suppressedAt   DateTime  @default(now())
+  liftedAt       DateTime?
+  liftedBy       String?   // role string
+
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  playbookRule   PlaybookRule @relation(fields: [playbookRuleId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, playbookRuleId])
+  @@map("account_rule_suppressions")
+}
+
+// AI_FALLBACK patterns crystallized into candidate playbook rules
+model RuleCandidate {
+  id                  String               @id @default(uuid())
+  title               String
+  category            String
+  condition           String               @db.Text
+  recommendation      String               @db.Text
+  sourceCount         Int                  @default(1)  // distinct accounts
+  accountIds          Json?                // array of accountIds that contributed
+  confidence          Float?
+  clusterKey          String?              // "CATEGORY::first-four-title-words" — used for sub-cluster dedup
+  status              RuleCandidateStatus  @default(PENDING)
+  promotedToRuleId    String?              // PlaybookRule.id after promotion
+  promotedToPlaybookId String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@map("rule_candidates")
 }
 
 // ─── Activity Log ─────────────────────────────────────────────────────────────

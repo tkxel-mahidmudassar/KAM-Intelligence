@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import type { KpiBreakdown } from "@/lib/scoring/kpi";
 import { TrendingUp, AlertTriangle, Ticket, Users, Activity, Zap, Brain, ChevronRight, CheckCircle2, XCircle, Clock, TrendingDown, Minus, ChevronDown } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -8,6 +9,8 @@ import {
 } from "recharts";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { ActivePlaybooks } from "@/components/playbooks/ActivePlaybooks";
+import { RecommendationsPanel } from "@/components/playbooks/RecommendationsPanel";
 import { ScoreHistoryChart } from "./ScoreHistoryChart";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -471,7 +474,7 @@ function buildKpiExplanation(key: string, adapters: AdapterData, dimensions: Kpi
 // ─── KPI Scoring Row (sparkline + expand for tasks) ──────────────────────────
 
 function KpiScoringRow({
-  meta, score, history, dimensions, actions, explanation, onRequestOverride, canOverride, overrideActive,
+  meta, score, history, dimensions, actions, explanation, onRequestOverride, canOverride, overrideActive, breakdown,
 }: {
   meta:             { key: string; label: string; weight: number };
   score:            number | null;
@@ -482,6 +485,7 @@ function KpiScoringRow({
   onRequestOverride?: () => void;
   canOverride:      boolean;
   overrideActive?:  boolean;
+  breakdown?:       KpiBreakdown | null;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -564,20 +568,43 @@ function KpiScoringRow({
       {/* Expand panel */}
       {expanded && (
         <div className="px-4 pb-3 pt-1 bg-[var(--bg-surface-2)]/40 space-y-3">
-          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-1)] p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-disabled)]">Scoring Logic</p>
-            <p className="mt-1 text-[11px] text-[var(--text-primary)] leading-relaxed">{explanation.rationale}</p>
-            <p className="mt-1 text-[11px] text-[var(--text-muted)] leading-relaxed">{explanation.formula}</p>
-            {explanation.fallback && (
-              <p className="mt-1 text-[10px] text-[#F59E0B] leading-relaxed">{explanation.fallback}</p>
-            )}
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {explanation.drivers.slice(0, 5).map((driver) => (
-                <span key={driver} className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface-2)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]">
-                  {driver}
-                </span>
-              ))}
+          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-1)] p-3 space-y-2.5">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-disabled)]">Scoring Logic</p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)] leading-relaxed">{explanation.formula}</p>
+              {explanation.fallback && (
+                <p className="mt-1 text-[10px] text-[#F59E0B] leading-relaxed">{explanation.fallback}</p>
+              )}
             </div>
+
+            {/* Sub-scores from scoring engine */}
+            {breakdown && breakdown.drivers.length > 0 && (
+              <div className="space-y-2 pt-1 border-t border-[var(--border-subtle)]">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-disabled)]">Sub-scores</p>
+                {breakdown.drivers.map((driver) => {
+                  const dScore = driver.score ?? null;
+                  const dColor = dScore == null ? "#6B7280" : dScore >= 70 ? "#22C55E" : dScore >= 45 ? "#F59E0B" : "#EF4444";
+                  return (
+                    <div key={driver.label} className="space-y-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-[var(--text-primary)]">{driver.label}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] text-[var(--text-disabled)]">{driver.value}</span>
+                          {dScore != null && (
+                            <span className="text-[11px] font-semibold tabular-nums w-7 text-right" style={{ color: dColor }}>{dScore}</span>
+                          )}
+                        </div>
+                      </div>
+                      {dScore != null && (
+                        <div className="h-1 rounded-full bg-[var(--border-subtle)] overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${dScore}%`, background: dColor }} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* KPI dimensions */}
@@ -653,6 +680,16 @@ export function OverviewTab({
 }: OverviewTabProps) {
   const [overrideModal, setOverrideModal] = useState<{ kpiKey: string; kpiLabel: string; currentValue: number } | null>(null);
   const [declineModal, setDeclineModal]   = useState<string | null>(null); // overrideId
+  const [kpiBreakdown, setKpiBreakdown]   = useState<Record<string, KpiBreakdown> | null>(null);
+
+  // Fetch computed KPI sub-scores from the scoring engine
+  useEffect(() => {
+    if (!accountId) return;
+    fetch(`/api/accounts/${accountId}/kpi-breakdown`, { headers: { "x-role": role } })
+      .then((r) => r.json())
+      .then((res) => { if (res.data) setKpiBreakdown(res.data); })
+      .catch(console.error);
+  }, [accountId, role]);
 
   const topSignals = signals.slice(0, 3);
   const topActions = actions.slice(0, 4);
@@ -706,7 +743,7 @@ export function OverviewTab({
       {accountId && <ScoreHistoryChart accountId={accountId} refreshKey={scoreRefreshKey} />}
 
       {/* Pending override banner — shown to managers/executives */}
-      {(role === "MANAGER" || role === "EXECUTIVE") && scoreOverrides.filter((o) => o.status === "PENDING").length > 0 && (
+      {(role === "KAM" || role === "MANAGER" || role === "EXECUTIVE") && scoreOverrides.filter((o) => o.status === "PENDING").length > 0 && (
         <div className="rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/05 p-4 space-y-2" style={{ background: "rgba(245,158,11,0.05)" }}>
           <div className="flex items-center gap-2 mb-1">
             <Clock className="h-4 w-4 text-[#F59E0B]" />
@@ -893,6 +930,7 @@ export function OverviewTab({
                   dimensions={dims}
                   actions={actions}
                   explanation={buildKpiExplanation(m.key as string, adapters, dims)}
+                  breakdown={kpiBreakdown ? kpiBreakdown[m.key] ?? null : null}
                   canOverride={isKam && !!onRequestOverride}
                   overrideActive={hasApprovedOverride}
                   onRequestOverride={onRequestOverride ? () => {
@@ -1033,6 +1071,18 @@ export function OverviewTab({
             await onRequestOverride?.(overrideModal.kpiKey, value, reason);
           }}
         />
+      )}
+
+      {/* Recommendations + Active Playbooks */}
+      {accountId && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <RecommendationsPanel accountId={accountId} />
+          </div>
+          <div>
+            <ActivePlaybooks accountId={accountId} />
+          </div>
+        </div>
       )}
 
       {/* Decline modal */}

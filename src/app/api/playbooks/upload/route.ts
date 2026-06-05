@@ -1,20 +1,34 @@
 import { NextRequest } from "next/server";
+import { writeFile, mkdir } from "fs/promises";
+import { join, extname } from "path";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { getRoleFromRequest, getUserIdFromRequest, created, badRequest, serverError, guard } from "@/lib/api";
+import { getRoleFromRequest, created, badRequest, serverError, guard } from "@/lib/api";
+import { parsePlaybookFile } from "@/lib/playbooks/parser";
+import { runMasterOrchestrator } from "@/lib/ai/agents/masterOrchestrator";
 import { logAudit } from "@/lib/audit";
-import { extractPlaybookText, parsingErrorMessage } from "@/lib/playbooks/extract";
-import { fileTypeLabel, storePlaybookFile, validatePlaybookFile } from "@/lib/playbooks/files";
 
 export const config = { api: { bodyParser: false } };
 
-async function resolveUploaderId(req: NextRequest) {
-  const userId = getUserIdFromRequest(req);
-  if (!userId) return null;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } }).catch(() => null);
-  return user?.id ?? null;
-}
+const ALLOWED_MIMES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/plain",
+  "text/markdown",
+];
 
-// POST /api/playbooks/upload
+const ALLOWED_EXTS = ["pdf", "doc", "docx", "xls", "xlsx", "txt", "md"];
+
+const FILE_TYPE_LABEL: Record<string, string> = {
+  pdf: "pdf", doc: "docx", docx: "docx",
+  xls: "xlsx", xlsx: "xlsx", txt: "txt", md: "md",
+};
+
+// POST /api/playbooks/upload  (multipart/form-data)
+// Fields: file (binary), title (optional — defaults to filename)
 export async function POST(req: NextRequest) {
   try {
     const role = getRoleFromRequest(req);
@@ -23,91 +37,81 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const title = ((formData.get("title") as string | null) ?? file?.name ?? "").trim();
+    const title = (formData.get("title") as string | null) ?? "";
 
     if (!file) return badRequest("file is required");
-    if (!title) return badRequest("title is required");
 
-    const validationError = validatePlaybookFile(file);
-    if (validationError) return badRequest(validationError);
+    const ext = extname(file.name).replace(".", "").toLowerCase();
+    if (!ALLOWED_EXTS.includes(ext) && !ALLOWED_MIMES.includes(file.type)) {
+      return badRequest(`Unsupported file type. Allowed: PDF, DOCX, TXT, MD, XLSX.`);
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      return badRequest("File too large. Maximum size is 25 MB.");
+    }
 
-    const uploadedById = await resolveUploaderId(req);
-    const stored = await storePlaybookFile(file);
-    const fileType = fileTypeLabel(file.name, file.type);
+    // Resolve uploader user (POC: first KAM user)
+    const uploaderUser = await prisma.user.findFirst({
+      where: { role: role as never },
+      orderBy: { createdAt: "asc" },
+    });
 
-    const createdPlaybook = await prisma.playbook.create({
+    // Write file to disk
+    const filename = `${randomUUID()}.${ext}`;
+    const uploadsDir = join(process.cwd(), "public", "uploads", "playbooks");
+    await mkdir(uploadsDir, { recursive: true });
+    const destPath = join(uploadsDir, filename);
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    await writeFile(destPath, buffer);
+
+    const storagePath = `/uploads/playbooks/${filename}`;
+    const playbookTitle = title.trim() || file.name.replace(/\.[^.]+$/, "");
+
+    // Create playbook record (PROCESSING)
+    const playbook = await prisma.playbook.create({
       data: {
-        title,
+        title: playbookTitle,
         fileName: file.name,
-        fileType,
-        mimeType: file.type || null,
+        fileType: FILE_TYPE_LABEL[ext] ?? ext,
+        mimeType: file.type || "application/octet-stream",
         fileSize: file.size,
-        storagePath: stored.storagePath,
-        uploadedById,
+        storagePath,
+        uploadedById: uploaderUser?.id ?? null,
         status: "PROCESSING",
-        extractedText: null,
-        processingError: null,
-        processedAt: null,
       },
     });
 
-    let playbook;
-    try {
-      const extraction = await extractPlaybookText({
-        storagePath: stored.storagePath,
-        fileName: file.name,
-        mimeType: file.type || null,
-        fileType,
-      });
-
-      playbook = await prisma.playbook.update({
-        where: { id: createdPlaybook.id },
-        data: {
-          status: "ACTIVE",
-          extractedText: extraction.text,
-          processingError: null,
-          processedAt: new Date(),
-        },
-        include: {
-          uploadedBy: { select: { id: true, name: true, email: true, role: true } },
-          _count: { select: { rules: true } },
-        },
-      });
-    } catch (error) {
-      playbook = await prisma.playbook.update({
-        where: { id: createdPlaybook.id },
-        data: {
-          status: "FAILED",
-          extractedText: null,
-          processingError: parsingErrorMessage(error),
-          processedAt: null,
-        },
-        include: {
-          uploadedBy: { select: { id: true, name: true, email: true, role: true } },
-          _count: { select: { rules: true } },
-        },
-      });
-    }
-
-    if (!playbook.uploadedBy) {
-      playbook = await prisma.playbook.findUniqueOrThrow({
-        where: { id: playbook.id },
-        include: {
-          uploadedBy: { select: { id: true, name: true, email: true, role: true } },
-          _count: { select: { rules: true } },
-        },
-      });
-    }
-
-    await logAudit({
+    logAudit({
       role,
-      action: "playbook.uploaded",
+      action: "playbook_uploaded",
       entity: "Playbook",
       entityId: playbook.id,
-      metadata: { title: playbook.title, fileType: playbook.fileType, fileSize: playbook.fileSize, status: playbook.status },
+      metadata: { title: playbookTitle, fileName: file.name, fileType: FILE_TYPE_LABEL[ext] },
     });
 
-    return created(playbook);
+    // Parse + extract via master orchestrator (non-blocking response)
+    setImmediate(async () => {
+      try {
+        const parseResult = await parsePlaybookFile(buffer, file.type, file.name);
+        if (parseResult.error || parseResult.chunks.length === 0) {
+          await prisma.playbook.update({
+            where: { id: playbook.id },
+            data: { status: "FAILED", errorMessage: parseResult.error ?? "No content extracted" },
+          });
+          return;
+        }
+        await runMasterOrchestrator("playbook_uploaded", {
+          role,
+          playbookId: playbook.id,
+          playbookTitle,
+          parsedChunks: parseResult.chunks,
+        });
+      } catch (err) {
+        console.error("[playbook-upload] orchestrator failed:", err);
+      }
+    });
+
+    return created({ ...playbook, message: "Playbook uploaded. Processing started." });
   } catch (err) {
     return serverError(err);
   }

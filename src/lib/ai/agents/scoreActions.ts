@@ -71,8 +71,7 @@ Return a JSON array only:
     task: "score-actions-agent",
     messages: [{ role: "user", content: prompt }],
     maxTokens: 1024,
-    temperature: 0.3,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("generate-actions", prompt, response.content, Date.now() - t0));
 

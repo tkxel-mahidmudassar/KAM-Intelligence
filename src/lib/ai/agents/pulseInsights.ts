@@ -88,13 +88,27 @@ ${a.news}`.trim();
   }).join("\n\n");
 }
 
+// ─── Source shape persisted with each insight ────────────────────────────────
+
+export interface InsightSources {
+  newsHeadlines: { title: string; source: string; url: string; publishedAt: string }[];
+  internalData: {
+    health: string;
+    overallScore: number | null;
+    keyScores: Record<string, number | null>;
+    signalTitles: string[];
+  };
+}
+
 // ─── Single typed insight call ────────────────────────────────────────────────
 
 async function generateTypedInsight(
   type: InsightType,
   portfolioContext: string,
-  accountIds: Record<string, string>, // name → id map
-): Promise<{ insight: { accountId: string; type: InsightType; title: string; summary: string; confidence: number; model: string; promptTokens: number; outputTokens: number } | null; step: AgentStep }> {
+  accountIds: Record<string, string>,                           // name → id map
+  accountContexts: AccountContext[],                            // for source lookup after account resolution
+  newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]>, // accountId → raw news items
+): Promise<{ insight: { accountId: string; type: InsightType; title: string; summary: string; confidence: number; model: string; promptTokens: number; outputTokens: number; sources: InsightSources } | null; step: AgentStep }> {
   const t0 = Date.now();
 
   const prompt = `You are an AI intelligence engine for a B2B Key Account Management platform.
@@ -124,8 +138,7 @@ Return ONLY a JSON object (no markdown, no explanation):
       task:        `pulse-${type.toLowerCase()}`,
       messages:    [{ role: "user", content: prompt }],
       maxTokens:   1024,
-      temperature: 0.4,
-      jsonMode:    true,
+      jsonMode:    true, // temperature enforced to 0.0 at provider level
     });
 
     const step = makeStep(`pulse:${type}`, prompt, response.content, Date.now() - t0);
@@ -156,6 +169,30 @@ Return ONLY a JSON object (no markdown, no explanation):
       console.warn(`[pulseInsights] Fuzzy match failed for "${parsed.accountName}", using fallback account`);
     }
 
+    // ── Build source attribution for this insight ─────────────────────────────
+    const accountCtx = accountContexts.find((a) => a.id === accountId);
+    const rawNews    = newsResultsMap[accountId] ?? [];
+
+    const sources: InsightSources = {
+      newsHeadlines: rawNews.slice(0, 5).map((n) => ({
+        title:       n.title,
+        source:      n.source,
+        url:         n.url,
+        publishedAt: n.publishedAt,
+      })),
+      internalData: {
+        health:       accountCtx?.health ?? "UNKNOWN",
+        overallScore: accountCtx?.latestScore ?? null,
+        keyScores: {
+          csat:          accountCtx?.kpiScores?.csat ?? null,
+          relationship:  accountCtx?.kpiScores?.relationship ?? null,
+          risk:          accountCtx?.kpiScores?.risk ?? null,
+          contractHealth: accountCtx?.kpiScores?.contractHealth ?? null,
+        },
+        signalTitles: (accountCtx?.openSignals ?? []).slice(0, 3).map((s) => s.title),
+      },
+    };
+
     return {
       insight: {
         accountId,
@@ -166,6 +203,7 @@ Return ONLY a JSON object (no markdown, no explanation):
         model:        response.model,
         promptTokens: response.promptTokens ?? 0,
         outputTokens: response.outputTokens ?? 0,
+        sources,
       },
       step,
     };
@@ -245,6 +283,10 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
     accountContexts.map((a) => [a.name, a.id])
   );
 
+  // 3b. Build accountId → raw news map for source attribution
+  const newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]> =
+    Object.fromEntries(accountContexts.map((a, i) => [a.id, newsResults[i] ?? []]));
+
   // 4. Run 5 typed insight calls in parallel
   const insightTypes: InsightType[] = [
     InsightType.RISK,
@@ -255,12 +297,12 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
   ];
 
   const results = await Promise.all(
-    insightTypes.map((type) => generateTypedInsight(type, portfolioContext, accountIds))
+    insightTypes.map((type) => generateTypedInsight(type, portfolioContext, accountIds, accountContexts, newsResultsMap))
   );
 
   results.forEach(({ step }) => steps.push(step));
 
-  // 5. Persist successful insights
+  // 5. Persist successful insights (including sources)
   const toCreate = results
     .map((r) => r.insight)
     .filter((i): i is NonNullable<typeof i> => i !== null);
@@ -278,6 +320,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
         outputTokens: i.outputTokens,
         isDismissed:  false,
         isRead:       false,
+        sources:      i.sources, // structured source attribution
       })),
     });
   }
@@ -290,7 +333,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
       value: `ARR $${a.arr.toLocaleString()}`,
     })),
     steps,
-    model:          "gemini-2.5-flash",
+    model:          "gemini-2.0-flash",
     totalLatencyMs: Date.now() - t0,
   };
 }

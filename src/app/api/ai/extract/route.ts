@@ -67,7 +67,7 @@ ${rawText.slice(0, 4000)}`;
       task: "document-extract",
       messages: [{ role: "user", content: prompt }],
       maxTokens: 2048,
-      temperature: 0.1,
+      jsonMode: true, // temperature enforced to 0.0 at provider level
     });
 
     let extracted: Record<string, unknown> = {};

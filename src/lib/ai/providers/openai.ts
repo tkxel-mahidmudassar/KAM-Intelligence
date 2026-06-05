@@ -23,7 +23,8 @@ export class OpenAIProvider implements LLMProvider {
       model: MODEL,
       messages: request.messages,
       max_tokens: request.maxTokens ?? 1024,
-      temperature: request.temperature ?? 0.3,
+      // JSON mode must be deterministic — enforce 0.0 unless caller explicitly overrides.
+      temperature: request.temperature ?? (request.jsonMode ? 0.0 : 0.3),
     });
 
     const choice = response.choices[0];

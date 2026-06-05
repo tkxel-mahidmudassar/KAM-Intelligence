@@ -208,7 +208,7 @@ ${accounts.map((a) => `${a.name}: ${a.health}, Score ${a.kamScores[0]?.overall ?
         task: "assistant",
         messages: fullMessages,
         maxTokens: 4096,
-        temperature: 0.4,
+        temperature: 0.7, // prose — conversational, natural
       });
 
       return ok({

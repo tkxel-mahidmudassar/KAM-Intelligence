@@ -4,7 +4,7 @@ import { getRoleFromRequest, getUserIdFromRequest, ok, badRequest, serverError, 
 
 export interface CalendarItem {
   id: string;
-  type: "action" | "qbr" | "touchpoint" | "renewal" | "signal" | "pulse";
+  type: "action" | "qbr" | "touchpoint" | "renewal" | "signal" | "pulse" | "recommendation";
   title: string;
   accountId: string;
   accountName: string;
@@ -16,6 +16,8 @@ export interface CalendarItem {
   health?: string;
   priority?: string;
   confidence?: number | null;
+  sourceType?: string;   // PLAYBOOK | AI_FALLBACK for recommendation items
+  citation?: string;     // compact citation string e.g. "Renewal Playbook - p.4"
 }
 
 function toDateKey(d: Date): string {
@@ -46,7 +48,7 @@ export async function GET(req: NextRequest) {
     const where = kamWhere(role, kamUserId);
 
     // Fetch all data sources in parallel
-    const [actions, qbrSessions, touchpoints, renewals, signals, pulseInsights] = await Promise.all([
+    const [actions, qbrSessions, touchpoints, renewals, signals, pulseInsights, recommendations] = await Promise.all([
       prisma.action.findMany({
         where: {
           dueDate:   { gte: from, lte: to },
@@ -95,6 +97,20 @@ export async function GET(req: NextRequest) {
         include: { account: { select: { id: true, name: true, health: true } } },
         orderBy: { generatedAt: "desc" },
         take: 50,
+      }),
+      // Recommendations with due dates in range
+      prisma.recommendation.findMany({
+        where: {
+          dueDate: { gte: from, lte: to },
+          status: "ACTIVE",
+          account: where.kamId ? { kamId: where.kamId } : undefined,
+        },
+        include: {
+          account: { select: { id: true, name: true, health: true } },
+          playbookRule: {
+            include: { playbook: { select: { title: true } } },
+          },
+        },
       }),
     ]);
 
@@ -160,6 +176,28 @@ export async function GET(req: NextRequest) {
         severity: insight.type === "RISK" || insight.type === "ANOMALY" ? "WARNING" : "INFO",
         health: insight.account?.health,
         confidence: insight.confidence,
+      });
+    }
+
+    for (const rec of recommendations) {
+      if (!rec.account || !rec.dueDate) continue;
+      const rule = rec.playbookRule;
+      const citation = rule?.playbook
+        ? [rule.playbook.title.slice(0, 25), rule.sourcePage ? `p.${rule.sourcePage}` : null]
+            .filter(Boolean).join(" - ")
+        : null;
+      add(toDateKey(rec.dueDate), {
+        id: rec.id,
+        type: "recommendation",
+        title: rec.title,
+        accountId: rec.account.id,
+        accountName: rec.account.name,
+        href: `/accounts/${rec.account.id}`,
+        date: toDateKey(rec.dueDate),
+        health: rec.account.health,
+        summary: rec.summary,
+        sourceType: rec.sourceType,
+        citation: citation ?? undefined,
       });
     }
 

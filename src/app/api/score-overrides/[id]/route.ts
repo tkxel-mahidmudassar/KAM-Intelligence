@@ -11,7 +11,7 @@ export async function PATCH(
   try {
     const role = getRoleFromRequest(req);
     // Only managers and executives can approve/decline
-    if (role !== "MANAGER" && role !== "EXECUTIVE") {
+    if (role !== "KAM" && role !== "MANAGER" && role !== "EXECUTIVE") {
       return forbidden("Only managers and executives can action score overrides");
     }
     const denied = guard(role, "score:view");

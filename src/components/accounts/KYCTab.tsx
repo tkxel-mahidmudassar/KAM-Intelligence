@@ -423,7 +423,7 @@ function KycVersionDiff({ older, newer }: { older: KycVersion; newer: KycVersion
 export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, onCreateNew, onUpdate, onAiDraft, agentSources, agentSteps, agentModel }: KYCTabProps) {
   const { role } = useRole();
   const canSubmit  = role === "KAM" || role === "MANAGER";
-  const canApprove = role === "MANAGER";
+  const canApprove = role === "KAM" || role === "MANAGER";
   const canEdit    = role === "KAM" || role === "MANAGER";
 
   const [editing, setEditing]               = useState(false);

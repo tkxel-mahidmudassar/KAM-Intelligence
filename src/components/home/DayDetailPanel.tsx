@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   X, Activity, Calendar, Clock, ArrowUpRight,
-  CheckCircle2, AlertTriangle, RefreshCw, Zap,
+  CheckCircle2, AlertTriangle, RefreshCw, Zap, Lightbulb, BookOpen, Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CalendarItem } from "@/app/api/calendar/route";
@@ -12,25 +12,28 @@ import { ActionDetailModal } from "./ActionDetailModal";
 import { SignalReviewModal } from "./SignalReviewModal";
 
 const TYPE_COLOR: Record<string, string> = {
-  action:     "#0755E9",
-  qbr:        "#A855F7",
-  renewal:    "#F59E0B",
-  signal:     "#EF4444",
-  touchpoint: "#14B8A6",
-  pulse:      "#7C3AED",
+  action:         "#0755E9",
+  qbr:            "#A855F7",
+  renewal:        "#F59E0B",
+  signal:         "#EF4444",
+  touchpoint:     "#14B8A6",
+  pulse:          "#7C3AED",
+  recommendation: "#22C55E",
 };
 
 const TYPE_ICON: Record<string, React.ElementType> = {
-  action:     CheckCircle2,
-  qbr:        Calendar,
-  renewal:    RefreshCw,
-  signal:     AlertTriangle,
-  touchpoint: Activity,
-  pulse:      Zap,
+  action:         CheckCircle2,
+  qbr:            Calendar,
+  renewal:        RefreshCw,
+  signal:         AlertTriangle,
+  touchpoint:     Activity,
+  pulse:          Zap,
+  recommendation: Lightbulb,
 };
 
 const TYPE_LABEL: Record<string, string> = {
-  action: "Action", qbr: "QBR", renewal: "Renewal", signal: "Signal", touchpoint: "Touchpoint", pulse: "AI Pulse",
+  action: "Action", qbr: "QBR", renewal: "Renewal", signal: "Signal",
+  touchpoint: "Touchpoint", pulse: "AI Pulse", recommendation: "Recommendation",
 };
 
 function formatDate(iso: string): string {
@@ -48,6 +51,7 @@ function ItemRow({
   const Icon  = TYPE_ICON[item.type] ?? Zap;
 
   const isClickable = item.type === "action" || item.type === "signal";
+  const isPlaybook  = item.type === "recommendation" && item.sourceType === "PLAYBOOK";
   const href = item.href ?? `/accounts/${item.accountId}`;
 
   return (
@@ -101,6 +105,21 @@ function ItemRow({
         {item.summary && (
           <p className="mt-1 text-[10px] text-[var(--text-muted)] line-clamp-2">{item.summary}</p>
         )}
+        {item.type === "recommendation" && (
+          <div className="mt-1">
+            {isPlaybook ? (
+              <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium border border-[#0755E9]/25 text-[#0755E9]" style={{ background: "rgba(7,85,233,0.07)" }}>
+                <BookOpen className="h-2.5 w-2.5" />
+                {item.citation ?? "Playbook-guided"}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium border border-[#6B7280]/25 text-[var(--text-muted)]" style={{ background: "rgba(107,114,128,0.07)" }}>
+                <Brain className="h-2.5 w-2.5" />
+                AI fallback
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Arrow for non-modal items */}
@@ -134,7 +153,7 @@ export function DayDetailPanel({ date, items, onClose, onItemUpdated }: DayDetai
     return acc;
   }, {});
 
-  const typeOrder = ["signal", "pulse", "renewal", "action", "qbr", "touchpoint"];
+  const typeOrder = ["signal", "recommendation", "pulse", "renewal", "action", "qbr", "touchpoint"];
 
   const handleSelect = (item: CalendarItem) => {
     if (item.type === "action") setActiveAction(item);

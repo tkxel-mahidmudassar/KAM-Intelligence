@@ -104,7 +104,7 @@ Rules:
       task: "questionnaire-prefill",
       messages: [{ role: "user", content: prompt }],
       maxTokens: 1024,
-      temperature: 0.1,
+      jsonMode: true, // temperature enforced to 0.0 at provider level
     });
 
     let suggestions: Record<string, { response: string; confidence: number; rationale: string }> = {};

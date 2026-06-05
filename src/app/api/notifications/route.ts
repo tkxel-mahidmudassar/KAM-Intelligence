@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       }),
 
       // Pending score overrides (MANAGER+)
-      (role === "MANAGER" || role === "EXECUTIVE" || role === "ADMIN")
+      (role === "KAM" || role === "MANAGER" || role === "EXECUTIVE" || role === "ADMIN")
         ? prisma.scoreOverride.findMany({
             where: { status: "PENDING" },
             include: { account: { select: { id: true, name: true, health: true } } },

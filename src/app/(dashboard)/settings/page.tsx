@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Brain, Zap, Check, RefreshCw, Server, SlidersHorizontal, AlertCircle, Save, Bell, Mail, Monitor, ChevronDown, Users, Shield, BookOpen } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Brain, Zap, Check, RefreshCw, Server, SlidersHorizontal, AlertCircle, Save, Bell, Mail, Monitor, ChevronDown, ChevronUp, Users, Shield, Plus, BookOpen, Upload, Archive, Trash2, FileText, Table, FileCode, CheckCircle, XCircle, Clock, MoreVertical, Network, BarChart2, Loader2, Star, AlertTriangle } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 import { cn } from "@/lib/utils";
 import { PlaybookLibrary } from "@/components/playbooks/PlaybookLibrary";
@@ -149,7 +149,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 }
 
 function NotificationPrefsPanel({ role, initialPrefs }: { role: string; initialPrefs: NotificationPrefs }) {
-  const canEdit = role === "MANAGER" || role === "EXECUTIVE";
+  const canEdit = role === "KAM" || role === "MANAGER" || role === "EXECUTIVE";
   const [prefs, setPrefs]   = useState<NotificationPrefs>({ ...initialPrefs });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
@@ -314,7 +314,7 @@ function NotificationPrefsPanel({ role, initialPrefs }: { role: string; initialP
 // ─── Score Weights Panel ──────────────────────────────────────────────────────
 
 function ScoreWeightsPanel({ role, initialWeights }: { role: string; initialWeights: WeightMap }) {
-  const canEdit = role === "MANAGER" || role === "EXECUTIVE";
+  const canEdit = role === "KAM" || role === "MANAGER" || role === "EXECUTIVE";
   const [weights, setWeights]   = useState<WeightMap>({ ...initialWeights });
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
@@ -519,6 +519,652 @@ function avatarInitials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
+// ─── Playbooks section ────────────────────────────────────────────────────────
+
+interface Playbook {
+  id: string;
+  title: string;
+  fileType: string;
+  fileName: string;
+  fileSize: number;
+  status: "PROCESSING" | "ACTIVE" | "FAILED" | "ARCHIVED";
+  processedAt: string | null;
+  errorMessage: string | null;
+  ruleCount: number;
+  exclusionCount: number;
+  createdAt: string;
+  uploadedBy: { name: string; role: string } | null;
+}
+
+const STATUS_META = {
+  PROCESSING: { label: "Processing",  color: "#F59E0B", icon: Clock },
+  ACTIVE:     { label: "Active",      color: "#22C55E", icon: CheckCircle },
+  FAILED:     { label: "Failed",      color: "#EF4444", icon: XCircle },
+  ARCHIVED:   { label: "Archived",    color: "#6B7280", icon: Archive },
+};
+
+const FILE_ICON: Record<string, React.ElementType> = {
+  pdf: FileText, docx: FileText, doc: FileText,
+  xlsx: Table, xls: Table,
+  txt: FileCode, md: FileCode,
+};
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function PlaybooksSection({ role }: { role: string }) {
+  const [playbooks, setPlaybooks]   = useState<Playbook[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [uploading, setUploading]   = useState(false);
+  const [dragging, setDragging]     = useState(false);
+  const [openMenu, setOpenMenu]     = useState<string | null>(null);
+  const fileInputRef                = useRef<HTMLInputElement>(null);
+
+  const canUpload = role !== "EXECUTIVE";
+
+  const fetchPlaybooks = () => {
+    setLoading(true);
+    fetch("/api/playbooks", { headers: { "x-role": role } })
+      .then((r) => r.json())
+      .then((res) => setPlaybooks(res.data ?? []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchPlaybooks(); }, [role]);
+
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("title", file.name.replace(/\.[^.]+$/, ""));
+      const res = await fetch("/api/playbooks/upload", {
+        method: "POST",
+        headers: { "x-role": role },
+        body: form,
+      });
+      if (res.ok) {
+        fetchPlaybooks();
+        // Poll for processing completion
+        const pollInterval = setInterval(() => {
+          fetchPlaybooks();
+        }, 3000);
+        setTimeout(() => clearInterval(pollInterval), 30000);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+    e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handleStatusChange = async (id: string, status: "ACTIVE" | "ARCHIVED") => {
+    setOpenMenu(null);
+    await fetch(`/api/playbooks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-role": role },
+      body: JSON.stringify({ status }),
+    });
+    fetchPlaybooks();
+  };
+
+  const handleDelete = async (id: string) => {
+    setOpenMenu(null);
+    if (!confirm("Permanently delete this playbook and all its rules?")) return;
+    await fetch(`/api/playbooks/${id}`, { method: "DELETE", headers: { "x-role": role } });
+    fetchPlaybooks();
+  };
+
+  return (
+    <SettingSection title="Playbooks" icon={BookOpen} iconColor="#0755E9">
+      <p className="text-[12px] text-[var(--text-muted)] mb-4">
+        Upload trusted internal playbooks. Recommendations across all accounts will be grounded in
+        these rules first, with AI fallback when no playbook guidance applies.
+        {role === "EXECUTIVE" && " You have view-only access."}
+      </p>
+
+      {/* Upload dropzone */}
+      {canUpload && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={cn(
+            "mb-4 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 cursor-pointer transition-all",
+            dragging
+              ? "border-[#0755E9] bg-[#0755E9]/5"
+              : "border-[var(--border-subtle)] hover:border-[#0755E9]/50 hover:bg-[var(--bg-surface-2)]"
+          )}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          {uploading ? (
+            <>
+              <RefreshCw className="h-5 w-5 text-[#0755E9] animate-spin" />
+              <p className="text-[13px] font-medium text-[var(--text-primary)]">Uploading…</p>
+            </>
+          ) : (
+            <>
+              <Upload className="h-5 w-5 text-[var(--text-muted)]" />
+              <p className="text-[13px] font-medium text-[var(--text-primary)]">
+                Drop a file or click to upload
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)]">PDF, DOCX, XLSX, TXT, MD — max 25 MB</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Playbook list */}
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="h-14 rounded-lg bg-[var(--bg-surface-2)] animate-pulse" />
+          ))}
+        </div>
+      ) : playbooks.length === 0 ? (
+        <p className="text-[12px] text-[var(--text-muted)] text-center py-4">
+          No playbooks yet. Upload one to get started.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {playbooks.map((pb) => {
+            const statusMeta = STATUS_META[pb.status];
+            const StatusIcon = statusMeta.icon;
+            const FileIcon = FILE_ICON[pb.fileType] ?? FileText;
+            return (
+              <div
+                key={pb.id}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl border p-3 transition-opacity",
+                  pb.status === "ARCHIVED"
+                    ? "opacity-50 border-[var(--border-subtle)] bg-transparent"
+                    : "border-[var(--border-subtle)] bg-[var(--bg-surface-1)]"
+                )}
+              >
+                {/* File type icon */}
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0755E9]/10">
+                  <FileIcon className="h-4 w-4 text-[#0755E9]" />
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{pb.title}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] truncate">
+                    {pb.fileType.toUpperCase()} &middot; {formatBytes(pb.fileSize)}
+                    {pb.uploadedBy && ` &middot; ${pb.uploadedBy.name}`}
+                    {pb.status === "ACTIVE" && ` &middot; ${pb.ruleCount} rule${pb.ruleCount !== 1 ? "s" : ""}`}
+                    {pb.status === "ACTIVE" && pb.exclusionCount > 0 && ` &middot; off for ${pb.exclusionCount} account${pb.exclusionCount !== 1 ? "s" : ""}`}
+                  </p>
+                </div>
+
+                {/* Status chip */}
+                <div
+                  className="flex items-center gap-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold border"
+                  style={{ color: statusMeta.color, borderColor: `${statusMeta.color}40`, background: `${statusMeta.color}12` }}
+                >
+                  <StatusIcon className="h-3 w-3" />
+                  {statusMeta.label}
+                </div>
+
+                {/* Actions menu */}
+                {canUpload && pb.status !== "PROCESSING" && (
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setOpenMenu(openMenu === pb.id ? null : pb.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[var(--bg-surface-2)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                    {openMenu === pb.id && (
+                      <div className="absolute right-0 top-8 z-50 w-40 rounded-xl border border-[var(--glass-border)] bg-[var(--bg-surface-1)] shadow-lg py-1">
+                        {pb.status === "ACTIVE" && (
+                          <button
+                            onClick={() => handleStatusChange(pb.id, "ARCHIVED")}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] transition-colors"
+                          >
+                            <Archive className="h-3.5 w-3.5" /> Archive
+                          </button>
+                        )}
+                        {pb.status === "ARCHIVED" && (
+                          <button
+                            onClick={() => handleStatusChange(pb.id, "ACTIVE")}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] transition-colors"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5" /> Restore
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(pb.id)}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#EF4444] hover:bg-[#EF4444]/10 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] text-[var(--text-muted)]">
+        Active playbooks apply to all accounts automatically. Archived playbooks no longer influence recommendations.
+      </p>
+
+      {/* Rule Performance tab — MANAGER/ADMIN only */}
+      {(role === "KAM" || role === "MANAGER" || role === "ADMIN") && (
+        <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart2 className="h-3.5 w-3.5 text-[#0755E9]" />
+            <h4 className="text-[13px] font-semibold text-[var(--text-primary)]">Rule Performance & Candidates</h4>
+          </div>
+          <RulePerformanceTab role={role} />
+        </div>
+      )}
+    </SettingSection>
+  );
+}
+
+// ─── Agent Orchestrator Section ──────────────────────────────────────────────
+
+interface OrchestratorRun {
+  trigger: string;
+  status: string;
+  totalLatencyMs: number;
+  agentCount: number;
+  failedAgents?: string[];
+  failureReason?: string;
+  createdAt: string;
+}
+
+type OrchestratorTrigger = "manual_full_refresh" | "daily_batch";
+
+const TRIGGER_META: Record<OrchestratorTrigger, { label: string; description: string; color: string }> = {
+  manual_full_refresh: { label: "Full Refresh", description: "Re-run recommendations for all accounts + quality scoring + crystallize patterns", color: "#0755E9" },
+  daily_batch:         { label: "Daily Batch",  description: "Same as daily cron: rec orchestrator + rule quality scoring + fallback crystallizer", color: "#8B5CF6" },
+};
+
+function AgentOrchestratorSection({ role }: { role: string }) {
+  const [runningTrigger, setRunningTrigger] = useState<OrchestratorTrigger | null>(null);
+  const [lastRuns, setLastRuns] = useState<OrchestratorRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(true);
+  const [lastResult, setLastResult] = useState<{ trigger: string; status: string; agentCount: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/activity-logs?action=orchestrator.run&limit=10", { headers: { "x-role": role } })
+      .then((r) => r.json())
+      .then((res) => {
+        const logs = (res.data ?? []).map((l: { metadata?: OrchestratorRun; createdAt: string }) => ({
+          ...((l.metadata as OrchestratorRun) ?? {}),
+          createdAt: l.createdAt,
+        }));
+        setLastRuns(logs);
+      })
+      .catch(console.error)
+      .finally(() => setRunsLoading(false));
+  }, [role]);
+
+  const handleTrigger = async (trigger: OrchestratorTrigger) => {
+    setRunningTrigger(trigger);
+    setLastResult(null);
+    try {
+      const res = await fetch("/api/ai/orchestrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-role": role },
+        body: JSON.stringify({ trigger, context: {} }),
+      });
+      const json = await res.json();
+      if (json.data) {
+        setLastResult({
+          trigger: json.data.trigger,
+          status: json.data.status,
+          agentCount: json.data.agentsRun?.length ?? 0,
+        });
+        setLastRuns((prev) => [{ ...json.data, agentCount: json.data.agentsRun?.length ?? 0, createdAt: new Date().toISOString() }, ...prev.slice(0, 9)]);
+      }
+    } catch (err) {
+      console.error("[orchestrator] manual trigger failed:", err);
+    } finally {
+      setRunningTrigger(null);
+    }
+  };
+
+  const canTrigger = role === "KAM" || role === "MANAGER" || role === "ADMIN";
+
+  return (
+    <div className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] shadow-[var(--glass-shadow)] p-5 space-y-5">
+      <div className="flex items-center gap-2.5">
+        <Network className="h-4 w-4 text-[#0755E9]" />
+        <h2 className="text-[14px] font-bold text-[var(--text-primary)]">Agent Orchestrator</h2>
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#0755E9]/10 text-[#0755E9]">MANAGER / ADMIN</span>
+      </div>
+
+      <p className="text-[12px] text-[var(--text-muted)]">
+        The master orchestrator coordinates all agents in sequence. Trigger manually for on-demand runs, or let the daily cron handle it automatically.
+      </p>
+
+      {/* Manual trigger buttons */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {(Object.entries(TRIGGER_META) as [OrchestratorTrigger, typeof TRIGGER_META[OrchestratorTrigger]][]).map(([trigger, meta]) => (
+          <button
+            key={trigger}
+            onClick={() => handleTrigger(trigger)}
+            disabled={!canTrigger || !!runningTrigger}
+            className={cn(
+              "flex flex-col items-start gap-1 rounded-xl border p-3.5 text-left transition-all disabled:opacity-50",
+              "hover:border-[var(--border-default)] hover:bg-[var(--bg-surface-2)]",
+              "border-[var(--border-subtle)] bg-[var(--bg-surface-2)]",
+            )}
+          >
+            <div className="flex items-center gap-2 w-full">
+              <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${meta.color}18` }}>
+                {runningTrigger === trigger
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: meta.color }} />
+                  : <Zap className="h-3.5 w-3.5" style={{ color: meta.color }} />
+                }
+              </div>
+              <span className="text-[13px] font-semibold text-[var(--text-primary)]">{meta.label}</span>
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] pl-9">{meta.description}</p>
+          </button>
+        ))}
+      </div>
+
+      {!canTrigger && (
+        <p className="text-[11px] text-[var(--text-muted)] italic">Read-only: only Manager or Admin can trigger orchestrator runs.</p>
+      )}
+
+      {lastResult && (
+        <div className={cn(
+          "flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium border",
+          lastResult.status === "completed"
+            ? "bg-[#22C55E]/08 border-[#22C55E]/30 text-[#22C55E]"
+            : lastResult.status === "partial"
+            ? "bg-[#F59E0B]/08 border-[#F59E0B]/30 text-[#F59E0B]"
+            : "bg-[#EF4444]/08 border-[#EF4444]/30 text-[#EF4444]",
+        )} style={lastResult.status === "completed" ? { background: "rgba(34,197,94,0.08)" } : lastResult.status === "partial" ? { background: "rgba(245,158,11,0.08)" } : { background: "rgba(239,68,68,0.08)" }}>
+          {lastResult.status === "completed" ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+          {TRIGGER_META[lastResult.trigger as OrchestratorTrigger]?.label ?? lastResult.trigger} completed ({lastResult.status}) &middot; {lastResult.agentCount} agent{lastResult.agentCount !== 1 ? "s" : ""} run
+        </div>
+      )}
+
+      {/* Recent run history */}
+      {!runsLoading && lastRuns.length > 0 && (
+        <div>
+          <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">Recent Runs</p>
+          <div className="space-y-1">
+            {lastRuns.slice(0, 5).map((run, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg bg-[var(--bg-surface-2)] px-3 py-2">
+                <div className={cn(
+                  "h-2 w-2 rounded-full shrink-0",
+                  run.status === "completed" ? "bg-[#22C55E]" : run.status === "partial" ? "bg-[#F59E0B]" : "bg-[#EF4444]",
+                )} />
+                <span className="text-[12px] text-[var(--text-secondary)] flex-1 truncate">
+                  {run.trigger ?? "unknown"} &middot; {run.agentCount ?? "?"} agents
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+                  {run.totalLatencyMs ? `${(run.totalLatencyMs / 1000).toFixed(1)}s` : "—"}
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+                  {run.createdAt ? new Date(run.createdAt).toLocaleTimeString() : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Rule Performance Section (inside Playbooks) ──────────────────────────────
+
+interface RulePerf {
+  id: string;
+  category: string;
+  condition: string;
+  qualityScore: number | null;
+  dismissCount: number;
+  actionCount: number;
+  qualityNote: { summary?: string; suggestions?: string[]; flag?: string } | null;
+  playbook: { title: string };
+}
+
+interface RuleCandidate {
+  id: string;
+  title: string;
+  category: string;
+  condition: string;
+  recommendation: string;
+  sourceCount: number;
+  confidence: number | null;
+  status: string;
+}
+
+function RulePerformanceTab({ role }: { role: string }) {
+  const [rules, setRules] = useState<RulePerf[]>([]);
+  const [candidates, setCandidates] = useState<RuleCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedRule, setExpandedRule] = useState<string | null>(null);
+  const [promoting, setPromoting] = useState<string | null>(null);
+  const [dismissingCand, setDismissingCand] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/playbooks/rules-performance", { headers: { "x-role": role } }).then((r) => r.json()),
+      fetch("/api/rule-candidates?status=PENDING", { headers: { "x-role": role } }).then((r) => r.json()),
+    ]).then(([rulesRes, candRes]) => {
+      setRules(rulesRes.data ?? []);
+      setCandidates(candRes.data ?? []);
+    }).catch(console.error).finally(() => setLoading(false));
+  }, [role]);
+
+  const handlePromote = async (candidateId: string) => {
+    setPromoting(candidateId);
+    try {
+      await fetch(`/api/rule-candidates/${candidateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-role": role },
+        body: JSON.stringify({ action: "promote" }),
+      });
+      setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
+    } catch { /* noop */ } finally {
+      setPromoting(null);
+    }
+  };
+
+  const handleDismissCandidate = async (candidateId: string) => {
+    setDismissingCand(candidateId);
+    try {
+      await fetch(`/api/rule-candidates/${candidateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-role": role },
+        body: JSON.stringify({ action: "dismiss" }),
+      });
+      setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
+    } catch { /* noop */ } finally {
+      setDismissingCand(null);
+    }
+  };
+
+  if (loading) return <div className="h-20 rounded-lg bg-[var(--bg-surface-2)] animate-pulse" />;
+
+  return (
+    <div className="space-y-5">
+      {/* Rule Candidates */}
+      {candidates.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Star className="h-3.5 w-3.5 text-[#F59E0B]" />
+            <h4 className="text-[13px] font-semibold text-[var(--text-primary)]">Rule Candidates</h4>
+            <span className="text-[10px] bg-[#F59E0B]/15 text-[#F59E0B] px-1.5 py-0.5 rounded-full font-semibold">{candidates.length} pending</span>
+          </div>
+          <p className="text-[11px] text-[var(--text-muted)] mb-3">
+            These patterns were discovered from AI fallback recommendations actioned across 3+ accounts. Promote them to add as real playbook rules.
+          </p>
+          <div className="space-y-2">
+            {candidates.map((c) => (
+              <div key={c.id} className="rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/04 p-3" style={{ background: "rgba(245,158,11,0.04)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-semibold text-[var(--text-primary)]">{c.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] bg-[#F59E0B]/15 text-[#F59E0B] px-1.5 py-0.5 rounded-full font-medium">{c.category}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">{c.sourceCount} accounts</span>
+                      {c.confidence && <span className="text-[10px] text-[var(--text-muted)]">{(c.confidence * 100).toFixed(0)}% confidence</span>}
+                    </div>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1.5 line-clamp-2">{c.condition}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handlePromote(c.id)}
+                      disabled={!!promoting}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-white bg-[#22C55E] hover:bg-[#16A34A] transition-colors disabled:opacity-50"
+                    >
+                      {promoting === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                      Promote
+                    </button>
+                    <button
+                      onClick={() => handleDismissCandidate(c.id)}
+                      disabled={!!dismissingCand}
+                      className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[#EF4444] hover:bg-[#EF4444]/08 transition-colors"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Rule Quality Scores */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <BarChart2 className="h-3.5 w-3.5 text-[#0755E9]" />
+          <h4 className="text-[13px] font-semibold text-[var(--text-primary)]">Rule Performance</h4>
+        </div>
+        {rules.length === 0 ? (
+          <p className="text-[12px] text-[var(--text-muted)] italic">No rules have enough feedback data yet (minimum 5 signals per rule).</p>
+        ) : (
+          <div className="space-y-2">
+            {rules.map((rule) => {
+              const total = rule.actionCount + rule.dismissCount;
+              const rate = total > 0 ? rule.actionCount / total : null;
+              const isLowQuality = rule.qualityNote?.flag === "LOW_QUALITY";
+              const isExpanded = expandedRule === rule.id;
+
+              return (
+                <div key={rule.id} className={cn("rounded-lg border overflow-hidden", isLowQuality ? "border-[#F59E0B]/40" : "border-[var(--border-subtle)]")}>
+                  <button
+                    onClick={() => setExpandedRule(isExpanded ? null : rule.id)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--bg-surface-2)] transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase">{rule.category}</span>
+                        <span className="text-[10px] text-[var(--text-muted)] truncate">{rule.playbook.title}</span>
+                        {isLowQuality && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-semibold text-[#F59E0B]">
+                            <AlertTriangle className="h-2.5 w-2.5" /> Review recommended
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[12px] text-[var(--text-primary)] truncate mt-0.5">{rule.condition.slice(0, 80)}...</p>
+                    </div>
+                    {/* Success bar */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {rule.qualityScore !== null ? (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-16 h-1.5 rounded-full bg-[var(--bg-surface-3)] overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${rule.qualityScore}%`,
+                                background: rule.qualityScore >= 60 ? "#22C55E" : rule.qualityScore >= 30 ? "#F59E0B" : "#EF4444",
+                              }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-semibold text-[var(--text-primary)]">{rule.qualityScore}%</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-[var(--text-muted)]">no data</span>
+                      )}
+                      <span className="text-[10px] text-[var(--text-muted)]">{total} signals</span>
+                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-[var(--text-muted)]" /> : <ChevronDown className="h-3.5 w-3.5 text-[var(--text-muted)]" />}
+                    </div>
+                  </button>
+
+                  {isExpanded && rule.qualityNote && (
+                    <div className="px-3 pb-3 pt-2 border-t border-[var(--border-subtle)] space-y-2.5">
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg bg-[var(--bg-surface-2)] p-2">
+                          <p className="text-[16px] font-bold text-[#22C55E]">{rule.actionCount}</p>
+                          <p className="text-[10px] text-[var(--text-muted)]">Actioned</p>
+                        </div>
+                        <div className="rounded-lg bg-[var(--bg-surface-2)] p-2">
+                          <p className="text-[16px] font-bold text-[#EF4444]">{rule.dismissCount}</p>
+                          <p className="text-[10px] text-[var(--text-muted)]">Dismissed</p>
+                        </div>
+                        <div className="rounded-lg bg-[var(--bg-surface-2)] p-2">
+                          <p className="text-[16px] font-bold text-[var(--text-primary)]">
+                            {rate !== null ? `${(rate * 100).toFixed(0)}%` : "—"}
+                          </p>
+                          <p className="text-[10px] text-[var(--text-muted)]">Success</p>
+                        </div>
+                      </div>
+                      {rule.qualityNote.summary && (
+                        <p className="text-[12px] text-[var(--text-secondary)]">{rule.qualityNote.summary}</p>
+                      )}
+                      {rule.qualityNote.suggestions && rule.qualityNote.suggestions.length > 0 && (
+                        <div>
+                          <p className="text-[11px] font-semibold text-[var(--text-muted)] mb-1">Improvement Suggestions</p>
+                          <ul className="space-y-1">
+                            {rule.qualityNote.suggestions.map((s, i) => (
+                              <li key={i} className="text-[11px] text-[var(--text-secondary)] flex items-start gap-1.5">
+                                <span className="text-[#0755E9] mt-0.5 shrink-0">•</span>{s}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { role, userId } = useRole();
   const [settings, setSettings]   = useState<AppSettings | null>(null);
@@ -529,7 +1175,7 @@ export default function SettingsPage() {
   const [teamLoading, setTeamLoading] = useState(false);
   const [editingRole, setEditingRole] = useState<string | null>(null);
 
-  const canViewTeam = role === "MANAGER" || role === "ADMIN";
+  const canViewTeam = role === "KAM" || role === "MANAGER" || role === "ADMIN";
 
   useEffect(() => {
     fetch("/api/settings", { headers: { "x-role": role } })
@@ -815,6 +1461,14 @@ export default function SettingsPage() {
             </div>
           </div>
         </SettingSection>
+      )}
+
+      {/* Playbooks */}
+      <PlaybooksSection role={role} />
+
+      {/* Agent Orchestrator — MANAGER / ADMIN */}
+      {(role === "KAM" || role === "MANAGER" || role === "ADMIN") && (
+        <AgentOrchestratorSection role={role} />
       )}
 
       {/* Demo Controls */}

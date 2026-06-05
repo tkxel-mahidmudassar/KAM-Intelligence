@@ -79,8 +79,7 @@ Identify 4-6 realistic expansion vectors. Return JSON array only:
     task: "opportunity-agent-vectors",
     messages: [{ role: "user", content: promptA }],
     maxTokens: 1024,
-    temperature: 0.4,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("identify-vectors", promptA, responseA.content, Date.now() - tA));
 
@@ -121,8 +120,7 @@ For each vector, produce a full opportunity object. Return JSON array only:
     task: "opportunity-agent-evaluate",
     messages: [{ role: "user", content: promptB }],
     maxTokens: 2048,
-    temperature: 0.3,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("evaluate-opportunities", promptB, responseB.content, Date.now() - tB));
 

@@ -71,7 +71,7 @@ ${context}`;
       task: "pulse-insight",
       messages: [{ role: "user", content: prompt }],
       maxTokens: 4096,
-      temperature: 0.3,
+      temperature: 0.5, // prose — analyst-like, consistent tone
     });
 
     // Parse JSON from response — handle plain JSON, ```json fences, or prose wrapping

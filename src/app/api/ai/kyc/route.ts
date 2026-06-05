@@ -63,14 +63,13 @@ Salesforce Opportunities: ${sf.data.opportunities.map((o) => `${o.name} ($${o.am
       task: "kyc-draft",
       messages: [{ role: "user", content: prompt }],
       maxTokens: 4096,
-      temperature: 0.3,
+      jsonMode: true, // migrated from heuristic extraction; temperature enforced to 0.0 at provider level
     });
 
     // Parse JSON
     let parsed: Record<string, string>;
     try {
-      const jsonMatch = aiResponse.content.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(jsonMatch?.[0] ?? aiResponse.content);
+      parsed = JSON.parse(aiResponse.content);
     } catch {
       return serverError("AI returned malformed JSON — please retry");
     }

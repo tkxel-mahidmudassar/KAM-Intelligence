@@ -61,8 +61,7 @@ Return JSON only: { "genuine": true/false, "confidence": 0.0-1.0, "reasoning": "
     task: "signal-triage-assess",
     messages: [{ role: "user", content: promptA }],
     maxTokens: 256,
-    temperature: 0.1,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("assess-signal", promptA, responseA.content, Date.now() - tA));
 
@@ -103,8 +102,7 @@ Return JSON only: { "title": "imperative title under 80 chars", "description": "
     task: "signal-triage-action",
     messages: [{ role: "user", content: promptB }],
     maxTokens: 256,
-    temperature: 0.2,
-    jsonMode: true,
+    jsonMode: true, // temperature enforced to 0.0 at provider level
   });
   steps.push(makeStep("suggest-action", promptB, responseB.content, Date.now() - tB));
 

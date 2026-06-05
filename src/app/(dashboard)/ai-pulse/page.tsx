@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Brain, Zap, TrendingUp, AlertTriangle, Lightbulb, RefreshCw, ChevronRight, Sparkles, Clock } from "lucide-react";
+import { Brain, Zap, TrendingUp, AlertTriangle, Lightbulb, RefreshCw, ChevronRight, Sparkles, Clock, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { useRole } from "@/context/RoleContext";
 import { Badge } from "@/components/ui/Badge";
@@ -42,6 +42,23 @@ interface Signal {
 interface NotificationData {
   signals: Signal[];
   insights: Insight[];
+}
+
+interface PulseRecommendation {
+  id: string;
+  title: string;
+  summary: string;
+  recommendedAction: string | null;
+  sourceType: "PLAYBOOK" | "AI_FALLBACK";
+  priority: number;
+  dueDate: string | null;
+  account: { id: string; name: string; health: string } | null;
+  playbookRule?: {
+    category: string;
+    sourcePage?: number | null;
+    sourceSection?: string | null;
+    playbook?: { title: string };
+  } | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -220,9 +237,13 @@ export default function AiPulsePage() {
   const [loading, setLoading]       = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generatingStep, setGeneratingStep] = useState<string>("");
-  const [tab, setTab]               = useState<"insights" | "signals">("insights");
+  const [tab, setTab]               = useState<"insights" | "signals" | "recommendations">("insights");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
+
+  // Playbook-grounded recommendations across all accounts
+  const [pulseRecs, setPulseRecs]   = useState<PulseRecommendation[]>([]);
+  const [recsLoading, setRecsLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -238,6 +259,41 @@ export default function AiPulsePage() {
       return null;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRecommendations = async () => {
+    setRecsLoading(true);
+    try {
+      // Fetch accounts first, then get recommendations for each
+      const accRes = await fetch("/api/accounts", { headers: { "x-role": role, "x-user-id": userId ?? "" } });
+      const accJson = await accRes.json();
+      const accounts: { id: string; name: string; health: string }[] = accJson.data ?? [];
+
+      const allRecs: PulseRecommendation[] = [];
+      await Promise.all(
+        accounts.map(async (acc) => {
+          const res = await fetch(`/api/recommendations?accountId=${acc.id}`, {
+            headers: { "x-role": role },
+          });
+          const json = await res.json();
+          const recs = (json.data ?? []) as PulseRecommendation[];
+          // Attach account info
+          recs.forEach((r) => { r.account = { id: acc.id, name: acc.name, health: acc.health }; });
+          allRecs.push(...recs);
+        })
+      );
+
+      // Sort by priority then due date
+      allRecs.sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return (a.dueDate ?? "9999") < (b.dueDate ?? "9999") ? -1 : 1;
+      });
+      setPulseRecs(allRecs);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRecsLoading(false);
     }
   };
 
@@ -265,6 +321,16 @@ export default function AiPulsePage() {
       setGeneratingStep("Done — loading insights...");
       setLastGenerated(new Date());
       await fetchData();
+
+      // Fire master orchestrator pulse_refresh (handles all accounts internally)
+      setGeneratingStep("Refreshing playbook recommendations...");
+      fetch("/api/ai/orchestrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-role": role },
+        body: JSON.stringify({ trigger: "pulse_refresh" }),
+      })
+        .then(() => fetchRecommendations())
+        .catch(console.error);
     } catch (e) {
       console.error(e);
     } finally {
@@ -274,18 +340,17 @@ export default function AiPulsePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, userId]);
 
-  // On mount: load data, then auto-trigger agent if no insights exist or all are >24h old
+  // On mount: load data + recommendations, auto-trigger agent if stale
   useEffect(() => {
     (async () => {
       const d = await fetchData();
+      fetchRecommendations();
       const existing: Insight[] = d?.insights ?? [];
       const hasRecent = existing.some((i) => {
         const age = Date.now() - new Date(i.generatedAt).getTime();
-        return age < 24 * 60 * 60 * 1000; // < 24 hours
+        return age < 24 * 60 * 60 * 1000;
       });
-      if (!hasRecent) {
-        runAgent();
-      }
+      if (!hasRecent) runAgent();
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
@@ -392,6 +457,20 @@ export default function AiPulsePage() {
             {signals.length}
           </span>
         </button>
+        <button
+          onClick={() => { setTab("recommendations"); fetchRecommendations(); }}
+          className={cn(
+            "px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-all",
+            tab === "recommendations"
+              ? "text-[#22C55E] border-[#22C55E]"
+              : "text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]"
+          )}
+        >
+          Recommendations
+          <span className="ml-1.5 text-[10px] bg-[#22C55E]/12 text-[#22C55E] rounded-full px-1.5 py-px font-semibold">
+            {pulseRecs.length}
+          </span>
+        </button>
       </div>
 
       {/* Insight type filter */}
@@ -438,7 +517,7 @@ export default function AiPulsePage() {
             ))}
           </div>
         )
-      ) : (
+      ) : tab === "signals" ? (
         signals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Zap className="h-12 w-12 text-[var(--text-disabled)] mb-3" />
@@ -450,6 +529,60 @@ export default function AiPulsePage() {
             {signals.map((signal) => (
               <SignalCard key={signal.id} signal={signal} />
             ))}
+          </div>
+        )
+      ) : (
+        /* Recommendations tab */
+        recsLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} className="h-[100px]" />)}
+          </div>
+        ) : pulseRecs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <Lightbulb className="h-12 w-12 text-[var(--text-disabled)] mb-3" />
+            <p className="text-[14px] font-medium text-[var(--text-primary)]">No recommendations yet</p>
+            <p className="text-[12px] text-[var(--text-muted)] mt-1">Upload playbooks in Settings or regenerate insights to create recommendations</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pulseRecs.map((rec) => {
+              const isPlaybook = rec.sourceType === "PLAYBOOK";
+              const priorityColor = rec.priority === 1 ? "#EF4444" : rec.priority === 2 ? "#F59E0B" : "#22C55E";
+              const priorityLabel = rec.priority === 1 ? "High" : rec.priority === 2 ? "Medium" : "Low";
+              const citation = rec.playbookRule?.playbook
+                ? [rec.playbookRule.playbook.title.slice(0, 25), rec.playbookRule.sourcePage ? `p.${rec.playbookRule.sourcePage}` : null].filter(Boolean).join(" - ")
+                : null;
+              return (
+                <div key={rec.id} className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${priorityColor}18` }}>
+                      <Lightbulb className="h-4 w-4" style={{ color: priorityColor }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="text-[13px] font-semibold text-[var(--text-primary)]">{rec.title}</p>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border" style={{ color: priorityColor, borderColor: `${priorityColor}30`, background: `${priorityColor}10` }}>{priorityLabel}</span>
+                        {isPlaybook ? (
+                          <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold border border-[#0755E9]/25 text-[#0755E9]" style={{ background: "rgba(7,85,233,0.07)" }}>
+                            <BookOpen className="h-2.5 w-2.5" />{citation ?? "Playbook-guided"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold border border-[#6B7280]/20 text-[var(--text-muted)]" style={{ background: "rgba(107,114,128,0.06)" }}>
+                            <Brain className="h-2.5 w-2.5" />AI fallback
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">{rec.summary}</p>
+                      {rec.account && (
+                        <Link href={`/accounts/${rec.account.id}`} className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#0755E9] hover:underline">
+                          <ChevronRight className="h-3 w-3" />{rec.account.name}
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )
       )}

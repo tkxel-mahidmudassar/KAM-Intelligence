@@ -30,7 +30,8 @@ export type Resource =
   | "opportunity"
   | "questionnaire"
   | "portfolio"
-  | "playbook";
+  | "playbook"
+  | "recommendation";
 
 export type Action =
   | "view"
@@ -50,10 +51,73 @@ export type Permission = `${Resource}:${Action}`;
 
 // ─── Role → granted permissions ────────────────────────────────────────────────
 
-const KAM_PERMISSIONS: Permission[] = [
-  // Accounts — view & update own only (ownership enforced separately via scope)
+// ASSOCIATE — supports a KAM; view-heavy with limited write access
+const ASSOCIATE_PERMISSIONS: Permission[] = [
+  // Accounts — view only (scoped to supervising KAM's accounts)
   "account:view",
+
+  // Contacts — view + update
+  "contact:view",
+  "contact:update",
+
+  // KPIs — view only
+  "kpi:view",
+
+  // Scores — view only
+  "score:view",
+
+  // Actions — view, create, update (cannot delete)
+  "action:view",
+  "action:create",
+  "action:update",
+
+  // Signals — view only
+  "signal:view",
+
+  // Documents — view only
+  "document:view",
+
+  // KYC — view only (KAM drafts, associate supports)
+  "kyc:view",
+
+  // QBR — view only
+  "qbr:view",
+
+  // AI Insights — view and dismiss
+  "insight:view",
+  "insight:dismiss",
+
+  // Activity log — view
+  "activityLog:view",
+
+  // Touchpoints — log meetings and calls
+  "touchpoint:view",
+  "touchpoint:create",
+
+  // Escalations — view and update (cannot create or resolve)
+  "escalation:view",
+  "escalation:update",
+
+  // Opportunities — view only
+  "opportunity:view",
+
+  // Questionnaire — view only
+  "questionnaire:view",
+
+  // Playbooks — view only (cannot upload)
+  "playbook:view",
+
+  // Recommendations — view and dismiss
+  "recommendation:view",
+  "recommendation:dismiss",
+];
+
+const KAM_PERMISSIONS: Permission[] = [
+  // Accounts — full portfolio view + create (KAM = Account Manager)
+  "account:view",
+  "account:create",
   "account:update",
+  "account:export",
 
   // Contacts
   "contact:view",
@@ -64,9 +128,12 @@ const KAM_PERMISSIONS: Permission[] = [
   // KPIs
   "kpi:view",
   "kpi:create",
+  "kpi:export",
 
-  // Scores — view only, cannot approve
+  // Scores — view + approve AI-proposed scores
   "score:view",
+  "score:approve",
+  "score:export",
 
   // Actions — full CRUD on own accounts
   "action:view",
@@ -125,31 +192,38 @@ const KAM_PERMISSIONS: Permission[] = [
   "questionnaire:view",
   "questionnaire:create",
 
-  // Playbooks — global trusted guidance library
+  // Playbooks — KAM can upload, replace, archive global playbooks
   "playbook:view",
   "playbook:create",
   "playbook:update",
-  "playbook:archive",
-];
-
-const MANAGER_PERMISSIONS: Permission[] = [
-  ...KAM_PERMISSIONS,
-
-  // Accounts — all accounts, including create
-  "account:create",
-
-  // Scores — can approve AI-proposed scores
-  "score:approve",
+  "playbook:delete",
 
   // KYC — full lifecycle including approve/reject
   "kyc:approve",
   "kyc:reject",
 
-  // Users — view and update team members (MANAGER can change KAM roles; cannot create/delete)
+  // Users — view and update team members
   "user:view",
   "user:update",
 
-  // Portfolio — manager-level views
+  // Portfolio — full view
+  "portfolio:view",
+
+  // Recommendations — view, dismiss, and action
+  "recommendation:view",
+  "recommendation:dismiss",
+  "recommendation:update",
+
+  // Activity log export
+  "activityLog:export",
+  "qbr:export",
+];
+
+// MANAGER is now an alias for KAM — kept for backward compat with any seeded MANAGER users
+const MANAGER_PERMISSIONS: Permission[] = [
+  ...KAM_PERMISSIONS,
+
+  // Portfolio — manager-level views (already in KAM, but explicit here too)
   "portfolio:view",
 
   // Touchpoints (inherited)
@@ -179,6 +253,9 @@ const MANAGER_PERMISSIONS: Permission[] = [
   "kpi:export",
   "score:export",
   "qbr:export",
+
+  // Recommendations — managers can also action them
+  "recommendation:update",
 ];
 
 const EXECUTIVE_PERMISSIONS: Permission[] = [
@@ -202,6 +279,12 @@ const EXECUTIVE_PERMISSIONS: Permission[] = [
   "portfolio:view",
   "playbook:view",
 
+  // Playbooks — exec can view only
+  "playbook:view",
+
+  // Recommendations — exec can view only
+  "recommendation:view",
+
   // Executives can export for board reporting
   "account:export",
   "kpi:export",
@@ -224,12 +307,14 @@ const ADMIN_PERMISSIONS: Permission[] = [
   "user:view", "user:create", "user:update", "user:delete", "user:manage",
   "activityLog:view", "activityLog:export",
   "portfolio:view",
-  "playbook:view", "playbook:create", "playbook:update", "playbook:archive",
+  "playbook:view", "playbook:create", "playbook:update", "playbook:delete",
+  "recommendation:view", "recommendation:create", "recommendation:update", "recommendation:dismiss",
 ];
 
 // ─── Permission sets (O(1) lookup) ────────────────────────────────────────────
 
 const ROLE_PERMISSIONS: Record<Role | "ADMIN", Set<Permission>> = {
+  ASSOCIATE: new Set(ASSOCIATE_PERMISSIONS),
   KAM:       new Set(KAM_PERMISSIONS),
   MANAGER:   new Set(MANAGER_PERMISSIONS),
   EXECUTIVE: new Set(EXECUTIVE_PERMISSIONS),
@@ -279,11 +364,12 @@ export function getPermissions(role: Role | "ADMIN"): Permission[] {
 // ─── Scope helpers ────────────────────────────────────────────────────────────
 
 /**
- * Whether the role is restricted to only their own accounts (KAM only).
- * Managers and Executives can see all accounts.
+ * Whether the role is restricted to only their own accounts.
+ * KAM is the primary account manager and sees all accounts.
+ * Only ASSOCIATE is scoped to their supervising KAM's accounts.
  */
 export function isAccountScoped(role: Role | "ADMIN"): boolean {
-  return role === "KAM";
+  return role === "ASSOCIATE";
 }
 
 /**

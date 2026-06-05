@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut, ChevronDown, Settings } from "lucide-react";
+import { Bell, LogOut, ChevronDown, Settings, User } from "lucide-react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { NotificationDrawer } from "@/components/layout/NotificationDrawer";
@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 import type { Role } from "@/types";
 
 const ROLES: { value: Role; label: string }[] = [
-  { value: "KAM",       label: "Associate" },
-  { value: "MANAGER",   label: "KAM" },
+  { value: "ASSOCIATE", label: "Associate" },
+  { value: "KAM",       label: "KAM" },
   { value: "EXECUTIVE", label: "Exec" },
 ];
 
@@ -25,6 +25,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/qbr":        "QBR / DBR",
   "/actions":    "Action Board",
   "/settings":   "Settings",
+  "/profile":    "My Profile",
 };
 
 function getPageTitle(pathname: string): string {
@@ -67,11 +68,18 @@ function UserMenu({ userName, onLogout }: { userName: string; onLogout: () => vo
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border border-[var(--glass-border)] bg-[var(--bg-surface-1)] shadow-lg z-50 py-1"
+          className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border border-[var(--glass-border)] bg-[var(--bg-surface-1)] shadow-lg z-[9999] py-1"
         >
           <div className="px-3 py-2 border-b border-[var(--border-subtle)]">
             <p className="text-[12px] font-semibold text-[var(--text-primary)] truncate">{userName}</p>
           </div>
+          <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-2)] transition-colors"
+          >
+            <User className="h-3.5 w-3.5" /> My Profile
+          </Link>
           <Link
             href="/settings"
             onClick={() => setOpen(false)}
@@ -137,11 +145,12 @@ export function Topbar() {
   return (
     <>
       <header
-        className="flex h-14 shrink-0 items-center justify-between px-5 gap-4"
+        className="flex h-14 shrink-0 items-center justify-between px-5 gap-4 relative"
         style={{
           background: "var(--glass-bg)",
           backdropFilter: "var(--glass-blur)",
           borderBottom: "1px solid var(--border-subtle)",
+          zIndex: 40,
         }}
       >
         {/* Page title */}

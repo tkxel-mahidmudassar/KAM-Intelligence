@@ -26,7 +26,8 @@ export class ClaudeProvider implements LLMProvider {
     const response = await this.client.messages.create({
       model: MODEL,
       max_tokens: request.maxTokens ?? 1024,
-      temperature: request.temperature ?? 0.3,
+      // JSON mode must be deterministic — enforce 0.0 unless caller explicitly overrides.
+      temperature: request.temperature ?? (request.jsonMode ? 0.0 : 0.3),
       ...(systemMsg ? { system: systemMsg.content } : {}),
       messages: conversationMsgs.map((m) => ({
         role: m.role as "user" | "assistant",

@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { LLMProvider, LLMRequest, LLMResponse } from "../provider.interface";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-2.0-flash";
 
 export class GeminiProvider implements LLMProvider {
   readonly provider = "gemini" as const;
@@ -28,7 +28,9 @@ export class GeminiProvider implements LLMProvider {
       ...(systemMsg ? { systemInstruction: systemMsg.content } : {}),
       generationConfig: {
         maxOutputTokens: request.maxTokens ?? 1024,
-        temperature: request.temperature ?? 0.3,
+        // JSON mode must be deterministic — enforce 0.0 unless caller explicitly overrides.
+        // Prose calls (no jsonMode) default to 0.3 if no temperature is specified.
+        temperature: request.temperature ?? (request.jsonMode ? 0.0 : 0.3),
         ...(request.jsonMode ? { responseMimeType: "application/json" } : {}),
       },
     });

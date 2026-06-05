@@ -7,7 +7,7 @@ import type { Role } from "@/types";
 
 // ─── Role resolution (POC: read from x-role header, default KAM) ─────────────
 
-const VALID_ROLES: Role[] = ["KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
+const VALID_ROLES: Role[] = ["ASSOCIATE", "KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
 
 export function getRoleFromRequest(req: NextRequest): Role {
   const header = req.headers.get("x-role") ?? "";
@@ -66,5 +66,7 @@ export function guard(role: Role, permission: Permission): NextResponse | null {
 // ─── KAM account scope filter ─────────────────────────────────────────────────
 
 export function kamWhere(role: Role, kamId: string): { kamId?: string } {
-  return role === "KAM" ? { kamId } : {};
+  // KAM is the primary manager role — sees all accounts (no scoping).
+  // Only ASSOCIATE is scoped to the accounts assigned to their supervising KAM.
+  return role === "ASSOCIATE" ? { kamId } : {};
 }
