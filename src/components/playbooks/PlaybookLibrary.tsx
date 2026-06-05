@@ -20,7 +20,7 @@ interface Playbook {
   createdAt: string;
   updatedAt: string;
   uploadedBy: { id: string; name: string; email: string; role: string } | null;
-  _count: { rules: number };
+  _count?: { rules?: number };
 }
 
 interface PlaybookLibraryProps {
@@ -285,7 +285,7 @@ export function PlaybookLibrary({ role, userId }: PlaybookLibraryProps) {
                 <div className="text-[12px] font-semibold text-[var(--text-secondary)]">{playbook.fileType}</div>
                 <div>{statusBadge(playbook.status)}</div>
                 <div className="text-[12px] text-[var(--text-muted)]">{formatDate(playbook.processedAt ?? playbook.updatedAt)}</div>
-                <div className="text-[12px] text-[var(--text-muted)]">{playbook._count.rules}</div>
+                <div className="text-[12px] text-[var(--text-muted)]">{playbook._count?.rules ?? 0}</div>
                 <div className="relative flex justify-end">
                   {canWrite && (
                     <>
