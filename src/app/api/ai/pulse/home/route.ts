@@ -39,7 +39,12 @@ export async function GET(req: NextRequest) {
     const recentInsights = await prisma.aIPulseInsight.findMany({
       where: {
         isDismissed: false,
-        task:        { not: "score-narrative" }, // exclude score narratives (not pulse insights)
+        // Older pulse-agent rows were created before the task field was populated.
+        // Include those null-task rows while still excluding score narratives.
+        OR: [
+          { task: null },
+          { task: { not: "score-narrative" } },
+        ],
         ...(where.kamId ? {
           account: { kamId: where.kamId },
         } : {}),

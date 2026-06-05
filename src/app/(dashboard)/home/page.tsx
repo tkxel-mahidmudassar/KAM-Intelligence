@@ -1638,14 +1638,18 @@ function HomePulseSection({ role }: { role: string }) {
   const [data, setData] = useState<HomePulseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const fetchPulse = useCallback(async () => {
     try {
       const res = await fetch("/api/ai/pulse/home", { headers: { "x-role": role } });
       const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Unable to load AI Pulse.");
       if (json.data) setData(json.data);
     } catch (e) {
       console.error("[HomePulseSection] fetch failed:", e);
+      setRefreshError(e instanceof Error ? e.message : "Unable to load AI Pulse.");
     } finally {
       setLoading(false);
     }
@@ -1653,15 +1657,23 @@ function HomePulseSection({ role }: { role: string }) {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    setRefreshError(null);
+    setRefreshMessage("Generating fresh public-intelligence insights. This usually takes 10-20 seconds.");
     try {
-      await fetch("/api/ai/agents/pulse", {
+      const res = await fetch("/api/ai/agents/pulse", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-role": role },
         body: JSON.stringify({}),
       });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "AI Pulse refresh failed.");
       await fetchPulse();
+      const count = json.data?.output?.count ?? json.output?.count;
+      setRefreshMessage(count ? `Generated ${count} fresh insight${count === 1 ? "" : "s"}.` : "Refresh completed, but no new insights were generated.");
     } catch (e) {
       console.error("[HomePulseSection] refresh failed:", e);
+      setRefreshError(e instanceof Error ? e.message : "AI Pulse refresh failed.");
+      setRefreshMessage(null);
     } finally {
       setRefreshing(false);
     }
@@ -1700,6 +1712,18 @@ function HomePulseSection({ role }: { role: string }) {
           {refreshing ? "Refreshing..." : "Refresh"}
         </button>
       </div>
+      {(refreshMessage || refreshError) && (
+        <div
+          className={cn(
+            "mx-4 mt-3 rounded-xl border px-3 py-2 text-[11px] leading-relaxed",
+            refreshError
+              ? "border-[#EF4444]/25 bg-[#EF4444]/8 text-[#EF4444]"
+              : "border-[#0755E9]/20 bg-[#0755E9]/8 text-[#0755E9]",
+          )}
+        >
+          {refreshError ?? refreshMessage}
+        </div>
+      )}
 
       {/* Body */}
       <div className="p-4 space-y-3">

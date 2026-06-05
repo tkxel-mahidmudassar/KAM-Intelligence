@@ -39,6 +39,18 @@ interface AccountContext {
   news:         string; // formatted news string for prompt
 }
 
+interface GeneratedPulseInsight {
+  accountId: string;
+  type: InsightType;
+  title: string;
+  summary: string;
+  confidence: number;
+  model: string;
+  promptTokens: number;
+  outputTokens: number;
+  sources: InsightSources;
+}
+
 // ─── Prompt templates per insight type ───────────────────────────────────────
 
 const TYPE_INSTRUCTIONS: Record<InsightType, string> = {
@@ -108,7 +120,7 @@ async function generateTypedInsight(
   accountIds: Record<string, string>,                           // name → id map
   accountContexts: AccountContext[],                            // for source lookup after account resolution
   newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]>, // accountId → raw news items
-): Promise<{ insight: { accountId: string; type: InsightType; title: string; summary: string; confidence: number; model: string; promptTokens: number; outputTokens: number; sources: InsightSources } | null; step: AgentStep }> {
+): Promise<{ insight: GeneratedPulseInsight | null; step: AgentStep }> {
   const t0 = Date.now();
 
   const prompt = `You are an AI intelligence engine for a B2B Key Account Management platform.
@@ -216,6 +228,115 @@ Return ONLY a JSON object (no markdown, no explanation):
   }
 }
 
+function sourcesForAccount(
+  account: AccountContext,
+  newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]>,
+): InsightSources {
+  const rawNews = newsResultsMap[account.id] ?? [];
+  return {
+    newsHeadlines: rawNews.slice(0, 5).map((n) => ({
+      title:       n.title,
+      source:      n.source,
+      url:         n.url,
+      publishedAt: n.publishedAt,
+    })),
+    internalData: {
+      health:       account.health,
+      overallScore: account.latestScore,
+      keyScores: {
+        csat:           account.kpiScores?.csat ?? null,
+        relationship:   account.kpiScores?.relationship ?? null,
+        risk:           account.kpiScores?.risk ?? null,
+        contractHealth: account.kpiScores?.contractHealth ?? null,
+      },
+      signalTitles: account.openSignals.slice(0, 3).map((s) => s.title),
+    },
+  };
+}
+
+function buildFallbackInsights(
+  accounts: AccountContext[],
+  newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]>,
+): GeneratedPulseInsight[] {
+  const healthRank: Record<string, number> = { CRITICAL: 0, AT_RISK: 1, HEALTHY: 2 };
+  const byRisk = [...accounts].sort((a, b) => {
+    const healthDelta = (healthRank[a.health] ?? 3) - (healthRank[b.health] ?? 3);
+    if (healthDelta !== 0) return healthDelta;
+    return (a.latestScore ?? 100) - (b.latestScore ?? 100);
+  });
+  const byWhitespace = [...accounts].sort((a, b) =>
+    (b.kpiScores?.whitespace ?? 0) - (a.kpiScores?.whitespace ?? 0)
+  );
+  const byActions = [...accounts].sort((a, b) => b.openActions - a.openActions);
+  const byRenewal = [...accounts].sort((a, b) => {
+    const aDays = a.contractEnd ? (a.contractEnd.getTime() - Date.now()) / 86400000 : 9999;
+    const bDays = b.contractEnd ? (b.contractEnd.getTime() - Date.now()) / 86400000 : 9999;
+    return aDays - bDays;
+  });
+
+  const riskAccount = byRisk[0];
+  const opportunityAccount = byWhitespace[0] ?? riskAccount;
+  const trendAccount = byActions[0] ?? riskAccount;
+  const anomalyAccount = accounts.find((a) =>
+    (a.kpiScores?.whitespace ?? 0) >= 70 && (a.latestScore ?? 100) < 70
+  ) ?? byRisk[1] ?? riskAccount;
+  const recommendationAccount = byRenewal[0] ?? riskAccount;
+
+  const make = (
+    account: AccountContext,
+    type: InsightType,
+    title: string,
+    summary: string,
+    confidence = 0.68,
+  ): GeneratedPulseInsight => ({
+    accountId: account.id,
+    type,
+    title,
+    summary,
+    confidence,
+    model: "internal-fallback",
+    promptTokens: 0,
+    outputTokens: 0,
+    sources: sourcesForAccount(account, newsResultsMap),
+  });
+
+  return [
+    make(
+      riskAccount,
+      InsightType.RISK,
+      `${riskAccount.name} needs immediate risk attention`,
+      `${riskAccount.name} is the highest-risk account in the current portfolio view with ${riskAccount.health} health, score ${riskAccount.latestScore ?? "N/A"}/100, ${riskAccount.openActions} open action${riskAccount.openActions === 1 ? "" : "s"}, and ${riskAccount.openSignals.length} unresolved signal${riskAccount.openSignals.length === 1 ? "" : "s"}. Prioritise executive alignment and close the most critical open action before the next review cycle.`,
+    ),
+    make(
+      opportunityAccount,
+      InsightType.OPPORTUNITY,
+      `${opportunityAccount.name} has the clearest expansion signal`,
+      `${opportunityAccount.name} has whitespace score ${opportunityAccount.kpiScores?.whitespace ?? "N/A"} and ARR $${opportunityAccount.arr.toLocaleString()}, making it the strongest internal expansion candidate. Review open opportunities and prepare a scoped commercial proposal tied to the account's current operating priorities.`,
+    ),
+    make(
+      trendAccount,
+      InsightType.TREND,
+      `${trendAccount.name} is driving the action workload`,
+      `${trendAccount.name} currently has ${trendAccount.openActions} open action${trendAccount.openActions === 1 ? "" : "s"}, the highest action load in scope. This trend suggests the account needs tighter weekly governance, owner assignment, and a visible milestone cadence until the queue normalises.`,
+      0.64,
+    ),
+    make(
+      anomalyAccount,
+      InsightType.ANOMALY,
+      `${anomalyAccount.name} shows a score-to-whitespace mismatch`,
+      `${anomalyAccount.name} combines score ${anomalyAccount.latestScore ?? "N/A"}/100 with whitespace ${anomalyAccount.kpiScores?.whitespace ?? "N/A"}, which suggests opportunity exists but execution or relationship health may be limiting conversion. Validate whether the blocker is stakeholder access, delivery confidence, or commercial timing.`,
+      0.62,
+    ),
+    make(
+      recommendationAccount,
+      InsightType.RECOMMENDATION,
+      `Run this week's account control plan for ${recommendationAccount.name}`,
+      `${recommendationAccount.name} should get a concrete control plan this week: confirm the next stakeholder touchpoint, assign owners for open actions, and document the renewal or escalation path. This fallback insight was generated from internal account data because the live LLM provider is currently quota-limited.`,
+      0.7,
+    ),
+  ];
+}
+
 // ─── Main agent function ──────────────────────────────────────────────────────
 
 export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult<{ count: number }>> {
@@ -303,9 +424,19 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
   results.forEach(({ step }) => steps.push(step));
 
   // 5. Persist successful insights (including sources)
-  const toCreate = results
+  let toCreate = results
     .map((r) => r.insight)
     .filter((i): i is NonNullable<typeof i> => i !== null);
+
+  if (toCreate.length === 0 && accountContexts.length > 0) {
+    toCreate = buildFallbackInsights(accountContexts, newsResultsMap);
+    steps.push(makeStep(
+      "fallback-insights",
+      "Gemini returned no parseable pulse insights",
+      `Generated ${toCreate.length} fallback insights from internal account data`,
+      0,
+    ));
+  }
 
   if (toCreate.length > 0) {
     await prisma.aIPulseInsight.createMany({
@@ -314,6 +445,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
         type:         i.type,
         title:        i.title,
         summary:      i.summary,
+        task:         "pulse-insight",
         confidence:   i.confidence,
         model:        i.model,
         promptTokens: i.promptTokens,
