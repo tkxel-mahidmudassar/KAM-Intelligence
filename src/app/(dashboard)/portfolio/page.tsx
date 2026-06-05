@@ -83,19 +83,20 @@ export default function PortfolioPage() {
     <div className="space-y-5">
 
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[20px] font-bold text-[var(--text-primary)] tracking-[-0.02em]">
+      <div className="command-hero flex items-center justify-between gap-4 p-5">
+        <div className="relative z-10">
+          <span className="command-kicker">Portfolio command deck</span>
+          <h1 className="mt-4 text-[28px] font-black leading-none tracking-[-0.06em] text-white sm:text-[38px]">
             Portfolio
           </h1>
-          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
+          <p className="mt-3 text-[13px] text-white/72">
             {loading ? "Loading…" : `${accounts.length} accounts · real-time health overview`}
           </p>
         </div>
         {canCreate && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold text-white bg-[#0755E9] rounded-xl hover:bg-[#0647C7] transition-colors"
+            className="relative z-10 flex items-center gap-1.5 rounded-2xl bg-white px-4 py-2.5 text-[13px] font-black text-[#071B3A] shadow-[0_14px_32px_rgba(255,255,255,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[#F7FAFF]"
           >
             <Plus className="h-4 w-4" /> New Account
           </button>

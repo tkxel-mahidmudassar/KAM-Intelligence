@@ -273,10 +273,11 @@ export default function ManagerPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[20px] font-bold text-[var(--text-primary)] tracking-[-0.02em]">Command Centre</h1>
-          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
+      <div className="command-hero flex items-start justify-between gap-4 p-5">
+        <div className="relative z-10">
+          <span className="command-kicker">Governance command deck</span>
+          <h1 className="mt-4 text-[28px] font-black leading-none tracking-[-0.06em] text-white sm:text-[38px]">Command Centre</h1>
+          <p className="mt-3 text-[13px] text-white/72">
             Portfolio governance and KAM performance overview
           </p>
         </div>
@@ -284,10 +285,10 @@ export default function ManagerPage() {
           onClick={handleBulkRefresh}
           disabled={refreshing || loading}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-all shrink-0",
+            "relative z-10 flex items-center gap-2 rounded-2xl px-4 py-2.5 text-[13px] font-black transition-all shrink-0",
             refreshing
-              ? "bg-[var(--bg-surface-2)] text-[var(--text-muted)] border border-[var(--border-subtle)] cursor-not-allowed"
-              : "bg-[#0755E9]/10 text-[#0755E9] border border-[#0755E9]/30 hover:bg-[#0755E9]/20"
+              ? "bg-white/20 text-white/60 border border-white/15 cursor-not-allowed"
+              : "bg-white text-[#071B3A] shadow-[0_14px_32px_rgba(255,255,255,0.2)] hover:-translate-y-0.5 hover:bg-[#F7FAFF]"
           )}
         >
           <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />

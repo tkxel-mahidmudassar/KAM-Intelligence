@@ -601,11 +601,10 @@ export default function ActionsPage() {
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-[28px] border border-white/15 bg-[radial-gradient(circle_at_12%_18%,rgba(255,209,102,0.26),transparent_26%),linear-gradient(135deg,#071B3A_0%,#0755E9_48%,#0C8A7A_100%)] p-5 shadow-[0_28px_80px_rgba(7,27,58,0.28)]">
-        <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/12 blur-3xl" />
+      <section className="command-hero p-5">
         <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-2xl text-white">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white/78">
+            <div className="command-kicker">
               <Target className="h-3.5 w-3.5" />
               Execution command deck
             </div>

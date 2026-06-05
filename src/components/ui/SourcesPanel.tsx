@@ -16,6 +16,7 @@ const TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; labe
   touchpoint:  { icon: Users,       color: "#14B8A6", label: "Touchpoint"},
   contact:     { icon: Users,       color: "#0EA5E9", label: "Contact"   },
   opportunity: { icon: Target,      color: "#F97316", label: "Opportunity"},
+  public:      { icon: Link2,       color: "#0C8A7A", label: "Public"    },
 };
 
 function SourceItem({ source }: { source: AgentSource }) {

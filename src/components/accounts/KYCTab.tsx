@@ -86,6 +86,41 @@ const FIELD_LABELS: Record<keyof KycFields, string> = {
 
 const FIELD_KEYS = Object.keys(FIELD_LABELS) as (keyof KycFields)[];
 
+function extractSourceLabels(value: string): string[] {
+  const labels = new Set<string>();
+  const finalLine = value.match(/(?:^|\n)Sources:\s*(.+)$/i);
+  if (finalLine?.[1]) {
+    finalLine[1].split(";").map((s) => s.trim()).filter(Boolean).forEach((s) => labels.add(s));
+  }
+  for (const match of value.matchAll(/\[Source:\s*([^\]]+)\]/gi)) {
+    match[1].split(";").map((s) => s.trim()).filter(Boolean).forEach((s) => labels.add(s));
+  }
+  return Array.from(labels);
+}
+
+function stripSourceMarkers(value: string): string {
+  return value
+    .replace(/\s*\[Source:\s*[^\]]+\]/gi, "")
+    .replace(/(?:^|\n)Sources:\s*.+$/i, "")
+    .trim();
+}
+
+function SourceChips({ sources }: { sources: string[] }) {
+  if (sources.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {sources.map((source) => (
+        <span
+          key={source}
+          className="inline-flex items-center rounded-full border border-[#0C8A7A]/20 bg-[#0C8A7A]/8 px-2 py-1 text-[10px] font-bold text-[#0C8A7A]"
+        >
+          Source: {source}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ─── KYC Edit Form ────────────────────────────────────────────────────────────
 
 function KycForm({
@@ -449,7 +484,7 @@ export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, 
 
   if (!latest && !creating) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
+      <div className="command-panel flex flex-col items-center justify-center px-6 py-20 text-center">
         <ShieldAlert className="h-12 w-12 text-[var(--text-disabled)] mb-3" />
         <p className="text-[14px] font-medium text-[var(--text-primary)]">No KYC record found</p>
         <p className="text-[12px] text-[var(--text-muted)] mt-1 mb-5">KYC has not been initiated for this account</p>
@@ -480,7 +515,7 @@ export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, 
 
   if (creating) {
     return (
-      <div className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] p-5">
+      <div className="command-panel p-5">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-[14px] font-semibold text-[var(--text-primary)]">
             New KYC Record — v{(latest?.version ?? 0) + 1}
@@ -521,7 +556,7 @@ export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, 
 
       <div className="space-y-4">
         {/* ── Status card ─────────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] p-5">
+        <div className="command-panel p-5">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <div
@@ -624,7 +659,7 @@ export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, 
 
         {/* ── Edit form ───────────────────────────────────────────────────── */}
         {editing && (
-          <div className="rounded-xl border border-[#0755E9]/30 bg-[#0755E9]/4 [backdrop-filter:var(--glass-blur)] p-5">
+          <div className="rounded-3xl border border-[#0755E9]/30 bg-[#0755E9]/4 p-5 shadow-[0_18px_54px_rgba(7,85,233,0.08)] [backdrop-filter:var(--glass-blur)]">
             <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4">Edit KYC Fields</h3>
             <KycForm
               initial={{
@@ -655,20 +690,30 @@ export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, 
 
         {/* ── KYC fields ──────────────────────────────────────────────────── */}
         {!editing && (
-          <div className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] p-5">
-            <h3 className="text-[12px] font-semibold text-[var(--text-primary)] uppercase tracking-wider mb-4">
+          <div className="command-card p-5">
+            <h3 className="command-section-label mb-4">
               KYC Details
             </h3>
             <div className="space-y-4">
               {FIELD_KEYS.map((key) => {
                 const val = latest[key];
                 if (!val) return null;
+                const displayValue = stripSourceMarkers(val);
+                const sectionSources = extractSourceLabels(val);
                 return (
-                  <div key={key}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                      {FIELD_LABELS[key]}
-                    </p>
-                    <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{val}</p>
+                  <div key={key} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface-2)]/60 p-4">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                        {FIELD_LABELS[key]}
+                      </p>
+                      {sectionSources.length > 0 && (
+                        <span className="rounded-full bg-[#0C8A7A]/10 px-2 py-0.5 text-[10px] font-bold text-[#0C8A7A]">
+                          {sectionSources.length} source{sectionSources.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{displayValue || val}</p>
+                    <SourceChips sources={sectionSources} />
                   </div>
                 );
               })}
@@ -683,7 +728,7 @@ export function KYCTab({ kycVersions, accountId, onSubmit, onApprove, onReject, 
 
         {/* ── Version history ─────────────────────────────────────────────── */}
         {kycVersions.length > 1 && (
-          <div className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] p-5">
+          <div className="command-panel p-5">
             <button
               className="flex items-center justify-between w-full"
               onClick={() => {

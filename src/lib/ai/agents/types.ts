@@ -7,7 +7,7 @@ export interface AgentStep {
 
 /** A structured reference to a specific data point the AI used when generating output. */
 export interface AgentSource {
-  type: "kpi" | "signal" | "score" | "kyc" | "document" | "adapter" | "action" | "touchpoint" | "contact" | "opportunity";
+  type: "kpi" | "signal" | "score" | "kyc" | "document" | "adapter" | "action" | "touchpoint" | "contact" | "opportunity" | "public";
   label: string;   // e.g. "CSAT score: 18/100", "Signal: Revenue drop detected"
   value?: string;  // optional secondary value or context
 }

@@ -202,11 +202,14 @@ export default function QBRPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-[20px] font-bold text-[var(--text-primary)] tracking-[-0.02em]">QBR / DBR</h1>
-        <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
+      <div className="command-hero p-5">
+        <div className="relative z-10">
+          <span className="command-kicker">Review command deck</span>
+          <h1 className="mt-4 text-[28px] font-black leading-none tracking-[-0.06em] text-white sm:text-[38px]">QBR / DBR</h1>
+          <p className="mt-3 text-[13px] text-white/72">
           Quarterly and daily business reviews across your portfolio
-        </p>
+          </p>
+        </div>
       </div>
 
       {/* Filter */}

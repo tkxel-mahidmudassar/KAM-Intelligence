@@ -288,10 +288,11 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-5">
       {/* Page header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[20px] font-bold text-[var(--text-primary)]">Portfolio Analytics</h1>
-          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
+      <div className="command-hero flex items-start justify-between gap-4 p-5">
+        <div className="relative z-10">
+          <span className="command-kicker">Insight command deck</span>
+          <h1 className="mt-4 text-[28px] font-black leading-none tracking-[-0.06em] text-white sm:text-[38px]">Portfolio Analytics</h1>
+          <p className="mt-3 text-[13px] text-white/72">
             {stats.total} account{stats.total !== 1 ? "s" : ""} · live snapshot
           </p>
         </div>
@@ -303,9 +304,8 @@ export default function AnalyticsPage() {
           }}
           disabled={exporting || accounts.length === 0}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium transition-all shrink-0",
-            "border border-[#0755E9]/30 bg-[#0755E9]/10 text-[#0755E9]",
-            "hover:bg-[#0755E9]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            "relative z-10 flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-[13px] font-black text-[#071B3A] shadow-[0_14px_32px_rgba(255,255,255,0.2)] transition-all shrink-0",
+            "hover:-translate-y-0.5 hover:bg-[#F7FAFF] disabled:opacity-50 disabled:cursor-not-allowed"
           )}
         >
           <Download className="h-4 w-4" />

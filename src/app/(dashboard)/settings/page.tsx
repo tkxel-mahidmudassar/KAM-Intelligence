@@ -1235,11 +1235,14 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       {/* Header */}
-      <div>
-        <h1 className="text-[20px] font-bold text-[var(--text-primary)] tracking-[-0.02em]">Settings</h1>
-        <p className="text-[13px] text-[var(--text-muted)] mt-0.5">
+      <div className="command-hero p-5">
+        <div className="relative z-10">
+          <span className="command-kicker">Configuration command deck</span>
+          <h1 className="mt-4 text-[28px] font-black leading-none tracking-[-0.06em] text-white sm:text-[38px]">Settings</h1>
+          <p className="mt-3 text-[13px] text-white/72">
           AI provider, adapter configuration, score weights, and demo controls
-        </p>
+          </p>
+        </div>
       </div>
 
       {/* Score Weights */}
