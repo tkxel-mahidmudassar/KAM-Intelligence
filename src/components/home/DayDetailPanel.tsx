@@ -259,7 +259,7 @@ export function DayDetailPanel({ date, items, allGrouped, onClose, onItemUpdated
 
   return (
     <>
-      <div className="w-80 shrink-0 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] shadow-[var(--glass-shadow)] flex flex-col overflow-hidden">
+        <div className="command-panel w-full shrink-0 flex flex-col overflow-hidden xl:w-80">
         {/* Close button */}
         <div className="flex items-center justify-end px-3 pt-2 shrink-0">
           <button

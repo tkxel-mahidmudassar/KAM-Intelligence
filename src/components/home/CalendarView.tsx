@@ -125,12 +125,13 @@ function DayCell({
 export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) {
   const { role, userId } = useRole();
   const today = new Date();
+  const todayKey = toDateKey(today);
 
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [grouped, setGrouped] = useState<Record<string, CalendarItem[]>>({});
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayKey);
 
   const fetchCalendar = useCallback(async () => {
     setLoading(true);
@@ -156,7 +157,7 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
     } finally {
       setLoading(false);
     }
-  }, [year, month, role]);
+  }, [year, month, role, userId]);
 
   useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
 
@@ -177,14 +178,13 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
   };
 
   const weeks = buildGrid(year, month);
-  const todayKey = toDateKey(today);
 
   const selectedItems = selectedDate ? (grouped[selectedDate] ?? []) : [];
 
   return (
-    <div className="flex gap-4 min-h-0">
+    <div className="flex flex-col gap-4 min-h-0 xl:flex-row">
       {/* ── Calendar grid ─────────────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] shadow-[var(--glass-shadow)] p-4 space-y-3">
+      <div className="command-panel flex-1 min-w-0 p-4 space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-[14px] font-bold text-[var(--text-primary)]">
@@ -278,7 +278,7 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
 
       {/* ── Empty state when no date selected ────────────────────────────── */}
       {!selectedDate && !loading && (
-        <div className="w-72 shrink-0 rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] p-6 flex flex-col items-center justify-center text-center">
+        <div className="command-panel w-full shrink-0 p-6 flex flex-col items-center justify-center text-center xl:w-72">
           <Calendar className="h-10 w-10 text-[var(--text-disabled)] mb-3" />
           <p className="text-[13px] font-medium text-[var(--text-primary)]">Select a day</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1">Click any date to see actions, signals, renewals, and meetings</p>

@@ -1112,11 +1112,36 @@ export default function HomePage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-[22px] font-bold tracking-[-0.03em] text-[var(--text-primary)]">
-          {greeting()}
-        </h1>
-        <p className="text-[13px] text-[var(--text-muted)] mt-0.5">{todayLabel()}</p>
+      <div className="command-hero p-5">
+        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <span className="command-kicker">
+              <Sparkles className="h-3 w-3" />
+              Portfolio Command Deck
+            </span>
+            <h1 className="mt-4 text-[30px] font-black leading-none tracking-[-0.06em] text-white sm:text-[42px]">
+              {greeting()}
+            </h1>
+            <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-white/74">
+              {todayLabel()} · Live account health, urgent actions, calendar commitments, and AI pulse in one operating view.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-white sm:min-w-[360px]">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/58">Accounts</p>
+              <p className="mt-2 text-[24px] font-black leading-none num-mono">{accounts.length}</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/58">Open</p>
+              <p className="mt-2 text-[24px] font-black leading-none num-mono">{totalOpenActions}</p>
+            </div>
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/58">Role</p>
+              <p className="mt-2 text-[18px] font-black leading-none">{role}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {loading ? (
@@ -1213,7 +1238,7 @@ function StatCard({
     <button
       type="button"
       onClick={() => onSelect(id)}
-      className="rounded-xl border p-4 flex flex-col gap-0 text-left transition-all duration-200 group overflow-hidden relative hover:-translate-y-0.5"
+      className="command-card p-4 flex flex-col gap-0 text-left transition-all duration-200 group overflow-hidden relative hover:-translate-y-0.5"
       style={{
         background: "var(--stat-card-bg)",
         borderColor: "var(--stat-card-border)",
@@ -1398,7 +1423,7 @@ function PulseInsightCard({ insight }: { insight: HomeInsight }) {
     || Object.values(sources?.internalData?.keyScores ?? {}).some((v) => v !== null);
 
   return (
-    <div className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] shadow-[var(--glass-shadow)] p-4">
+    <div className="command-card p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg mt-0.5" style={{ background: cfg.bg }}>
           <Icon className="h-4 w-4" style={{ color: cfg.color }} />
@@ -1524,7 +1549,7 @@ function PulseRecommendationCard({ rec }: { rec: HomeRecommendation }) {
   const hasSources = isPlaybook && (rec.playbookRule?.condition || rec.matchingSignals.length > 0);
 
   return (
-    <div className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] shadow-[var(--glass-shadow)] p-4">
+    <div className="command-card p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg mt-0.5" style={{ background: `${priorityColor}18` }}>
           <Lightbulb className="h-4 w-4" style={{ color: priorityColor }} />
@@ -1649,7 +1674,7 @@ function HomePulseSection({ role }: { role: string }) {
   const hasContent = allInsights.length > 0 || allRecs.length > 0;
 
   return (
-    <div className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] shadow-[var(--glass-shadow)]">
+    <div className="command-panel">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
         <div className="flex items-center gap-2.5">
