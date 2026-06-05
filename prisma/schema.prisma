@@ -105,13 +105,6 @@ enum PlaybookScope {
   GLOBAL
 }
 
-enum PlaybookStatus {
-  PROCESSING
-  ACTIVE
-  FAILED
-  ARCHIVED
-}
-
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 model User {
@@ -539,53 +532,6 @@ model Opportunity {
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@map("opportunities")
-}
-
-// Playbook library
-
-model Playbook {
-  id              String         @id @default(uuid())
-  title           String
-  scope           PlaybookScope  @default(GLOBAL)
-  fileName        String
-  fileType        String
-  mimeType        String?
-  fileSize        Int
-  storagePath     String
-  uploadedById    String?
-  status          PlaybookStatus @default(PROCESSING)
-  extractedText   String?        @db.LongText
-  processingError String?        @db.Text
-  processedAt     DateTime?
-  archivedAt      DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-
-  uploadedBy User?          @relation("PlaybookUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
-  rules      PlaybookRule[]
-
-  @@map("playbooks")
-}
-
-model PlaybookRule {
-  id                String   @id @default(uuid())
-  playbookId        String
-  category          String
-  condition         String   @db.Text
-  recommendation    String   @db.Text
-  correctiveMeasure String?  @db.Text
-  priority          String   @default("MEDIUM")
-  sourceTitle       String
-  sourcePage        Int?
-  sourceSection     String?
-  sourceSheet       String?
-  sourceExcerpt     String?  @db.Text
-  createdAt         DateTime @default(now())
-
-  playbook Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
-
-  @@index([playbookId])
-  @@map("playbook_rules")
 }
 
 // ─── App Config (global settings, single row) ─────────────────────────────────
