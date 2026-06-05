@@ -1124,7 +1124,7 @@ export default function HomePage() {
           {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <PortfolioStatCards
             accounts={accounts}
             openActions={totalOpenActions}
@@ -1150,6 +1150,117 @@ export default function HomePage() {
   );
 }
 
+// ─── Stat card sub-components ─────────────────────────────────────────────────
+
+function Sparkline({ points, color, id }: { points: number[]; color: string; id: string }) {
+  if (points.length < 2) return null;
+  const w = 72; const h = 28;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const xs = points.map((_, i) => (i / (points.length - 1)) * w);
+  const ys = points.map((p) => h - 4 - ((p - min) / range) * (h - 10));
+  const pathD = xs.map((x, i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" ");
+  const areaD = `${pathD} L ${w} ${h} L 0 ${h} Z`;
+  const gradId = `sg-${id}`;
+  return (
+    <svg width={w} height={h} className="overflow-visible" aria-hidden>
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#${gradId})`} />
+      <path d={pathD} stroke={color} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function useCountUp(target: number, duration = 700) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    let frame = 0;
+    const total = Math.ceil(duration / 16);
+    const timer = setInterval(() => {
+      frame++;
+      const ease = 1 - Math.pow(1 - frame / total, 3);
+      setValue(frame >= total ? target : Math.floor(ease * target));
+      if (frame >= total) clearInterval(timer);
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+  return value;
+}
+
+function StatCard({
+  id, label, rawValue, displayValue, sub, icon: Icon, color, glow, trend, sparkPoints, onSelect,
+}: {
+  id: CardKind; label: string; rawValue: number; displayValue: string;
+  sub: string; icon: React.ElementType; color: string; glow: string;
+  trend: { delta: number | null; pct: number | null };
+  sparkPoints: number[]; onSelect: (c: CardKind) => void;
+}) {
+  const animated = useCountUp(rawValue);
+  const shown = typeof rawValue === "number" && displayValue === String(rawValue)
+    ? String(animated)
+    : displayValue;
+
+  const TrendIcon = trend.delta === null ? null : trend.delta >= 0 ? TrendingUp : TrendingDown;
+  const trendColor = trend.delta === null ? "var(--text-muted)" : trend.delta >= 0 ? "#22C55E" : "#EF4444";
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(id)}
+      className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] p-4 flex flex-col gap-0 text-left transition-all duration-200 group overflow-hidden relative"
+      style={{ boxShadow: `var(--glass-shadow)` }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = glow; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--glass-shadow)"; }}
+    >
+      {/* Label row */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5">
+          <div className="flex h-5 w-5 items-center justify-center rounded-md" style={{ background: `${color}20` }}>
+            <Icon className="h-3 w-3" style={{ color }} />
+          </div>
+          <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-[0.06em]">{label}</p>
+        </div>
+        <ExternalLink className="h-3 w-3 text-[var(--text-disabled)] opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+
+      {/* Value + sparkline */}
+      <div className="flex items-end justify-between gap-2">
+        <div>
+          <p className="text-[30px] font-bold leading-none num-mono" style={{ color }}>{shown}</p>
+          {TrendIcon && trend.pct !== null && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <TrendIcon className="h-3 w-3" style={{ color: trendColor }} />
+              <span className="text-[11px] font-semibold num-mono" style={{ color: trendColor }}>
+                {trend.delta! > 0 ? "+" : ""}{trend.delta} vs prev
+              </span>
+            </div>
+          )}
+        </div>
+        {sparkPoints.length >= 2 && (
+          <div className="mb-1 opacity-80 group-hover:opacity-100 transition-opacity">
+            <Sparkline points={sparkPoints} color={color} id={id} />
+          </div>
+        )}
+      </div>
+
+      {/* Sub label */}
+      <p className="text-[11px] text-[var(--text-muted)] truncate mt-2">{sub}</p>
+
+      {/* Left-edge colour accent — appears on hover */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        style={{ background: color }}
+      />
+    </button>
+  );
+}
+
 function PortfolioStatCards({
   accounts, openActions, onSelect,
 }: {
@@ -1157,48 +1268,97 @@ function PortfolioStatCards({
   openActions: number;
   onSelect: (card: CardKind) => void;
 }) {
-  const total = accounts.length;
-  const healthy = accounts.filter((a) => a.health === "HEALTHY").length;
-  const atRisk = accounts.filter((a) => a.health === "AT_RISK").length;
+  const total    = accounts.length;
+  const healthy  = accounts.filter((a) => a.health === "HEALTHY").length;
+  const atRisk   = accounts.filter((a) => a.health === "AT_RISK").length;
   const critical = accounts.filter((a) => a.health === "CRITICAL").length;
   const totalARR = accounts.reduce((s, a) => s + a.arr, 0);
 
+  // Build sparkline data from kamScores across all accounts
+  // Combine latest + prev scores, bucket into 6 time slots
+  const allScores = accounts.flatMap((a) =>
+    a.kamScores.map((s) => ({ score: s.overall, at: s.computedAt ?? "" }))
+  ).sort((a, b) => a.at.localeCompare(b.at));
+
+  function bucketedSpark(extractor: (accts: Account[], slotIdx: number, total: number) => number) {
+    const SLOTS = 6;
+    return Array.from({ length: SLOTS }, (_, i) => extractor(accounts, i, SLOTS));
+  }
+
+  // Healthy count over time (approximate using score distribution)
+  const healthySpark = bucketedSpark((accts, i, n) => {
+    const ratio = i / (n - 1);
+    return accts.filter((a) => {
+      const s0 = a.kamScores[1]?.overall ?? a.kamScores[0]?.overall ?? 50;
+      const s1 = a.kamScores[0]?.overall ?? s0;
+      const interpolated = s0 + (s1 - s0) * ratio;
+      return interpolated >= 70;
+    }).length;
+  });
+
+  const atRiskSpark = bucketedSpark((accts, i, n) => {
+    const ratio = i / (n - 1);
+    return accts.filter((a) => {
+      const s0 = a.kamScores[1]?.overall ?? a.kamScores[0]?.overall ?? 50;
+      const s1 = a.kamScores[0]?.overall ?? s0;
+      const interpolated = s0 + (s1 - s0) * ratio;
+      return interpolated >= 45 && interpolated < 70;
+    }).length;
+  });
+
+  const criticalSpark = bucketedSpark((accts, i, n) => {
+    const ratio = i / (n - 1);
+    return accts.filter((a) => {
+      const s0 = a.kamScores[1]?.overall ?? a.kamScores[0]?.overall ?? 50;
+      const s1 = a.kamScores[0]?.overall ?? s0;
+      const interpolated = s0 + (s1 - s0) * ratio;
+      return interpolated < 45;
+    }).length;
+  });
+
+  // ARR sparkline — approximate distribution across accounts by score rank
+  const arrSpark = [...accounts]
+    .sort((a, b) => (a.kamScores[0]?.overall ?? 0) - (b.kamScores[0]?.overall ?? 0))
+    .map((a) => a.arr / 1_000_000);
+
+  // Prev-period values for trends
+  const prevHealthy  = accounts.filter((a) => (a.kamScores[1]?.overall ?? a.kamScores[0]?.overall ?? 0) >= 70).length;
+  const prevAtRisk   = accounts.filter((a) => { const s = a.kamScores[1]?.overall ?? a.kamScores[0]?.overall ?? 0; return s >= 45 && s < 70; }).length;
+  const prevCritical = accounts.filter((a) => (a.kamScores[1]?.overall ?? a.kamScores[0]?.overall ?? 100) < 45).length;
+
   const cards = [
-    { id: "arr" as const, label: "Total ARR", value: formatARR(totalARR), sub: `${total} account${total !== 1 ? "s" : ""}`, icon: DollarSign, iconBg: "#0755E9" },
-    { id: "healthy" as const, label: "Healthy", value: healthy, sub: healthy > 0 ? `${Math.round((healthy / Math.max(total, 1)) * 100)}% of portfolio` : "-", icon: CheckCircle2, iconBg: "#22C55E" },
-    { id: "atRisk" as const, label: "At Risk", value: atRisk, sub: atRisk > 0 ? `${formatARR(accounts.filter((a) => a.health === "AT_RISK").reduce((s, a) => s + a.arr, 0))} ARR` : "-", icon: AlertTriangle, iconBg: "#F59E0B" },
-    { id: "critical" as const, label: "Critical", value: critical, sub: critical > 0 ? `${formatARR(accounts.filter((a) => a.health === "CRITICAL").reduce((s, a) => s + a.arr, 0))} at risk` : "-", icon: XCircle, iconBg: "#EF4444" },
-    { id: "actions" as const, label: "Open Actions", value: openActions, sub: openActions === 1 ? "1 task pending" : `${openActions} tasks pending`, icon: ClipboardList, iconBg: "#7C3AED" },
+    {
+      id: "arr" as const, label: "Total ARR", rawValue: Math.round(totalARR / 1000), displayValue: formatARR(totalARR),
+      sub: `${total} account${total !== 1 ? "s" : ""}`, icon: DollarSign, color: "#0755E9", glow: "var(--card-glow-brand)",
+      trend: { delta: null, pct: null }, sparkPoints: arrSpark.length >= 2 ? arrSpark : [],
+    },
+    {
+      id: "healthy" as const, label: "Healthy", rawValue: healthy, displayValue: String(healthy),
+      sub: `${Math.round((healthy / Math.max(total, 1)) * 100)}% of portfolio`, icon: CheckCircle2, color: "#22C55E", glow: "var(--card-glow-healthy)",
+      trend: { delta: healthy - prevHealthy, pct: prevHealthy > 0 ? Math.round(((healthy - prevHealthy) / prevHealthy) * 100) : null },
+      sparkPoints: healthySpark,
+    },
+    {
+      id: "atRisk" as const, label: "At Risk", rawValue: atRisk, displayValue: String(atRisk),
+      sub: atRisk > 0 ? `${formatARR(accounts.filter((a) => a.health === "AT_RISK").reduce((s, a) => s + a.arr, 0))} ARR` : "No accounts at risk",
+      icon: AlertTriangle, color: "#F59E0B", glow: "var(--card-glow-atrisk)",
+      trend: { delta: atRisk - prevAtRisk, pct: null },
+      sparkPoints: atRiskSpark,
+    },
+    {
+      id: "critical" as const, label: "Critical", rawValue: critical, displayValue: String(critical),
+      sub: critical > 0 ? `${formatARR(accounts.filter((a) => a.health === "CRITICAL").reduce((s, a) => s + a.arr, 0))} at risk` : "No critical accounts",
+      icon: XCircle, color: "#EF4444", glow: "var(--card-glow-critical)",
+      trend: { delta: critical - prevCritical, pct: null },
+      sparkPoints: criticalSpark,
+    },
   ];
 
   return (
     <>
-      {cards.map((card) => {
-        const Icon = card.icon;
-        return (
-          <button
-            key={card.id}
-            type="button"
-            onClick={() => onSelect(card.id)}
-            className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] shadow-[var(--glass-shadow)] p-4 flex flex-col gap-1.5 text-left hover:border-[#0755E9]/40 hover:bg-[var(--bg-surface-2)] transition-colors group"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-medium text-[var(--text-muted)] leading-tight">{card.label}</p>
-              <ExternalLink className="h-3 w-3 text-[var(--text-disabled)] opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="flex items-end justify-between gap-1">
-              <p className="text-[28px] font-bold text-[var(--text-primary)] leading-none tabular-nums">{card.value}</p>
-              <div
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg mb-0.5"
-                style={{ background: `${card.iconBg}20` }}
-              >
-                <Icon className="h-3.5 w-3.5" style={{ color: card.iconBg }} />
-              </div>
-            </div>
-            <p className="text-[11px] text-[var(--text-muted)] truncate">{card.sub}</p>
-          </button>
-        );
-      })}
+      {cards.map((card) => (
+        <StatCard key={card.id} {...card} onSelect={onSelect} />
+      ))}
     </>
   );
 }

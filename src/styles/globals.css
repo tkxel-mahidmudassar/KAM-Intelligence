@@ -94,6 +94,13 @@
   --sidebar-active-bg:  rgba(7,85,233,0.20);
   --sidebar-active-border: #0755E9;
 
+  /* Card glow variants — used for stat card left-border accent */
+  --card-glow-brand:    0 2px 20px -4px rgba(7,85,233,0.18), inset 3px 0 0 #0755E9;
+  --card-glow-healthy:  0 2px 20px -4px rgba(34,197,94,0.15), inset 3px 0 0 #22C55E;
+  --card-glow-atrisk:   0 2px 20px -4px rgba(245,158,11,0.15), inset 3px 0 0 #F59E0B;
+  --card-glow-critical: 0 2px 20px -4px rgba(239,68,68,0.18), inset 3px 0 0 #EF4444;
+  --card-glow-purple:   0 2px 20px -4px rgba(124,58,237,0.15), inset 3px 0 0 #7C3AED;
+
   /* Focus ring */
   --ring-brand: 0 0 0 3px rgba(7,85,233,0.20);
 
@@ -105,51 +112,60 @@
 .dark {
   color-scheme: dark;
 
-  /* Rich dark gradient — blue glow so glassmorphism actually shows up */
-  --bg-gradient: radial-gradient(ellipse at 20% -5%,  rgba(7,85,233,0.18) 0%, transparent 45%),
-                 radial-gradient(ellipse at 80% 95%,  rgba(7,85,233,0.10) 0%, transparent 45%),
-                 radial-gradient(ellipse at 55% 45%,  rgba(7,85,233,0.05) 0%, transparent 40%),
-                 #020816;
-  --bg-base: #020816;
+  /* Deep navy — blue-tinted like inspo 1, richer than before */
+  --bg-gradient: radial-gradient(ellipse at 15% -10%, rgba(7,85,233,0.28) 0%, transparent 50%),
+                 radial-gradient(ellipse at 85% 100%, rgba(7,85,233,0.16) 0%, transparent 50%),
+                 radial-gradient(ellipse at 50%  50%, rgba(7,85,233,0.06) 0%, transparent 60%),
+                 #060D1F;
+  --bg-base: #060D1F;
 
-  /* Dark glass — takes blue-tinted glow from the background */
-  --glass-bg:      rgba(255,255,255,0.04);
-  --glass-border:  rgba(255,255,255,0.08);
-  --glass-blur:    blur(20px);
-  --glass-shadow:  0 4px 24px -4px rgba(0,0,0,0.40), 0 1px 4px -1px rgba(0,0,0,0.30),
-                   inset 0 1px 0 0 rgba(255,255,255,0.06);
+  /* Dark glass with blue glow behind elevated surfaces */
+  --glass-bg:      rgba(255,255,255,0.045);
+  --glass-border:  rgba(255,255,255,0.09);
+  --glass-blur:    blur(24px);
+  --glass-shadow:  0 4px 32px -4px rgba(0,0,0,0.55), 0 1px 4px -1px rgba(0,0,0,0.40),
+                   inset 0 1px 0 0 rgba(255,255,255,0.08),
+                   0 0 0 1px rgba(7,85,233,0.06);
 
-  --glass-elevated-bg:     rgba(255,255,255,0.07);
-  --glass-elevated-border: rgba(255,255,255,0.12);
-  --glass-elevated-shadow: 0 24px 48px -8px rgba(0,0,0,0.70), 0 8px 16px -4px rgba(0,0,0,0.40),
-                            inset 0 1px 0 0 rgba(255,255,255,0.08);
+  --glass-elevated-bg:     rgba(10,20,50,0.80);
+  --glass-elevated-border: rgba(255,255,255,0.13);
+  --glass-elevated-shadow: 0 24px 56px -8px rgba(0,0,0,0.80), 0 8px 20px -4px rgba(0,0,0,0.50),
+                            inset 0 1px 0 0 rgba(255,255,255,0.10),
+                            0 0 40px -10px rgba(7,85,233,0.25);
 
-  --bg-surface:   rgba(255,255,255,0.04);
-  --bg-surface-1: #111C2E;              /* solid — modals, elevated panels   */
+  --bg-surface:   rgba(255,255,255,0.045);
+  --bg-surface-1: #0E1A30;              /* solid — modals, elevated panels   */
   --bg-surface-2: rgba(255,255,255,0.06);
-  --bg-surface-3: rgba(255,255,255,0.09);
-  --modal-input-bg: rgba(255,255,255,0.08); /* form inputs inside modals (dark) */
+  --bg-surface-3: rgba(255,255,255,0.10);
+  --modal-input-bg: rgba(255,255,255,0.08);
 
   --border-subtle:  rgba(255,255,255,0.07);
-  --border-default: rgba(255,255,255,0.11);
-  --border-strong:  rgba(255,255,255,0.20);
+  --border-default: rgba(255,255,255,0.12);
+  --border-strong:  rgba(255,255,255,0.22);
 
-  --text-primary:   #EDF0F7;
-  --text-secondary: #8E97AB;
-  --text-muted:     #505B6E;
-  --text-disabled:  #2E3848;
+  --text-primary:   #E8EDF8;
+  --text-secondary: #8C96B0;
+  --text-muted:     #4D5870;
+  --text-disabled:  #2A3348;
   --text-inverse:   #13191F;
 
-  --sidebar-bg:         #07080F;
-  --sidebar-border:     rgba(255,255,255,0.05);
-  --sidebar-text:       #5A6478;
-  --sidebar-text-hover: #A0ABBE;
+  /* Sidebar — deep navy panel */
+  --sidebar-bg:         #050C1C;
+  --sidebar-border:     rgba(255,255,255,0.06);
+  --sidebar-text:       #4E5C78;
+  --sidebar-text-hover: #9DAABF;
   --sidebar-text-active:#FFFFFF;
-  --sidebar-active-bg:  rgba(7,85,233,0.18);
+  --sidebar-active-bg:  rgba(7,85,233,0.22);
   --sidebar-active-border: #4D8BFF;
 
-  --ring-brand: 0 0 0 3px rgba(77,139,255,0.25);
+  /* Card glow variants — used for stat card accents */
+  --card-glow-brand:    0 0 20px -4px rgba(7,85,233,0.35), inset 3px 0 0 #0755E9;
+  --card-glow-healthy:  0 0 20px -4px rgba(34,197,94,0.25), inset 3px 0 0 #22C55E;
+  --card-glow-atrisk:   0 0 20px -4px rgba(245,158,11,0.25), inset 3px 0 0 #F59E0B;
+  --card-glow-critical: 0 0 20px -4px rgba(239,68,68,0.30), inset 3px 0 0 #EF4444;
+  --card-glow-purple:   0 0 20px -4px rgba(124,58,237,0.25), inset 3px 0 0 #7C3AED;
 
+  --ring-brand: 0 0 0 3px rgba(77,139,255,0.25);
   --scrollbar-thumb: rgba(255,255,255,0.10);
 }
 
@@ -182,6 +198,13 @@
   /* Focus */
   :focus-visible { outline: 2px solid #0755E9; outline-offset: 2px; }
   .dark :focus-visible { outline-color: #4D8BFF; }
+
+  /* Mono / tabular numbers — for KPI values */
+  .num-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "ss01";
+    letter-spacing: -0.02em;
+  }
 
   /* Theme transition — only for color/bg, not layout */
   *, *::before, *::after {

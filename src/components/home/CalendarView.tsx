@@ -269,8 +269,10 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
         <DayDetailPanel
           date={selectedDate}
           items={selectedItems}
+          allGrouped={grouped}
           onClose={() => setSelectedDate(null)}
           onItemUpdated={() => { fetchCalendar(); onItemUpdated?.(); }}
+          onDateChange={(d) => setSelectedDate(d)}
         />
       )}
 
