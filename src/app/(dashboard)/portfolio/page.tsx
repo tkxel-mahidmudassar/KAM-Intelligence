@@ -198,6 +198,8 @@ export default function PortfolioPage() {
                 <button
                   key={v}
                   onClick={() => setView(v)}
+                  aria-label={v === "grid" ? "Grid view" : "List view"}
+                  title={v === "grid" ? "Grid view" : "List view"}
                   className={cn(
                     "p-1.5 rounded-md transition-all duration-150",
                     view === v
@@ -258,6 +260,7 @@ export default function PortfolioPage() {
               kamName={account.kam?.name ?? null}
               openSignals={account.signals}
               openActionCount={account._count.actions}
+              variant={view}
             />
           ))}
         </div>

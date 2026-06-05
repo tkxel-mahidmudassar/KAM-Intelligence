@@ -100,6 +100,11 @@
   --card-glow-atrisk:   0 2px 20px -4px rgba(245,158,11,0.15), inset 3px 0 0 #F59E0B;
   --card-glow-critical: 0 2px 20px -4px rgba(239,68,68,0.18), inset 3px 0 0 #EF4444;
   --card-glow-purple:   0 2px 20px -4px rgba(124,58,237,0.15), inset 3px 0 0 #7C3AED;
+  --stat-card-bg:       linear-gradient(145deg, rgba(255,255,255,0.92), rgba(255,255,255,0.62));
+  --stat-card-border:   rgba(255,255,255,0.96);
+  --stat-card-shadow:   0 12px 34px -18px rgba(27,35,46,0.26), 0 1px 0 rgba(255,255,255,0.90) inset;
+  --stat-card-hover:    0 18px 44px -20px rgba(27,35,46,0.34), 0 1px 0 rgba(255,255,255,0.95) inset;
+  --score-ring-track:   rgba(19,25,31,0.08);
 
   /* Focus ring */
   --ring-brand: 0 0 0 3px rgba(7,85,233,0.20);
@@ -164,6 +169,11 @@
   --card-glow-atrisk:   0 0 20px -4px rgba(245,158,11,0.25), inset 3px 0 0 #F59E0B;
   --card-glow-critical: 0 0 20px -4px rgba(239,68,68,0.30), inset 3px 0 0 #EF4444;
   --card-glow-purple:   0 0 20px -4px rgba(124,58,237,0.25), inset 3px 0 0 #7C3AED;
+  --stat-card-bg:       linear-gradient(145deg, rgba(255,255,255,0.070), rgba(255,255,255,0.030));
+  --stat-card-border:   rgba(255,255,255,0.10);
+  --stat-card-shadow:   var(--glass-shadow);
+  --stat-card-hover:    0 16px 42px -18px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.11);
+  --score-ring-track:   rgba(255,255,255,0.10);
 
   --ring-brand: 0 0 0 3px rgba(77,139,255,0.25);
   --scrollbar-thumb: rgba(255,255,255,0.10);

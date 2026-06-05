@@ -1213,13 +1213,24 @@ function StatCard({
     <button
       type="button"
       onClick={() => onSelect(id)}
-      className="rounded-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] p-4 flex flex-col gap-0 text-left transition-all duration-200 group overflow-hidden relative"
-      style={{ boxShadow: `var(--glass-shadow)` }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = glow; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--glass-shadow)"; }}
+      className="rounded-xl border p-4 flex flex-col gap-0 text-left transition-all duration-200 group overflow-hidden relative hover:-translate-y-0.5"
+      style={{
+        background: "var(--stat-card-bg)",
+        borderColor: "var(--stat-card-border)",
+        boxShadow: "var(--stat-card-shadow)",
+        backdropFilter: "var(--glass-blur)",
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `${glow}, var(--stat-card-hover)`; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--stat-card-shadow)"; }}
     >
+      <div
+        className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full opacity-60 blur-2xl transition-opacity duration-200 group-hover:opacity-90"
+        style={{ background: `${color}24` }}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 opacity-70 dark:bg-white/10" />
+
       {/* Label row */}
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="relative flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5">
           <div className="flex h-5 w-5 items-center justify-center rounded-md" style={{ background: `${color}20` }}>
             <Icon className="h-3 w-3" style={{ color }} />
@@ -1230,7 +1241,7 @@ function StatCard({
       </div>
 
       {/* Value + sparkline */}
-      <div className="flex items-end justify-between gap-2">
+      <div className="relative flex items-end justify-between gap-2">
         <div>
           <p className="text-[30px] font-bold leading-none num-mono" style={{ color }}>{shown}</p>
           {TrendIcon && trend.pct !== null && (
@@ -1250,7 +1261,7 @@ function StatCard({
       </div>
 
       {/* Sub label */}
-      <p className="text-[11px] text-[var(--text-muted)] truncate mt-2">{sub}</p>
+      <p className="relative text-[11px] text-[var(--text-muted)] truncate mt-2">{sub}</p>
 
       {/* Left-edge colour accent — appears on hover */}
       <div

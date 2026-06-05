@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, XCircle, Calendar, Zap, ListTodo, User } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -23,6 +24,7 @@ interface AccountCardProps {
   kamName: string | null;
   openSignals: Signal[];
   openActionCount: number;
+  variant?: "grid" | "list";
 }
 
 const HEALTH_CONFIG = {
@@ -43,12 +45,13 @@ function formatARR(arr: number) {
 }
 
 function ScoreArc({ score }: { score: number }) {
+  const [animatedScore, setAnimatedScore] = useState(0);
   const size   = 52;
   const stroke = 5;
   const r      = (size - stroke) / 2;
   const circ   = 2 * Math.PI * r;
   const arc    = circ * 0.75; // 270° arc
-  const filled = arc * (score / 100);
+  const filled = arc * (animatedScore / 100);
   const offset = circ * 0.125; // rotate -135° (start top-left)
 
   const color =
@@ -56,14 +59,33 @@ function ScoreArc({ score }: { score: number }) {
     score >= 45 ? "#F59E0B" :
                   "#EF4444";
 
+  useEffect(() => {
+    setAnimatedScore(0);
+    const frame = requestAnimationFrame(() => setAnimatedScore(score));
+    return () => cancelAnimationFrame(frame);
+  }, [score]);
+
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <div
+        className="absolute inset-1 rounded-full opacity-70"
+        style={{
+          background: `radial-gradient(circle, ${color}16 0%, transparent 68%)`,
+          filter: "blur(2px)",
+        }}
+      />
       <svg width={size} height={size} style={{ transform: "rotate(-225deg)" }}>
+        <defs>
+          <linearGradient id={`score-arc-${color.slice(1)}`} x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.55" />
+            <stop offset="100%" stopColor={color} stopOpacity="1" />
+          </linearGradient>
+        </defs>
         {/* Track */}
         <circle
           cx={size / 2} cy={size / 2} r={r}
           fill="none"
-          stroke="var(--border-subtle)"
+          stroke="var(--score-ring-track, var(--border-subtle))"
           strokeWidth={stroke}
           strokeDasharray={`${arc} ${circ - arc}`}
           strokeDashoffset={-offset}
@@ -73,12 +95,12 @@ function ScoreArc({ score }: { score: number }) {
         <circle
           cx={size / 2} cy={size / 2} r={r}
           fill="none"
-          stroke={color}
+          stroke={`url(#score-arc-${color.slice(1)})`}
           strokeWidth={stroke}
           strokeDasharray={`${filled} ${circ - filled}`}
           strokeDashoffset={-offset}
           strokeLinecap="round"
-          style={{ transition: "stroke-dasharray 0.6s ease" }}
+          style={{ transition: "stroke-dasharray 850ms cubic-bezier(0.22, 1, 0.36, 1)" }}
         />
       </svg>
       <span
@@ -143,7 +165,7 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 
 export function AccountCard({
   id, name, industry, arr, health, contractEnd,
-  score, scoreHistory, kamName, openSignals, openActionCount,
+  score, scoreHistory, kamName, openSignals, openActionCount, variant = "grid",
 }: AccountCardProps) {
   const cfg      = HEALTH_CONFIG[health];
   const HealthIcon = cfg.icon;
@@ -151,6 +173,72 @@ export function AccountCard({
   const renewalUrgent = days !== null && days <= 90;
 
   const topSignal = openSignals.find((s) => s.severity === "CRITICAL") ?? openSignals[0];
+
+  if (variant === "list") {
+    return (
+      <Link href={`/accounts/${id}`} className="block group">
+        <div
+          className={cn(
+            "grid grid-cols-1 items-start gap-3 rounded-xl border px-4 py-3 transition-all duration-200 md:grid-cols-[minmax(0,1.5fr)_120px_92px_minmax(130px,0.9fr)_90px] md:items-center md:gap-4",
+            "bg-[var(--glass-bg)] [backdrop-filter:var(--glass-blur)] shadow-[var(--glass-shadow)]",
+            "border-[var(--glass-border)] hover:border-[var(--border-default)] hover:-translate-y-0.5",
+            health === "CRITICAL" && "border-l-4 border-l-[#EF4444]",
+            health === "AT_RISK"  && "border-l-4 border-l-[#F59E0B]"
+          )}
+        >
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="truncate text-[14px] font-semibold text-[var(--text-primary)]" title={name}>
+                {name}
+              </h3>
+              <Badge variant={cfg.variant} className="shrink-0 flex items-center gap-1">
+                <HealthIcon className="h-3 w-3" />
+                {cfg.label}
+              </Badge>
+            </div>
+            <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">
+              {industry ?? "Uncategorized"}{kamName ? ` - ${kamName}` : ""}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[var(--text-disabled)]">ARR</p>
+            <p className="text-[16px] font-bold leading-none text-[var(--text-primary)] num-mono">{formatARR(arr)}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {score !== null ? <ScoreArc score={score} /> : <span className="text-[11px] text-[var(--text-disabled)]">No score</span>}
+          </div>
+
+          <div className="min-w-0">
+            {topSignal ? (
+              <div className="flex items-start gap-1.5">
+                <Zap
+                  className="mt-px h-3.5 w-3.5 shrink-0"
+                  style={{ color: topSignal.severity === "CRITICAL" ? "#EF4444" : "#F59E0B" }}
+                />
+                <span className="truncate text-[11px] text-[var(--text-secondary)]">{topSignal.title}</span>
+              </div>
+            ) : (
+              <span className="text-[11px] text-[var(--text-disabled)]">No open signals</span>
+            )}
+            {days !== null && (
+              <p className={cn("mt-1 text-[10px]", renewalUrgent ? "font-semibold text-[#F59E0B]" : "text-[var(--text-muted)]")}>
+                {days <= 0 ? "Renewal overdue" : `Renewal in ${days}d`}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 md:justify-end">
+            <ListTodo className="h-3.5 w-3.5 text-[var(--text-disabled)]" />
+            <span className="text-[11px] text-[var(--text-muted)]">
+              {openActionCount} action{openActionCount !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+      </Link>
+    );
+  }
 
   return (
     <Link href={`/accounts/${id}`} className="block group">

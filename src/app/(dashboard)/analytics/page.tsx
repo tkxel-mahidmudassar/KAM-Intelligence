@@ -344,12 +344,19 @@ export default function AnalyticsPage() {
           <div className="flex items-center gap-6">
             <ResponsiveContainer width={160} height={160}>
               <PieChart>
+                <defs>
+                  <filter id="analytics-donut-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="5" stdDeviation="5" floodOpacity="0.16" />
+                  </filter>
+                </defs>
                 <Pie
                   data={pieData}
                   cx="50%" cy="50%"
                   innerRadius={44} outerRadius={68}
                   dataKey="value"
                   strokeWidth={0}
+                  animationDuration={850}
+                  filter="url(#analytics-donut-shadow)"
                 >
                   {pieData.map((entry) => (
                     <Cell key={entry.key} fill={HEALTH_COLOR[entry.key]} />
@@ -390,6 +397,20 @@ export default function AnalyticsPage() {
         <Card title="ARR by Health Status">
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={arrByHealth} layout="vertical" barSize={20} margin={{ left: 8, right: 24 }}>
+              <defs>
+                <linearGradient id="arr-health-healthy" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0%" stopColor="#22C55E" stopOpacity="0.55" />
+                  <stop offset="100%" stopColor="#22C55E" stopOpacity="1" />
+                </linearGradient>
+                <linearGradient id="arr-health-risk" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.55" />
+                  <stop offset="100%" stopColor="#F59E0B" stopOpacity="1" />
+                </linearGradient>
+                <linearGradient id="arr-health-critical" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0%" stopColor="#EF4444" stopOpacity="0.55" />
+                  <stop offset="100%" stopColor="#EF4444" stopOpacity="1" />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
               <XAxis
                 type="number"
@@ -410,9 +431,16 @@ export default function AnalyticsPage() {
                 formatter={(v: number) => formatARR(v)}
                 contentStyle={tooltipStyle}
               />
-              <Bar dataKey="arr" radius={[0, 4, 4, 0]} label={false}>
+              <Bar dataKey="arr" radius={[0, 8, 8, 0]} label={false} animationDuration={900}>
                 {arrByHealth.map((entry, i) => (
-                  <Cell key={i} fill={entry.fill} />
+                  <Cell
+                    key={i}
+                    fill={
+                      entry.name === "Healthy" ? "url(#arr-health-healthy)" :
+                      entry.name === "At Risk" ? "url(#arr-health-risk)" :
+                      "url(#arr-health-critical)"
+                    }
+                  />
                 ))}
               </Bar>
             </BarChart>
@@ -423,6 +451,20 @@ export default function AnalyticsPage() {
         <Card title="Score Distribution (KAM Health Score)">
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={scoreHistogram} barSize={32} margin={{ left: -8, right: 8 }}>
+              <defs>
+                <linearGradient id="score-bar-healthy" x1="0" x2="0" y1="1" y2="0">
+                  <stop offset="0%" stopColor="#22C55E" stopOpacity="0.45" />
+                  <stop offset="100%" stopColor="#22C55E" stopOpacity="1" />
+                </linearGradient>
+                <linearGradient id="score-bar-risk" x1="0" x2="0" y1="1" y2="0">
+                  <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.45" />
+                  <stop offset="100%" stopColor="#F59E0B" stopOpacity="1" />
+                </linearGradient>
+                <linearGradient id="score-bar-critical" x1="0" x2="0" y1="1" y2="0">
+                  <stop offset="0%" stopColor="#EF4444" stopOpacity="0.45" />
+                  <stop offset="100%" stopColor="#EF4444" stopOpacity="1" />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
               <XAxis
                 dataKey="label"
@@ -437,10 +479,10 @@ export default function AnalyticsPage() {
                 tickLine={false}
               />
               <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="count" name="Accounts" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="count" name="Accounts" radius={[8, 8, 0, 0]} animationDuration={900}>
                 {scoreHistogram.map((entry, i) => {
                   const mid = (entry.min + entry.max) / 2;
-                  const fill = mid >= 70 ? "#22C55E" : mid >= 45 ? "#F59E0B" : "#EF4444";
+                  const fill = mid >= 70 ? "url(#score-bar-healthy)" : mid >= 45 ? "url(#score-bar-risk)" : "url(#score-bar-critical)";
                   return <Cell key={i} fill={fill} />;
                 })}
               </Bar>
@@ -457,6 +499,12 @@ export default function AnalyticsPage() {
           ) : (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={signalsByType} layout="vertical" barSize={14} margin={{ left: 4, right: 24 }}>
+                <defs>
+                  <linearGradient id="signal-bar-gradient" x1="0" x2="1" y1="0" y2="0">
+                    <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.48" />
+                    <stop offset="100%" stopColor="#F59E0B" stopOpacity="1" />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                 <XAxis
                   type="number"
@@ -474,7 +522,7 @@ export default function AnalyticsPage() {
                   width={80}
                 />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="count" name="Signals" fill="#F59E0B" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Signals" fill="url(#signal-bar-gradient)" radius={[0, 8, 8, 0]} animationDuration={900} />
               </BarChart>
             </ResponsiveContainer>
           )}
