@@ -18,7 +18,6 @@ const TYPE_COLOR: Record<string, string> = {
   renewal:        "#F59E0B",
   signal:         "#EF4444",
   touchpoint:     "#14B8A6",
-  pulse:          "#7C3AED",
   recommendation: "#22C55E",
 };
 
@@ -28,13 +27,12 @@ const TYPE_ICON: Record<string, React.ElementType> = {
   renewal:        RefreshCw,
   signal:         AlertTriangle,
   touchpoint:     Activity,
-  pulse:          Zap,
   recommendation: Lightbulb,
 };
 
 const TYPE_LABEL: Record<string, string> = {
   action: "Action", qbr: "QBR", renewal: "Renewal", signal: "Signal",
-  touchpoint: "Touchpoint", pulse: "AI Pulse", recommendation: "Recommendation",
+  touchpoint: "Touchpoint", recommendation: "Recommendation",
 };
 
 function toDateKey(d: Date): string {
@@ -238,9 +236,10 @@ interface DayDetailPanelProps {
   onClose: () => void;
   onItemUpdated: () => void;
   onDateChange: (d: string) => void;
+  maxHeight?: number;
 }
 
-export function DayDetailPanel({ date, items, allGrouped, onClose, onItemUpdated, onDateChange }: DayDetailPanelProps) {
+export function DayDetailPanel({ date, items, allGrouped, onClose, onItemUpdated, onDateChange, maxHeight }: DayDetailPanelProps) {
   const [activeAction, setActiveAction] = useState<CalendarItem | null>(null);
   const [activeSignal, setActiveSignal] = useState<CalendarItem | null>(null);
 
@@ -250,7 +249,7 @@ export function DayDetailPanel({ date, items, allGrouped, onClose, onItemUpdated
     return acc;
   }, {});
 
-  const typeOrder = ["signal", "recommendation", "pulse", "renewal", "action", "qbr", "touchpoint"];
+  const typeOrder = ["signal", "recommendation", "renewal", "action", "qbr", "touchpoint"];
 
   const handleSelect = (item: CalendarItem) => {
     if (item.type === "action") setActiveAction(item);
@@ -259,7 +258,10 @@ export function DayDetailPanel({ date, items, allGrouped, onClose, onItemUpdated
 
   return (
     <>
-        <div className="command-panel w-full shrink-0 flex flex-col overflow-hidden xl:w-80">
+      <div
+        className="command-panel w-full shrink-0 flex flex-col overflow-hidden xl:w-80"
+        style={maxHeight ? { maxHeight } : undefined}
+      >
         {/* Close button */}
         <div className="flex items-center justify-end px-3 pt-2 shrink-0">
           <button
@@ -273,15 +275,8 @@ export function DayDetailPanel({ date, items, allGrouped, onClose, onItemUpdated
         {/* Drum-roll date scroller */}
         <DrumRoll date={date} allGrouped={allGrouped} onDateChange={onDateChange} />
 
-        {/* Items count */}
-        <div className="px-4 py-2 shrink-0">
-          <p className="text-[11px] text-[var(--text-muted)]">
-            {items.length === 0 ? "Nothing scheduled" : `${items.length} item${items.length !== 1 ? "s" : ""}`}
-          </p>
-        </div>
-
         {/* Items */}
-        <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 space-y-4">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <Clock className="h-8 w-8 text-[var(--text-disabled)] mb-2" />

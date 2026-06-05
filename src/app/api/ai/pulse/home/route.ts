@@ -58,13 +58,21 @@ export async function GET(req: NextRequest) {
       take: 20, // fetch more, then sort and slice client-side
     });
 
+    // Keep the newest row per type so a refresh visibly replaces stale duplicate cards.
+    const newestByType = recentInsights.reduce<typeof recentInsights>((deduped, insight) => {
+      if (!deduped.some((item) => item.type === insight.type)) deduped.push(insight);
+      return deduped;
+    }, []);
+
     // Sort: RISK first, then by confidence desc, then by recency
-    const sortedInsights = recentInsights
+    const sortedInsights = newestByType
       .sort((a, b) => {
         const typeOrderA = INSIGHT_TYPE_ORDER[a.type] ?? 5;
         const typeOrderB = INSIGHT_TYPE_ORDER[b.type] ?? 5;
         if (typeOrderA !== typeOrderB) return typeOrderA - typeOrderB;
-        return (b.confidence ?? 0) - (a.confidence ?? 0);
+        const confidenceDelta = (b.confidence ?? 0) - (a.confidence ?? 0);
+        if (confidenceDelta !== 0) return confidenceDelta;
+        return b.generatedAt.getTime() - a.generatedAt.getTime();
       })
       .slice(0, 3);
 

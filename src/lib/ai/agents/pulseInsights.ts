@@ -13,10 +13,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
-import { gatherPublicIntelligence, formatNewsForPrompt } from "@/lib/intelligence/newsSearch";
+import { gatherPublicIntelligence } from "@/lib/intelligence/newsSearch";
+import type { NewsItem } from "@/lib/intelligence/newsSearch";
 import type { AgentResult, AgentStep } from "./types";
 import { makeStep } from "./types";
-import { InsightType } from "@prisma/client";
+import { InsightType, Prisma } from "@prisma/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,8 @@ interface AccountContext {
   openSignals:  { type: string; severity: string; title: string }[];
   openActions:  number;
   opportunities:{ serviceLine: string; estimatedValue: number | null; status: string }[];
-  news:         string; // formatted news string for prompt
+  evidence:     EvidenceSource[];
+  evidenceText: string;
 }
 
 interface GeneratedPulseInsight {
@@ -49,6 +51,194 @@ interface GeneratedPulseInsight {
   promptTokens: number;
   outputTokens: number;
   sources: InsightSources;
+}
+
+type EvidenceSourceType =
+  | "internal_metric"
+  | "signal"
+  | "action_count"
+  | "opportunity"
+  | "renewal"
+  | "public_news"
+  | "public_industry";
+
+export interface EvidenceSource {
+  id: string;
+  type: EvidenceSourceType;
+  title: string;
+  detail: string;
+  url?: string;
+  source?: string;
+  publishedAt?: string;
+  accountMatched?: boolean;
+  relevanceScore?: number;
+}
+
+export interface EvidenceClaim {
+  text: string;
+  sourceIds: string[];
+  sourceType: "internal" | "public" | "inference";
+}
+
+const GENERIC_COMPANY_TOKENS = new Set([
+  "and", "the", "inc", "llc", "ltd", "limited", "corp", "corporation", "company",
+  "group", "holdings", "solutions", "systems", "services", "technology", "technologies",
+  "health", "payments", "capital", "cloud", "digital", "global", "international",
+]);
+
+function tokenize(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2);
+}
+
+function companyTokens(name: string): string[] {
+  const tokens = tokenize(name);
+  const distinctive = tokens.filter((token) => !GENERIC_COMPANY_TOKENS.has(token));
+  return distinctive.length > 0 ? distinctive : tokens.filter((token) => token.length > 3);
+}
+
+function scoreNewsRelevance(account: Pick<AccountContext, "name" | "industry">, item: NewsItem): number {
+  const haystack = `${item.title} ${item.snippet ?? ""}`.toLowerCase();
+  const exactName = haystack.includes(account.name.toLowerCase());
+  const tokens = companyTokens(account.name);
+  const tokenMatches = tokens.filter((token) => haystack.includes(token)).length;
+  const tokenScore = tokens.length > 0 ? tokenMatches / tokens.length : 0;
+  const industryTokens = account.industry ? tokenize(account.industry) : [];
+  const industryScore = industryTokens.some((token) => haystack.includes(token)) ? 0.25 : 0;
+  const communityPenalty = item.source.toLowerCase().includes("reddit") ? 0.15 : 0;
+
+  return Math.max(0, Math.min(1, (exactName ? 1 : tokenScore) + industryScore - communityPenalty));
+}
+
+function buildInternalEvidence(account: AccountContext): EvidenceSource[] {
+  const evidence: EvidenceSource[] = [
+    {
+      id: `int:${account.id}:health-score`,
+      type: "internal_metric",
+      title: "Account health and score",
+      detail: `${account.name} has ${account.health} health and score ${account.latestScore ?? "N/A"}/100.`,
+    },
+    {
+      id: `int:${account.id}:action-count`,
+      type: "action_count",
+      title: "Open action count",
+      detail: `${account.name} has ${account.openActions} open action${account.openActions === 1 ? "" : "s"}.`,
+    },
+  ];
+
+  if (account.contractEnd) {
+    const days = Math.round((account.contractEnd.getTime() - Date.now()) / 86400000);
+    evidence.push({
+      id: `int:${account.id}:renewal`,
+      type: "renewal",
+      title: "Renewal timeline",
+      detail: `${account.name} renews in ${days} day${days === 1 ? "" : "s"}.`,
+    });
+  }
+
+  if (account.kpiScores) {
+    const kpiDetail = Object.entries(account.kpiScores)
+      .filter(([, value]) => value !== null)
+      .map(([key, value]) => `${key}: ${value}/100`)
+      .join(", ");
+
+    evidence.push({
+      id: `int:${account.id}:kpi-breakdown`,
+      type: "internal_metric",
+      title: "KPI score breakdown",
+      detail: kpiDetail || "No KPI score breakdown available.",
+    });
+  }
+
+  account.openSignals.slice(0, 5).forEach((signal, index) => {
+    evidence.push({
+      id: `int:${account.id}:signal-${index + 1}`,
+      type: "signal",
+      title: signal.title,
+      detail: `${signal.severity} ${signal.type} signal: ${signal.title}`,
+    });
+  });
+
+  account.opportunities.slice(0, 5).forEach((opportunity, index) => {
+    evidence.push({
+      id: `int:${account.id}:opportunity-${index + 1}`,
+      type: "opportunity",
+      title: `${opportunity.serviceLine} opportunity`,
+      detail: `${opportunity.serviceLine} is ${opportunity.status} with estimated value $${(opportunity.estimatedValue ?? 0).toLocaleString()}.`,
+    });
+  });
+
+  return evidence;
+}
+
+function buildPublicEvidence(account: AccountContext, newsItems: NewsItem[]): EvidenceSource[] {
+  return newsItems
+    .map<EvidenceSource | null>((item, index) => {
+      const relevanceScore = scoreNewsRelevance(account, item);
+      const accountMatched = relevanceScore >= 0.55;
+      const industryMatched = !accountMatched && relevanceScore >= 0.25;
+
+      if (!accountMatched && !industryMatched) return null;
+
+      return {
+        id: `pub:${account.id}:${index + 1}`,
+        type: accountMatched ? "public_news" as const : "public_industry" as const,
+        title: item.title,
+        detail: item.snippet || item.title,
+        url: item.url,
+        source: item.source,
+        publishedAt: item.publishedAt,
+        accountMatched,
+        relevanceScore: Number(relevanceScore.toFixed(2)),
+      };
+    })
+    .filter((item): item is EvidenceSource => item !== null)
+    .slice(0, 6);
+}
+
+function formatEvidenceForPrompt(evidence: EvidenceSource[]): string {
+  return evidence.map((source) => {
+    const sourceLabel = source.source ? ` | source: ${source.source}` : "";
+    const urlLabel = source.url ? ` | url: ${source.url}` : "";
+    return `[${source.id}] ${source.type}: ${source.title} — ${source.detail}${sourceLabel}${urlLabel}`;
+  }).join("\n");
+}
+
+function validateClaims(
+  claims: unknown,
+  allowedEvidence: EvidenceSource[],
+): EvidenceClaim[] {
+  if (!Array.isArray(claims)) return [];
+
+  const allowedIds = new Set(allowedEvidence.map((source) => source.id));
+  const publicIds = new Set(allowedEvidence
+    .filter((source) => source.type === "public_news" || source.type === "public_industry")
+    .map((source) => source.id));
+
+  return claims
+    .map((claim) => {
+      if (!claim || typeof claim !== "object") return null;
+      const record = claim as { text?: unknown; sourceIds?: unknown; sourceType?: unknown };
+      const text = typeof record.text === "string" ? record.text.trim() : "";
+      const sourceIds = Array.isArray(record.sourceIds)
+        ? record.sourceIds.filter((id): id is string => typeof id === "string" && allowedIds.has(id))
+        : [];
+      if (!text || sourceIds.length === 0) return null;
+
+      const hasPublic = sourceIds.some((id) => publicIds.has(id));
+      const sourceType = hasPublic
+        ? "public"
+        : record.sourceType === "inference"
+          ? "inference"
+          : "internal";
+
+      return { text, sourceIds, sourceType };
+    })
+    .filter((claim): claim is EvidenceClaim => claim !== null)
+    .slice(0, 4);
 }
 
 // ─── Prompt templates per insight type ───────────────────────────────────────
@@ -95,8 +285,8 @@ ${signals}
 Open actions: ${a.openActions}
 Opportunities:
 ${opps}
-Recent public news & intelligence:
-${a.news}`.trim();
+Evidence ledger:
+${a.evidenceText}`.trim();
   }).join("\n\n");
 }
 
@@ -110,6 +300,9 @@ export interface InsightSources {
     keyScores: Record<string, number | null>;
     signalTitles: string[];
   };
+  evidenceMode?: "llm-sourced-evidence" | "internal-fallback";
+  claims?: EvidenceClaim[];
+  evidence?: EvidenceSource[];
 }
 
 // ─── Single typed insight call ────────────────────────────────────────────────
@@ -119,15 +312,17 @@ async function generateTypedInsight(
   portfolioContext: string,
   accountIds: Record<string, string>,                           // name → id map
   accountContexts: AccountContext[],                            // for source lookup after account resolution
-  newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]>, // accountId → raw news items
 ): Promise<{ insight: GeneratedPulseInsight | null; step: AgentStep }> {
   const t0 = Date.now();
 
   const prompt = `You are an AI intelligence engine for a B2B Key Account Management platform.
-You have access to internal account data AND real-time public news for each account.
+You have access to an evidence ledger containing internal account data and vetted public intelligence.
 
 Your task: Generate ONE ${type} insight — the most significant one across the entire portfolio.
 The insight MUST be linked to a specific account (not portfolio-wide).
+Every factual claim MUST cite one or more sourceIds from the selected account's evidence ledger.
+No citation, no claim. Do not invent sourceIds. Do not use public_industry evidence for account-specific company facts.
+If public evidence is not directly about the selected account, frame it only as industry context and cite it as such.
 
 INSTRUCTION: ${TYPE_INSTRUCTIONS[type]}
 
@@ -141,8 +336,15 @@ Return ONLY a JSON object (no markdown, no explanation):
 {
   "accountName": "<exact account name from the list above>",
   "title": "<concise title under 90 chars>",
-  "summary": "<2-4 sentence insight grounding the finding in specific data points and/or news. Include a recommended action.>",
-  "confidence": <0.0-1.0>
+  "summary": "<2-4 sentence insight grounding the finding in cited evidence. Include a recommended action.>",
+  "confidence": <0.0-1.0>,
+  "claims": [
+    {
+      "text": "<single factual claim or recommended action>",
+      "sourceIds": ["<evidence id from ledger>"],
+      "sourceType": "internal" | "public" | "inference"
+    }
+  ]
 }`;
 
   try {
@@ -155,7 +357,7 @@ Return ONLY a JSON object (no markdown, no explanation):
 
     const step = makeStep(`pulse:${type}`, prompt, response.content, Date.now() - t0);
 
-    let parsed: { accountName: string; title: string; summary: string; confidence: number };
+    let parsed: { accountName: string; title: string; summary: string; confidence: number; claims?: unknown };
     try {
       parsed = JSON.parse(response.content);
     } catch {
@@ -183,34 +385,29 @@ Return ONLY a JSON object (no markdown, no explanation):
 
     // ── Build source attribution for this insight ─────────────────────────────
     const accountCtx = accountContexts.find((a) => a.id === accountId);
-    const rawNews    = newsResultsMap[accountId] ?? [];
+    if (!accountCtx) {
+      return {
+        insight: null,
+        step: makeStep(`pulse:${type}`, prompt, "ERROR: Selected account was not found in context", Date.now() - t0),
+      };
+    }
 
-    const sources: InsightSources = {
-      newsHeadlines: rawNews.slice(0, 5).map((n) => ({
-        title:       n.title,
-        source:      n.source,
-        url:         n.url,
-        publishedAt: n.publishedAt,
-      })),
-      internalData: {
-        health:       accountCtx?.health ?? "UNKNOWN",
-        overallScore: accountCtx?.latestScore ?? null,
-        keyScores: {
-          csat:          accountCtx?.kpiScores?.csat ?? null,
-          relationship:  accountCtx?.kpiScores?.relationship ?? null,
-          risk:          accountCtx?.kpiScores?.risk ?? null,
-          contractHealth: accountCtx?.kpiScores?.contractHealth ?? null,
-        },
-        signalTitles: (accountCtx?.openSignals ?? []).slice(0, 3).map((s) => s.title),
-      },
-    };
+    const claims = validateClaims(parsed.claims, accountCtx.evidence);
+    if (claims.length === 0) {
+      return {
+        insight: null,
+        step: makeStep(`pulse:${type}`, prompt, "ERROR: Insight did not include valid cited claims", Date.now() - t0),
+      };
+    }
+
+    const sources = sourcesForAccount(accountCtx, claims, "llm-sourced-evidence");
 
     return {
       insight: {
         accountId,
         type,
         title:        parsed.title,
-        summary:      parsed.summary,
+        summary:      claims.map((claim) => claim.text).join(" "),
         confidence:   Math.min(1, Math.max(0, parsed.confidence ?? 0.75)),
         model:        response.model,
         promptTokens: response.promptTokens ?? 0,
@@ -230,15 +427,20 @@ Return ONLY a JSON object (no markdown, no explanation):
 
 function sourcesForAccount(
   account: AccountContext,
-  newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]>,
+  claims: EvidenceClaim[],
+  evidenceMode: "llm-sourced-evidence" | "internal-fallback",
 ): InsightSources {
-  const rawNews = newsResultsMap[account.id] ?? [];
+  const usedSourceIds = new Set(claims.flatMap((claim) => claim.sourceIds));
+  const usedPublicEvidence = account.evidence.filter((source) =>
+    usedSourceIds.has(source.id) && (source.type === "public_news" || source.type === "public_industry")
+  );
+
   return {
-    newsHeadlines: rawNews.slice(0, 5).map((n) => ({
-      title:       n.title,
-      source:      n.source,
-      url:         n.url,
-      publishedAt: n.publishedAt,
+    newsHeadlines: usedPublicEvidence.map((source) => ({
+      title:       source.title,
+      source:      source.source ?? "Public source",
+      url:         source.url ?? "#",
+      publishedAt: source.publishedAt ?? new Date().toISOString(),
     })),
     internalData: {
       health:       account.health,
@@ -251,12 +453,14 @@ function sourcesForAccount(
       },
       signalTitles: account.openSignals.slice(0, 3).map((s) => s.title),
     },
+    evidenceMode,
+    claims,
+    evidence: account.evidence.filter((source) => usedSourceIds.has(source.id)),
   };
 }
 
 function buildFallbackInsights(
   accounts: AccountContext[],
-  newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]>,
 ): GeneratedPulseInsight[] {
   const healthRank: Record<string, number> = { CRITICAL: 0, AT_RISK: 1, HEALTHY: 2 };
   const byRisk = [...accounts].sort((a, b) => {
@@ -287,18 +491,29 @@ function buildFallbackInsights(
     type: InsightType,
     title: string,
     summary: string,
+    sourceIds: string[],
     confidence = 0.68,
-  ): GeneratedPulseInsight => ({
-    accountId: account.id,
-    type,
-    title,
-    summary,
-    confidence,
-    model: "internal-fallback",
-    promptTokens: 0,
-    outputTokens: 0,
-    sources: sourcesForAccount(account, newsResultsMap),
-  });
+  ): GeneratedPulseInsight => {
+    const claims: EvidenceClaim[] = [
+      {
+        text: summary,
+        sourceIds: sourceIds.filter((id) => account.evidence.some((source) => source.id === id)),
+        sourceType: "internal" as const,
+      },
+    ].filter((claim) => claim.sourceIds.length > 0);
+
+    return {
+      accountId: account.id,
+      type,
+      title,
+      summary,
+      confidence,
+      model: "internal-fallback",
+      promptTokens: 0,
+      outputTokens: 0,
+      sources: sourcesForAccount(account, claims, "internal-fallback"),
+    };
+  };
 
   return [
     make(
@@ -306,18 +521,21 @@ function buildFallbackInsights(
       InsightType.RISK,
       `${riskAccount.name} needs immediate risk attention`,
       `${riskAccount.name} is the highest-risk account in the current portfolio view with ${riskAccount.health} health, score ${riskAccount.latestScore ?? "N/A"}/100, ${riskAccount.openActions} open action${riskAccount.openActions === 1 ? "" : "s"}, and ${riskAccount.openSignals.length} unresolved signal${riskAccount.openSignals.length === 1 ? "" : "s"}. Prioritise executive alignment and close the most critical open action before the next review cycle.`,
+      [`int:${riskAccount.id}:health-score`, `int:${riskAccount.id}:action-count`],
     ),
     make(
       opportunityAccount,
       InsightType.OPPORTUNITY,
       `${opportunityAccount.name} has the clearest expansion signal`,
       `${opportunityAccount.name} has whitespace score ${opportunityAccount.kpiScores?.whitespace ?? "N/A"} and ARR $${opportunityAccount.arr.toLocaleString()}, making it the strongest internal expansion candidate. Review open opportunities and prepare a scoped commercial proposal tied to the account's current operating priorities.`,
+      [`int:${opportunityAccount.id}:kpi-breakdown`, `int:${opportunityAccount.id}:opportunity-1`],
     ),
     make(
       trendAccount,
       InsightType.TREND,
       `${trendAccount.name} is driving the action workload`,
       `${trendAccount.name} currently has ${trendAccount.openActions} open action${trendAccount.openActions === 1 ? "" : "s"}, the highest action load in scope. This trend suggests the account needs tighter weekly governance, owner assignment, and a visible milestone cadence until the queue normalises.`,
+      [`int:${trendAccount.id}:action-count`],
       0.64,
     ),
     make(
@@ -325,6 +543,7 @@ function buildFallbackInsights(
       InsightType.ANOMALY,
       `${anomalyAccount.name} shows a score-to-whitespace mismatch`,
       `${anomalyAccount.name} combines score ${anomalyAccount.latestScore ?? "N/A"}/100 with whitespace ${anomalyAccount.kpiScores?.whitespace ?? "N/A"}, which suggests opportunity exists but execution or relationship health may be limiting conversion. Validate whether the blocker is stakeholder access, delivery confidence, or commercial timing.`,
+      [`int:${anomalyAccount.id}:health-score`, `int:${anomalyAccount.id}:kpi-breakdown`],
       0.62,
     ),
     make(
@@ -332,6 +551,7 @@ function buildFallbackInsights(
       InsightType.RECOMMENDATION,
       `Run this week's account control plan for ${recommendationAccount.name}`,
       `${recommendationAccount.name} should get a concrete control plan this week: confirm the next stakeholder touchpoint, assign owners for open actions, and document the renewal or escalation path. This fallback insight was generated from internal account data because the live LLM provider is currently quota-limited.`,
+      [`int:${recommendationAccount.id}:renewal`, `int:${recommendationAccount.id}:action-count`],
       0.7,
     ),
   ];
@@ -367,29 +587,42 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
     accounts.map((a) => gatherPublicIntelligence(a.name, a.industry ?? "B2B SaaS"))
   );
 
-  const accountContexts: AccountContext[] = accounts.map((a, i) => ({
-    id:          a.id,
-    name:        a.name,
-    industry:    a.industry,
-    health:      a.health,
-    arr:         a.arr,
-    contractEnd: a.contractEnd,
-    latestScore: a.kamScores[0]?.overall ?? null,
-    kpiScores:   a.kamScores[0] ? {
-      csat:           a.kamScores[0].csat,
-      relationship:   a.kamScores[0].relationship,
-      risk:           a.kamScores[0].risk,
-      contractHealth: a.kamScores[0].contractHealth,
-      projectHealth:  a.kamScores[0].projectHealth,
-      resourceHealth: a.kamScores[0].resourceHealth,
-      financial:      a.kamScores[0].financial,
-      whitespace:     a.kamScores[0].whitespace,
-    } : null,
-    openSignals:  a.signals,
-    openActions:  a._count.actions,
-    opportunities:a.opportunities,
-    news:         formatNewsForPrompt(newsResults[i]),
-  }));
+  const accountContexts: AccountContext[] = accounts.map((a, i) => {
+    const baseContext: AccountContext = {
+      id:          a.id,
+      name:        a.name,
+      industry:    a.industry,
+      health:      a.health,
+      arr:         a.arr,
+      contractEnd: a.contractEnd,
+      latestScore: a.kamScores[0]?.overall ?? null,
+      kpiScores:   a.kamScores[0] ? {
+        csat:           a.kamScores[0].csat,
+        relationship:   a.kamScores[0].relationship,
+        risk:           a.kamScores[0].risk,
+        contractHealth: a.kamScores[0].contractHealth,
+        projectHealth:  a.kamScores[0].projectHealth,
+        resourceHealth: a.kamScores[0].resourceHealth,
+        financial:      a.kamScores[0].financial,
+        whitespace:     a.kamScores[0].whitespace,
+      } : null,
+      openSignals:  a.signals,
+      openActions:  a._count.actions,
+      opportunities:a.opportunities,
+      evidence:     [],
+      evidenceText: "",
+    };
+    const evidence = [
+      ...buildInternalEvidence(baseContext),
+      ...buildPublicEvidence(baseContext, newsResults[i] ?? []),
+    ];
+
+    return {
+      ...baseContext,
+      evidence,
+      evidenceText: formatEvidenceForPrompt(evidence),
+    };
+  });
 
   steps.push(makeStep(
     "gather-news",
@@ -404,10 +637,6 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
     accountContexts.map((a) => [a.name, a.id])
   );
 
-  // 3b. Build accountId → raw news map for source attribution
-  const newsResultsMap: Record<string, import("@/lib/intelligence/newsSearch").NewsItem[]> =
-    Object.fromEntries(accountContexts.map((a, i) => [a.id, newsResults[i] ?? []]));
-
   // 4. Run 5 typed insight calls in parallel
   const insightTypes: InsightType[] = [
     InsightType.RISK,
@@ -418,7 +647,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
   ];
 
   const results = await Promise.all(
-    insightTypes.map((type) => generateTypedInsight(type, portfolioContext, accountIds, accountContexts, newsResultsMap))
+    insightTypes.map((type) => generateTypedInsight(type, portfolioContext, accountIds, accountContexts))
   );
 
   results.forEach(({ step }) => steps.push(step));
@@ -429,7 +658,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
     .filter((i): i is NonNullable<typeof i> => i !== null);
 
   if (toCreate.length === 0 && accountContexts.length > 0) {
-    toCreate = buildFallbackInsights(accountContexts, newsResultsMap);
+    toCreate = buildFallbackInsights(accountContexts);
     steps.push(makeStep(
       "fallback-insights",
       "Gemini returned no parseable pulse insights",
@@ -452,7 +681,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
         outputTokens: i.outputTokens,
         isDismissed:  false,
         isRead:       false,
-        sources:      i.sources, // structured source attribution
+        sources:      i.sources as unknown as Prisma.InputJsonValue, // structured source attribution
       })),
     });
   }

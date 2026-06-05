@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/context/RoleContext";
@@ -14,13 +14,12 @@ const TYPE_COLOR: Record<string, string> = {
   renewal:        "#F59E0B",
   signal:         "#EF4444",
   touchpoint:     "#14B8A6",
-  pulse:          "#7C3AED",
   recommendation: "#22C55E",
 };
 
 const TYPE_LABEL: Record<string, string> = {
   action: "Action", qbr: "QBR", renewal: "Renewal", signal: "Signal",
-  touchpoint: "Touchpoint", pulse: "AI Pulse", recommendation: "Recommendation",
+  touchpoint: "Touchpoint", recommendation: "Recommendation",
 };
 
 function toDateKey(d: Date): string {
@@ -132,6 +131,8 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
   const [grouped, setGrouped] = useState<Record<string, CalendarItem[]>>({});
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(todayKey);
+  const calendarPanelRef = useRef<HTMLDivElement>(null);
+  const [calendarPanelHeight, setCalendarPanelHeight] = useState<number | null>(null);
 
   const fetchCalendar = useCallback(async () => {
     setLoading(true);
@@ -161,6 +162,18 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
 
   useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
 
+  useEffect(() => {
+    const el = calendarPanelRef.current;
+    if (!el) return;
+
+    const syncHeight = () => setCalendarPanelHeight(Math.ceil(el.getBoundingClientRect().height));
+    syncHeight();
+
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const prevMonth = () => {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
     else setMonth((m) => m - 1);
@@ -182,9 +195,9 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
   const selectedItems = selectedDate ? (grouped[selectedDate] ?? []) : [];
 
   return (
-    <div className="flex flex-col gap-4 min-h-0 xl:flex-row">
+    <div className="flex flex-col gap-4 min-h-0 xl:flex-row xl:items-start">
       {/* ── Calendar grid ─────────────────────────────────────────────────── */}
-      <div className="command-panel flex-1 min-w-0 p-4 space-y-3">
+      <div ref={calendarPanelRef} className="command-panel flex-1 min-w-0 p-4 space-y-3 xl:max-h-[640px]">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-[14px] font-bold text-[var(--text-primary)]">
@@ -273,6 +286,7 @@ export function CalendarView({ onItemUpdated }: { onItemUpdated?: () => void }) 
           onClose={() => setSelectedDate(null)}
           onItemUpdated={() => { fetchCalendar(); onItemUpdated?.(); }}
           onDateChange={(d) => setSelectedDate(d)}
+          maxHeight={calendarPanelHeight ?? undefined}
         />
       )}
 

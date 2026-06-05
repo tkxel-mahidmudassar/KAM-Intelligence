@@ -4,7 +4,7 @@ import { getRoleFromRequest, getUserIdFromRequest, ok, badRequest, serverError, 
 
 export interface CalendarItem {
   id: string;
-  type: "action" | "qbr" | "touchpoint" | "renewal" | "signal" | "pulse" | "recommendation";
+  type: "action" | "qbr" | "touchpoint" | "renewal" | "signal" | "recommendation";
   title: string;
   accountId: string;
   accountName: string;
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     const where = kamWhere(role, kamUserId);
 
     // Fetch all data sources in parallel
-    const [actions, qbrSessions, touchpoints, renewals, signals, pulseInsights, recommendations] = await Promise.all([
+    const [actions, qbrSessions, touchpoints, renewals, signals, recommendations] = await Promise.all([
       prisma.action.findMany({
         where: {
           dueDate:   { gte: from, lte: to },
@@ -86,17 +86,6 @@ export async function GET(req: NextRequest) {
           account:      where.kamId ? { kamId: where.kamId } : undefined,
         },
         include: { account: { select: { id: true, name: true, health: true } } },
-      }),
-      prisma.aIPulseInsight.findMany({
-        where: {
-          generatedAt:  { gte: from, lte: to },
-          isDismissed:  false,
-          title:        { not: { startsWith: "[LOG]" } },
-          account:      where.kamId ? { kamId: where.kamId } : undefined,
-        },
-        include: { account: { select: { id: true, name: true, health: true } } },
-        orderBy: { generatedAt: "desc" },
-        take: 50,
       }),
       // Recommendations with due dates in range
       prisma.recommendation.findMany({
@@ -162,23 +151,6 @@ export async function GET(req: NextRequest) {
         date: toDateKey(s.detectedAt), severity: s.severity, health: s.account.health,
       });
     }
-    for (const insight of pulseInsights) {
-      const key = toDateKey(insight.generatedAt);
-      add(key, {
-        id: insight.id,
-        type: "pulse",
-        title: `AI Pulse: ${insight.title}`,
-        accountId: insight.account?.id ?? "portfolio",
-        accountName: insight.account?.name ?? "Portfolio",
-        href: insight.account?.id ? `/accounts/${insight.account.id}` : "/ai-pulse",
-        date: key,
-        summary: insight.summary,
-        severity: insight.type === "RISK" || insight.type === "ANOMALY" ? "WARNING" : "INFO",
-        health: insight.account?.health,
-        confidence: insight.confidence,
-      });
-    }
-
     for (const rec of recommendations) {
       if (!rec.account || !rec.dueDate) continue;
       const rule = rec.playbookRule;

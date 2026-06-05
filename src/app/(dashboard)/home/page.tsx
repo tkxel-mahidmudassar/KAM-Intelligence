@@ -111,6 +111,22 @@ interface NewsHeadline {
   publishedAt: string;
 }
 
+interface EvidenceSource {
+  id: string;
+  type: string;
+  title: string;
+  detail: string;
+  url?: string;
+  source?: string;
+  publishedAt?: string;
+}
+
+interface EvidenceClaim {
+  text: string;
+  sourceIds: string[];
+  sourceType: "internal" | "public" | "inference";
+}
+
 interface InsightSources {
   newsHeadlines: NewsHeadline[];
   internalData: {
@@ -119,6 +135,9 @@ interface InsightSources {
     keyScores: Record<string, number | null>;
     signalTitles: string[];
   };
+  evidenceMode?: "llm-sourced-evidence" | "internal-fallback";
+  claims?: EvidenceClaim[];
+  evidence?: EvidenceSource[];
 }
 
 interface HomeInsight {
@@ -1127,18 +1146,10 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-white sm:min-w-[360px]">
+          <div className="grid grid-cols-1 gap-2 text-white sm:min-w-[120px]">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/58">Accounts</p>
               <p className="mt-2 text-[24px] font-black leading-none num-mono">{accounts.length}</p>
-            </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/58">Open</p>
-              <p className="mt-2 text-[24px] font-black leading-none num-mono">{totalOpenActions}</p>
-            </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/58">Role</p>
-              <p className="mt-2 text-[18px] font-black leading-none">{role}</p>
             </div>
           </div>
         </div>
@@ -1286,7 +1297,7 @@ function StatCard({
       </div>
 
       {/* Sub label */}
-      <p className="relative text-[11px] text-[var(--text-muted)] truncate mt-2">{sub}</p>
+      {sub && <p className="relative text-[11px] text-[var(--text-muted)] truncate mt-2">{sub}</p>}
 
       {/* Left-edge colour accent — appears on hover */}
       <div
@@ -1370,7 +1381,7 @@ function PortfolioStatCards({
     },
     {
       id: "healthy" as const, label: "Healthy", rawValue: healthy, displayValue: String(healthy),
-      sub: `${Math.round((healthy / Math.max(total, 1)) * 100)}% of portfolio`, icon: CheckCircle2, color: "#22C55E", glow: "var(--card-glow-healthy)",
+      sub: "", icon: CheckCircle2, color: "#22C55E", glow: "var(--card-glow-healthy)",
       trend: { delta: healthy - prevHealthy, pct: prevHealthy > 0 ? Math.round(((healthy - prevHealthy) / prevHealthy) * 100) : null },
       sparkPoints: healthySpark,
     },
@@ -1418,9 +1429,16 @@ function PulseInsightCard({ insight }: { insight: HomeInsight }) {
   const Icon  = cfg.icon;
   const [showSources, setShowSources] = useState(false);
   const sources = insight.sources;
+  const evidenceById = new Map((sources?.evidence ?? []).map((source) => [source.id, source]));
+  const hasClaimEvidence = (sources?.claims ?? []).some((claim) => claim.sourceIds.some((id) => evidenceById.has(id)));
   const hasNewsSources = (sources?.newsHeadlines ?? []).length > 0;
   const hasInternalData = (sources?.internalData?.signalTitles ?? []).length > 0
     || Object.values(sources?.internalData?.keyScores ?? {}).some((v) => v !== null);
+  const sourceModeLabel = sources?.evidenceMode === "internal-fallback"
+    ? "Internal fallback"
+    : sources?.evidenceMode === "llm-sourced-evidence"
+      ? "Claim-cited evidence"
+      : null;
 
   return (
     <div className="command-card p-4">
@@ -1455,7 +1473,7 @@ function PulseInsightCard({ insight }: { insight: HomeInsight }) {
               <span className="text-[10px] text-[var(--text-disabled)] flex items-center gap-0.5">
                 <Sparkles className="h-3 w-3" />{Math.round((insight.confidence ?? 0) * 100)}%
               </span>
-              {(hasNewsSources || hasInternalData) && (
+              {(hasClaimEvidence || hasNewsSources || hasInternalData) && (
                 <button
                   onClick={() => setShowSources((p) => !p)}
                   className="flex items-center gap-1 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
@@ -1471,8 +1489,63 @@ function PulseInsightCard({ insight }: { insight: HomeInsight }) {
           {/* Sources panel */}
           {showSources && sources && (
             <div className="mt-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-1)] p-3 space-y-3">
+              {sourceModeLabel && (
+                <div className="inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface-2)] px-2 py-1 text-[10px] font-medium text-[var(--text-muted)]">
+                  <Sparkles className="h-3 w-3 text-[#0755E9]" />
+                  {sourceModeLabel}
+                </div>
+              )}
+
+              {/* Claim-level evidence */}
+              {hasClaimEvidence && (
+                <div>
+                  <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <BookOpen className="h-3 w-3" />Claim Evidence
+                  </p>
+                  <div className="space-y-2">
+                    {(sources.claims ?? []).map((claim, index) => {
+                      const claimEvidence = claim.sourceIds
+                        .map((id) => evidenceById.get(id))
+                        .filter((source): source is EvidenceSource => Boolean(source));
+
+                      if (claimEvidence.length === 0) return null;
+
+                      return (
+                        <div key={`${claim.text}-${index}`} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-2)] p-2.5">
+                          <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{claim.text}</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {claimEvidence.map((source) => {
+                              const isPublic = source.type === "public_news" || source.type === "public_industry";
+                              const chip = (
+                                <span className={cn(
+                                  "inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                  isPublic
+                                    ? "border-[#0755E9]/20 bg-[#0755E9]/8 text-[#0755E9]"
+                                    : "border-[#14B8A6]/20 bg-[#14B8A6]/8 text-[#0F766E]"
+                                )}>
+                                  {isPublic ? <ExternalLink className="h-3 w-3 shrink-0" /> : <Database className="h-3 w-3 shrink-0" />}
+                                  <span className="truncate">{source.title}</span>
+                                </span>
+                              );
+
+                              return source.url ? (
+                                <a key={source.id} href={source.url} target="_blank" rel="noopener noreferrer" className="max-w-full hover:opacity-80">
+                                  {chip}
+                                </a>
+                              ) : (
+                                <span key={source.id} className="max-w-full">{chip}</span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Internal data */}
-              {hasInternalData && (
+              {!hasClaimEvidence && hasInternalData && (
                 <div>
                   <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1.5 flex items-center gap-1">
                     <Database className="h-3 w-3" />Internal Data
@@ -1501,7 +1574,7 @@ function PulseInsightCard({ insight }: { insight: HomeInsight }) {
               )}
 
               {/* News headlines */}
-              {hasNewsSources && (
+              {!hasClaimEvidence && hasNewsSources && (
                 <div>
                   <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1.5 flex items-center gap-1">
                     <Newspaper className="h-3 w-3" />Public Intelligence

@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import Link from "next/link";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { TrendingUp, AlertTriangle, DollarSign, Activity, ArrowRight, Download } from "lucide-react";
+import { TrendingUp, AlertTriangle, DollarSign, Activity, Download } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/utils";
@@ -199,23 +198,6 @@ export default function AnalyticsPage() {
     { name: "Critical", arr: accounts.filter((a) => a.health === "CRITICAL").reduce((s, a) => s + a.arr, 0),  fill: "#EF4444" },
   ], [accounts]);
 
-  // Score distribution histogram (buckets: 0-20, 21-40, 41-60, 61-80, 81-100)
-  const scoreHistogram = useMemo(() => {
-    const buckets = [
-      { label: "0–20",  min: 0,  max: 20,  count: 0 },
-      { label: "21–40", min: 21, max: 40,  count: 0 },
-      { label: "41–60", min: 41, max: 60,  count: 0 },
-      { label: "61–80", min: 61, max: 80,  count: 0 },
-      { label: "81–100",min: 81, max: 100, count: 0 },
-    ];
-    accounts.forEach((a) => {
-      const s = a.kamScores[0]?.overall ?? 50;
-      const b = buckets.find((b) => s >= b.min && s <= b.max);
-      if (b) b.count++;
-    });
-    return buckets;
-  }, [accounts]);
-
   // Signals by type (top types by count)
   const signalsByType = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -228,22 +210,6 @@ export default function AnalyticsPage() {
       .map(([type, count]) => ({ name: SIGNAL_TYPE_LABELS[type] ?? type, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
-  }, [accounts]);
-
-  // Signals by severity
-  const signalsBySeverity = useMemo(() => {
-    const counts = { CRITICAL: 0, WARNING: 0, INFO: 0 };
-    accounts.forEach((a) =>
-      a.signals.filter((s) => !s.isResolved).forEach((s) => {
-        const key = s.severity as keyof typeof counts;
-        if (key in counts) counts[key]++;
-      })
-    );
-    return [
-      { name: "Critical", value: counts.CRITICAL, fill: "#EF4444" },
-      { name: "Warning",  value: counts.WARNING,  fill: "#F59E0B" },
-      { name: "Info",     value: counts.INFO,     fill: "#0755E9" },
-    ].filter((d) => d.value > 0);
   }, [accounts]);
 
   // Industry breakdown
@@ -260,15 +226,6 @@ export default function AnalyticsPage() {
       .sort((a, b) => b.arr - a.arr)
       .slice(0, 6);
   }, [accounts]);
-
-  // Top at-risk accounts
-  const atRiskAccounts = useMemo(() =>
-    [...accounts]
-      .filter((a) => a.health !== "HEALTHY")
-      .sort((a, b) => (a.kamScores[0]?.overall ?? 50) - (b.kamScores[0]?.overall ?? 50))
-      .slice(0, 6),
-    [accounts]
-  );
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -447,50 +404,7 @@ export default function AnalyticsPage() {
           </ResponsiveContainer>
         </Card>
 
-        {/* 3. Score distribution */}
-        <Card title="Score Distribution (KAM Health Score)">
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={scoreHistogram} barSize={32} margin={{ left: -8, right: 8 }}>
-              <defs>
-                <linearGradient id="score-bar-healthy" x1="0" x2="0" y1="1" y2="0">
-                  <stop offset="0%" stopColor="#22C55E" stopOpacity="0.45" />
-                  <stop offset="100%" stopColor="#22C55E" stopOpacity="1" />
-                </linearGradient>
-                <linearGradient id="score-bar-risk" x1="0" x2="0" y1="1" y2="0">
-                  <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.45" />
-                  <stop offset="100%" stopColor="#F59E0B" stopOpacity="1" />
-                </linearGradient>
-                <linearGradient id="score-bar-critical" x1="0" x2="0" y1="1" y2="0">
-                  <stop offset="0%" stopColor="#EF4444" stopOpacity="0.45" />
-                  <stop offset="100%" stopColor="#EF4444" stopOpacity="1" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: "var(--text-disabled)" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 10, fill: "var(--text-disabled)" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="count" name="Accounts" radius={[8, 8, 0, 0]} animationDuration={900}>
-                {scoreHistogram.map((entry, i) => {
-                  const mid = (entry.min + entry.max) / 2;
-                  const fill = mid >= 70 ? "url(#score-bar-healthy)" : mid >= 45 ? "url(#score-bar-risk)" : "url(#score-bar-critical)";
-                  return <Cell key={i} fill={fill} />;
-                })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* 4. Open signals by type */}
+        {/* 3. Open signals by type */}
         <Card title="Open Signals by Type">
           {signalsByType.length === 0 ? (
             <div className="flex items-center justify-center h-[160px] text-[12px] text-[var(--text-disabled)]">
@@ -564,84 +478,8 @@ export default function AnalyticsPage() {
           )}
         </Card>
 
-        {/* At-risk accounts */}
-        <Card title="Accounts Needing Attention">
-          {atRiskAccounts.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-[12px] text-[var(--text-disabled)]">
-              All accounts are healthy 🎉
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {atRiskAccounts.map((a) => {
-                const score  = a.kamScores[0]?.overall ?? null;
-                const hColor = HEALTH_COLOR[a.health];
-                return (
-                  <Link
-                    key={a.id}
-                    href={`/accounts/${a.id}`}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[var(--bg-surface-2)] transition-colors group"
-                  >
-                    {/* Health dot */}
-                    <div className="h-2 w-2 rounded-full shrink-0" style={{ background: hColor }} />
-
-                    {/* Name */}
-                    <span className="flex-1 min-w-0 text-[13px] font-medium text-[var(--text-primary)] truncate">
-                      {a.name}
-                    </span>
-
-                    {/* Score bar */}
-                    {score != null && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="w-20 h-1.5 rounded-full bg-[var(--border-subtle)] overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{ width: `${score}%`, background: hColor }}
-                          />
-                        </div>
-                        <span className="text-[11px] font-semibold tabular-nums" style={{ color: hColor }}>
-                          {score}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* ARR */}
-                    <span className="text-[11px] text-[var(--text-muted)] tabular-nums w-14 text-right">
-                      {formatARR(a.arr)}
-                    </span>
-
-                    <ArrowRight className="h-3 w-3 text-[var(--text-disabled)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-
       </div>
 
-      {/* Signal severity summary */}
-      {signalsBySeverity.length > 0 && (
-        <Card title="Open Signal Severity Breakdown">
-          <div className="flex items-center gap-6 flex-wrap">
-            {signalsBySeverity.map(({ name, value, fill }) => (
-              <div key={name} className="flex items-center gap-3 min-w-[120px]">
-                <div
-                  className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: `${fill}18` }}
-                >
-                  <Activity className="h-4 w-4" style={{ color: fill }} />
-                </div>
-                <div>
-                  <p className="text-[22px] font-bold text-[var(--text-primary)] leading-none tabular-nums" style={{ color: fill }}>
-                    {value}
-                  </p>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{name}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

@@ -162,17 +162,6 @@ export default function AuditPage() {
     return counts;
   }, [logs]);
 
-  // ── Guard: KAM cannot access ──────────────────────────────────────────────────
-  if (role === "KAM") {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3">
-        <ClipboardList className="h-12 w-12 text-[var(--text-disabled)]" />
-        <p className="text-[14px] font-medium text-[var(--text-primary)]">Access Restricted</p>
-        <p className="text-[12px] text-[var(--text-muted)]">Audit logs are visible to Managers and Executives only.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5">
       {/* Header */}
