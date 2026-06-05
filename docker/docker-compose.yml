@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: kam_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: kam_intelligence
+      MYSQL_USER: kam_user
+      MYSQL_PASSWORD: kam_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - kam_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "kam_user", "-pkam_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: kam_chroma
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - kam_chroma_data:/chroma/chroma
+
+volumes:
+  kam_mysql_data:
+  kam_chroma_data:

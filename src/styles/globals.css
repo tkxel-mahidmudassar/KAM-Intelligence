@@ -1,0 +1,289 @@
+/* ─── Plus Jakarta Sans ─────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
+@import "tailwindcss";
+
+/* ─── Tailwind theme tokens ──────────────────────────────────────────────── */
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Tkxel blue family */
+  --color-brand-50:  #eef4fe;
+  --color-brand-100: #d5e5fd;
+  --color-brand-400: #4b8af3;
+  --color-brand-500: #0755E9;
+  --color-brand-600: #0647C7;
+  --color-brand-700: #0539A0;
+  --color-brand-800: #062D7E;
+
+  /* Status */
+  --color-healthy:         #22C55E;
+  --color-healthy-bg-l:    #F0FDF4;
+  --color-healthy-bg-d:    rgba(34,197,94,0.12);
+  --color-healthy-border-l:#BBF7D0;
+  --color-healthy-border-d:rgba(34,197,94,0.25);
+  --color-healthy-text-l:  #15803D;
+  --color-healthy-text-d:  #4ADE80;
+
+  --color-atrisk:          #F59E0B;
+  --color-atrisk-bg-l:     #FFFBEB;
+  --color-atrisk-bg-d:     rgba(245,158,11,0.12);
+  --color-atrisk-border-l: #FDE68A;
+  --color-atrisk-border-d: rgba(245,158,11,0.25);
+  --color-atrisk-text-l:   #B45309;
+  --color-atrisk-text-d:   #FCD34D;
+
+  --color-critical:        #EF4444;
+  --color-critical-bg-l:   #FEF2F2;
+  --color-critical-bg-d:   rgba(239,68,68,0.12);
+  --color-critical-border-l:#FECACA;
+  --color-critical-border-d:rgba(239,68,68,0.25);
+  --color-critical-text-l: #B91C1C;
+  --color-critical-text-d: #F87171;
+
+  /* Tkxel orange — used very sparingly */
+  --color-orange: #FF6900;
+}
+
+/* ─── Mode-aware custom properties ──────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Background — warm gradient base so glass cards have something to blur */
+  --bg-gradient: radial-gradient(ellipse at 18% 0%, rgba(7,85,233,0.07) 0%, transparent 55%),
+                 radial-gradient(ellipse at 85% 90%, rgba(7,85,233,0.04) 0%, transparent 50%),
+                 #F5F4F2;
+  --bg-base:     #F5F4F2;
+
+  /* Glass card surface */
+  --glass-bg:      rgba(255,255,255,0.72);
+  --glass-border:  rgba(255,255,255,0.90);
+  --glass-blur:    blur(20px);
+  --glass-shadow:  0 4px 24px -4px rgba(27,35,46,0.10), 0 1px 4px -1px rgba(27,35,46,0.08);
+
+  /* Elevated glass (modals, dropdowns) */
+  --glass-elevated-bg:     rgba(255,255,255,0.88);
+  --glass-elevated-border: rgba(255,255,255,0.95);
+  --glass-elevated-shadow: 0 24px 48px -8px rgba(27,35,46,0.18), 0 8px 16px -4px rgba(27,35,46,0.10);
+
+  /* Surfaces (non-glass fallback) */
+  --bg-surface:   rgba(255,255,255,0.80);
+  --bg-surface-1: #FFFFFF;              /* solid — modals, elevated panels   */
+  --bg-surface-2: rgba(248,247,246,0.80);
+  --bg-surface-3: #EAE8E4;
+  --modal-input-bg: #F0EFED;            /* form inputs inside modals (light) */
+
+  /* Borders */
+  --border-subtle:  rgba(0,0,0,0.07);
+  --border-default: rgba(0,0,0,0.12);
+  --border-strong:  rgba(0,0,0,0.20);
+
+  /* Text */
+  --text-primary:   #13191F;
+  --text-secondary: #3D4753;
+  --text-muted:     #7A8494;
+  --text-disabled:  #B8BFC8;
+  --text-inverse:   #FFFFFF;
+
+  /* Sidebar — always dark */
+  --sidebar-bg:         #020816;
+  --sidebar-border:     rgba(255,255,255,0.06);
+  --sidebar-text:       #8A94A8;
+  --sidebar-text-hover: #C8D0E0;
+  --sidebar-text-active:#FFFFFF;
+  --sidebar-active-bg:  rgba(7,85,233,0.20);
+  --sidebar-active-border: #0755E9;
+
+  /* Card glow variants — used for stat card left-border accent */
+  --card-glow-brand:    0 2px 20px -4px rgba(7,85,233,0.18), inset 3px 0 0 #0755E9;
+  --card-glow-healthy:  0 2px 20px -4px rgba(34,197,94,0.15), inset 3px 0 0 #22C55E;
+  --card-glow-atrisk:   0 2px 20px -4px rgba(245,158,11,0.15), inset 3px 0 0 #F59E0B;
+  --card-glow-critical: 0 2px 20px -4px rgba(239,68,68,0.18), inset 3px 0 0 #EF4444;
+  --card-glow-purple:   0 2px 20px -4px rgba(124,58,237,0.15), inset 3px 0 0 #7C3AED;
+  --stat-card-bg:       linear-gradient(145deg, rgba(255,255,255,0.92), rgba(255,255,255,0.62));
+  --stat-card-border:   rgba(255,255,255,0.96);
+  --stat-card-shadow:   0 12px 34px -18px rgba(27,35,46,0.26), 0 1px 0 rgba(255,255,255,0.90) inset;
+  --stat-card-hover:    0 18px 44px -20px rgba(27,35,46,0.34), 0 1px 0 rgba(255,255,255,0.95) inset;
+  --score-ring-track:   rgba(19,25,31,0.08);
+
+  /* Focus ring */
+  --ring-brand: 0 0 0 3px rgba(7,85,233,0.20);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(0,0,0,0.15);
+}
+
+/* ── Dark mode ── */
+.dark {
+  color-scheme: dark;
+
+  /* Deep navy — blue-tinted like inspo 1, richer than before */
+  --bg-gradient: radial-gradient(ellipse at 15% -10%, rgba(7,85,233,0.28) 0%, transparent 50%),
+                 radial-gradient(ellipse at 85% 100%, rgba(7,85,233,0.16) 0%, transparent 50%),
+                 radial-gradient(ellipse at 50%  50%, rgba(7,85,233,0.06) 0%, transparent 60%),
+                 #060D1F;
+  --bg-base: #060D1F;
+
+  /* Dark glass with blue glow behind elevated surfaces */
+  --glass-bg:      rgba(255,255,255,0.045);
+  --glass-border:  rgba(255,255,255,0.09);
+  --glass-blur:    blur(24px);
+  --glass-shadow:  0 4px 32px -4px rgba(0,0,0,0.55), 0 1px 4px -1px rgba(0,0,0,0.40),
+                   inset 0 1px 0 0 rgba(255,255,255,0.08),
+                   0 0 0 1px rgba(7,85,233,0.06);
+
+  --glass-elevated-bg:     rgba(10,20,50,0.80);
+  --glass-elevated-border: rgba(255,255,255,0.13);
+  --glass-elevated-shadow: 0 24px 56px -8px rgba(0,0,0,0.80), 0 8px 20px -4px rgba(0,0,0,0.50),
+                            inset 0 1px 0 0 rgba(255,255,255,0.10),
+                            0 0 40px -10px rgba(7,85,233,0.25);
+
+  --bg-surface:   rgba(255,255,255,0.045);
+  --bg-surface-1: #0E1A30;              /* solid — modals, elevated panels   */
+  --bg-surface-2: rgba(255,255,255,0.06);
+  --bg-surface-3: rgba(255,255,255,0.10);
+  --modal-input-bg: rgba(255,255,255,0.08);
+
+  --border-subtle:  rgba(255,255,255,0.07);
+  --border-default: rgba(255,255,255,0.12);
+  --border-strong:  rgba(255,255,255,0.22);
+
+  --text-primary:   #E8EDF8;
+  --text-secondary: #8C96B0;
+  --text-muted:     #4D5870;
+  --text-disabled:  #2A3348;
+  --text-inverse:   #13191F;
+
+  /* Sidebar — deep navy panel */
+  --sidebar-bg:         #050C1C;
+  --sidebar-border:     rgba(255,255,255,0.06);
+  --sidebar-text:       #4E5C78;
+  --sidebar-text-hover: #9DAABF;
+  --sidebar-text-active:#FFFFFF;
+  --sidebar-active-bg:  rgba(7,85,233,0.22);
+  --sidebar-active-border: #4D8BFF;
+
+  /* Card glow variants — used for stat card accents */
+  --card-glow-brand:    0 0 20px -4px rgba(7,85,233,0.35), inset 3px 0 0 #0755E9;
+  --card-glow-healthy:  0 0 20px -4px rgba(34,197,94,0.25), inset 3px 0 0 #22C55E;
+  --card-glow-atrisk:   0 0 20px -4px rgba(245,158,11,0.25), inset 3px 0 0 #F59E0B;
+  --card-glow-critical: 0 0 20px -4px rgba(239,68,68,0.30), inset 3px 0 0 #EF4444;
+  --card-glow-purple:   0 0 20px -4px rgba(124,58,237,0.25), inset 3px 0 0 #7C3AED;
+  --stat-card-bg:       linear-gradient(145deg, rgba(255,255,255,0.070), rgba(255,255,255,0.030));
+  --stat-card-border:   rgba(255,255,255,0.10);
+  --stat-card-shadow:   var(--glass-shadow);
+  --stat-card-hover:    0 16px 42px -18px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.11);
+  --score-ring-track:   rgba(255,255,255,0.10);
+
+  --ring-brand: 0 0 0 3px rgba(77,139,255,0.25);
+  --scrollbar-thumb: rgba(255,255,255,0.10);
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-gradient);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    line-height: 1.55;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+    min-height: 100%;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
+
+  /* Focus */
+  :focus-visible { outline: 2px solid #0755E9; outline-offset: 2px; }
+  .dark :focus-visible { outline-color: #4D8BFF; }
+
+  /* Mono / tabular numbers — for KPI values */
+  .num-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "ss01";
+    letter-spacing: -0.02em;
+  }
+
+  /* Theme transition — only for color/bg, not layout */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, box-shadow;
+    transition-duration: 120ms;
+    transition-timing-function: ease;
+  }
+}
+
+@layer components {
+  .command-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255,209,102,0.26), transparent 26%),
+      linear-gradient(135deg, #071B3A 0%, #0755E9 48%, #0C8A7A 100%);
+    box-shadow: 0 28px 80px rgba(7,27,58,0.28);
+  }
+
+  .command-hero::after {
+    content: "";
+    position: absolute;
+    right: -80px;
+    top: -96px;
+    height: 288px;
+    width: 288px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+    filter: blur(48px);
+    pointer-events: none;
+  }
+
+  .command-panel {
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow);
+    border-radius: 24px;
+  }
+
+  .command-card {
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface-1);
+    border-radius: 20px;
+    box-shadow: 0 18px 54px rgba(15,23,42,0.05);
+  }
+
+  .command-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.10);
+    padding: 0.25rem 0.75rem;
+    color: rgba(255,255,255,0.78);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .command-section-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+}
