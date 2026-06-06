@@ -1,0 +1,72 @@
+# App shell, home, settings, and auth
+
+## App shell
+
+The V2 app now uses a persistent shell around authenticated screens.
+
+Built in:
+
+- Left sidebar navigation for Home, Portfolio, and Settings.
+- Compact role switcher in the top bar.
+- Top-right notification bell with route-aware notifications.
+- Avatar dropdown with My profile and Log out.
+- Login and forgot-password screens render without the dashboard shell.
+
+Notifications currently route to the relevant module using client navigation:
+
+- Pending account creation review routes to Portfolio.
+- Score drop review routes to Portfolio with account/tab query context.
+- Playbook parsing routes to Settings.
+
+## Home
+
+The Home page is a portfolio operating view.
+
+Built in:
+
+- Four expandable topline cards: healthy accounts, at risk accounts, critical accounts, and renewals under 90 days.
+- Month calendar with action counts per day.
+- Day detail panel after selecting a calendar date.
+- Timeline view for the next three operating days.
+- Done and dismiss actions for calendar items.
+- Done and dismiss both require a reason in a floating modal before status changes locally.
+
+Current persistence:
+
+- Home action status is local UI state only.
+- The next backend pass should save action completion, dismissal, and reason metadata to the shared activity/reason log.
+
+## Settings
+
+The Settings page is the configuration surface for the V2 prototype.
+
+Built in:
+
+- Default KPI weights with sliders.
+- Weight total validation. Save/request is disabled unless weights equal 100%.
+- Associate invite and removal UI.
+- Account allocation and unallocation controls.
+- Playbook upload controls per KPI.
+- AI rules playbook display for learned denial/dismissal behavior.
+- Mock integrations: Salesforce, Gmail, Jira, Worksphere, Finance Invoice Tracking, LLM, and AI Note Taker.
+- My profile card using the current active user context.
+
+Current persistence:
+
+- Settings changes are local UI state only.
+- Playbook uploads capture filenames for UI state; parser/storage wiring should connect these controls to the playbook ingestion agent.
+
+## Auth
+
+The prototype includes basic auth screens.
+
+Built in:
+
+- Login page with email and password fields.
+- Login sets the active demo user in role context and routes to Home.
+- Forgot password flow collects an email and shows non-revealing success copy.
+
+Current persistence:
+
+- Login is demo-local and does not yet call a real session provider.
+- Forgot password is UI-only until the backend mail/reset token flow is wired.

@@ -10,13 +10,13 @@ const roleOptions: Array<{ label: string; value: Role; description: string }> = 
   { label: "C-Level", value: "EXECUTIVE", description: "Read-only" },
 ];
 
-export function RoleBar() {
+export function RoleBar({ compact = false }: { compact?: boolean }) {
   const { role, setRole } = useRole();
   const isReadOnlyRole = role === "EXECUTIVE" || role === "ADMIN" || role === "MANAGER";
 
   return (
-    <div className="sticky top-0 z-40 border-b border-[#E8E1D7] bg-[rgba(250,247,241,0.82)] px-5 py-2 shadow-[0_10px_28px_-26px_rgba(46,36,23,0.42)] [backdrop-filter:blur(18px)]">
-      <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3">
+    <div className={compact ? "" : "sticky top-0 z-40 border-b border-[#E8E1D7] bg-[rgba(250,247,241,0.82)] px-5 py-2 shadow-[0_10px_28px_-26px_rgba(46,36,23,0.42)] [backdrop-filter:blur(18px)]"}>
+      <div className={`${compact ? "" : "mx-auto max-w-[1500px]"} flex items-center justify-between gap-3`}>
         <div className="inline-flex w-fit items-center rounded-full border border-[#E2D8CC] bg-[#FFF9EF]/72 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
           {roleOptions.map((option) => {
             const active = role === option.value;

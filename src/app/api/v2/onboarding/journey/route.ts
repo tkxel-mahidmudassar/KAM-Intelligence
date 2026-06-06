@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runV2OnboardingAssistant, type V2OnboardingAgentInput } from "@/lib/v2/onboardingAgent";
+import { runV2JourneyAgent, type V2JourneyAgentInput } from "@/lib/v2/journeyAgent";
 
 export const runtime = "nodejs";
 
@@ -11,12 +11,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     if (!isObject(body)) {
-      return NextResponse.json({ error: "Invalid onboarding assistant payload" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid journey payload" }, { status: 400 });
     }
 
-    const input: V2OnboardingAgentInput = {
+    const input: V2JourneyAgentInput = {
       role: String(body.role || "ASSOCIATE"),
-      sourceFiles: Array.isArray(body.sourceFiles) ? body.sourceFiles.map(String) : [],
+      mode: body.mode === "enhance" ? "enhance" : "generate",
       prompt: String(body.prompt || ""),
       draft: isObject(body.draft)
         ? Object.fromEntries(Object.entries(body.draft).map(([key, value]) => [key, String(value ?? "")]))
@@ -25,10 +25,8 @@ export async function POST(req: NextRequest) {
         ? body.documents.map((document) => ({
             fileName: String(document?.fileName || ""),
             type: String(document?.type || ""),
-            uploadedAt: String(document?.uploadedAt || ""),
-            extractedText: String(document?.extractedText || ""),
             preview: String(document?.preview || ""),
-            charCount: Number(document?.charCount || 0),
+            extractedText: String(document?.extractedText || ""),
           }))
         : [],
       journey: Array.isArray(body.journey)
@@ -41,13 +39,11 @@ export async function POST(req: NextRequest) {
         : [],
     };
 
-    const result = await runV2OnboardingAssistant(input);
+    const result = await runV2JourneyAgent(input);
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Onboarding assistant failed",
-      },
+      { error: error instanceof Error ? error.message : "Journey agent failed" },
       { status: 500 },
     );
   }

@@ -44,6 +44,11 @@ interface KpiOverviewRow {
     name: string;
     score: number;
     rationale: string;
+    trend?: KpiTrend;
+    fallingWhy?: {
+      summary: string;
+      sources: string[];
+    };
   }>;
   why?: string;
   task?: string;
@@ -190,6 +195,17 @@ interface QbrPromptDraft {
   asks: string;
 }
 
+interface CammieMessage {
+  role: "user" | "assistant";
+  content: string;
+  artifact?: {
+    title: string;
+    fileUrl: string;
+    format: string;
+    summary: string;
+  };
+}
+
 interface DocumentUploadDraft {
   type: string;
   fileName: string;
@@ -231,6 +247,7 @@ interface OnboardingDocumentDraft {
   type: string;
   fileName: string;
   fileUrl: string;
+  file?: File;
 }
 
 interface OnboardingDocument {
@@ -239,6 +256,10 @@ interface OnboardingDocument {
   fileName: string;
   fileUrl: string;
   uploadedAt: string;
+  extractedText?: string;
+  preview?: string;
+  charCount?: number;
+  parseError?: string;
 }
 
 interface OnboardingJourneyDraftItem {
@@ -255,6 +276,14 @@ interface KycDraftSection {
   source: string;
   status: "Ready" | "Needs input";
   draft: string;
+}
+
+interface GeneratedKycDocument {
+  title: string;
+  fileName: string;
+  fileUrl: string;
+  summary: string;
+  approvalStatus: "Draft" | "Submitted to KAM" | "Approved";
 }
 
 interface SuggestionDismissalDraft {
@@ -308,10 +337,37 @@ const kpiOverviewRows: KpiOverviewRow[] = [
     score: 64,
     trend: "down",
     subParameters: [
-      { name: "Delivery risk", score: 58, rationale: "Flags missed commitments, slipped milestones, unresolved blockers, or quality concerns." },
-      { name: "Commercial risk", score: 66, rationale: "Looks for renewal, payment, scope, pricing, or procurement exposure." },
-      { name: "Relationship risk", score: 62, rationale: "Detects sponsor churn, weak access, low engagement, or unresolved dissatisfaction." },
-      { name: "External risk", score: 70, rationale: "Accounts for client market pressure, funding changes, layoffs, or strategic shifts." },
+      {
+        name: "Delivery risk",
+        score: 58,
+        rationale: "Flags missed commitments, slipped milestones, unresolved blockers, or quality concerns.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Two delivery checkpoints slipped without a named mitigation owner, which matches the delivery-risk playbook pattern for confidence loss before renewal planning.",
+          sources: ["Delivery risk playbook", "Account journey history", "AI rules learning log"],
+        },
+      },
+      {
+        name: "Commercial risk",
+        score: 66,
+        rationale: "Looks for renewal, payment, scope, pricing, or procurement exposure.",
+        trend: "down",
+        fallingWhy: {
+          summary: "The account is carrying renewal exposure while commercial next steps are not attached to a confirmed buyer path.",
+          sources: ["Contract health playbook", "Renewal history", "AI rules learning log"],
+        },
+      },
+      {
+        name: "Relationship risk",
+        score: 62,
+        rationale: "Detects sponsor churn, weak access, low engagement, or unresolved dissatisfaction.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Recent account history shows reduced sponsor coverage, so the model is treating relationship risk as a blocker to fast issue resolution.",
+          sources: ["Relationship playbook", "Stakeholder history", "AI rules learning log"],
+        },
+      },
+      { name: "External risk", score: 70, rationale: "Accounts for client market pressure, funding changes, layoffs, or strategic shifts.", trend: "flat" },
     ],
     why: "Risk exposure is above the preferred band for the account journey stage.",
     task: "Review risk signals and confirm a mitigation owner.",
@@ -340,10 +396,37 @@ const kpiOverviewRows: KpiOverviewRow[] = [
     score: 73,
     trend: "down",
     subParameters: [
-      { name: "Milestone health", score: 72, rationale: "Measures whether delivery commitments are landing on time." },
-      { name: "Sprint progress", score: 70, rationale: "Tracks current sprint execution, velocity, and unresolved carry-over." },
+      {
+        name: "Milestone health",
+        score: 72,
+        rationale: "Measures whether delivery commitments are landing on time.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Milestone confidence is weakening because the last delivery checkpoint did not close with owner/date clarity.",
+          sources: ["Project health playbook", "Account journey history", "AI rules learning log"],
+        },
+      },
+      {
+        name: "Sprint progress",
+        score: 70,
+        rationale: "Tracks current sprint execution, velocity, and unresolved carry-over.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Sprint progress is falling because unresolved carry-over is accumulating faster than the current sprint cadence is clearing it.",
+          sources: ["Project health playbook", "Delivery notes history", "AI rules learning log"],
+        },
+      },
       { name: "Quality signal", score: 76, rationale: "Looks for defect trends, rework, QA concerns, and client acceptance friction." },
-      { name: "Blocker resolution", score: 74, rationale: "Checks whether delivery blockers have clear owners and decision paths." },
+      {
+        name: "Blocker resolution",
+        score: 74,
+        rationale: "Checks whether delivery blockers have clear owners and decision paths.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Blocker resolution is soft because escalation notes show blockers moving across meetings without a confirmed decision path.",
+          sources: ["Project health playbook", "Meeting history", "AI rules learning log"],
+        },
+      },
     ],
     why: "Delivery confidence has softened against the current account journey checkpoint.",
     task: "Schedule a delivery health review with the pod lead.",
@@ -373,7 +456,16 @@ const kpiOverviewRows: KpiOverviewRow[] = [
     trend: "up",
     subParameters: [
       { name: "Expansion fit", score: 72, rationale: "Checks whether Tkxel has a credible service fit for adjacent client needs." },
-      { name: "Buyer appetite", score: 64, rationale: "Looks for sponsor interest, budget intent, and openness to a new conversation." },
+      {
+        name: "Buyer appetite",
+        score: 64,
+        rationale: "Looks for sponsor interest, budget intent, and openness to a new conversation.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Buyer appetite is being pulled down because expansion interest has not been converted into a dated sponsor conversation.",
+          sources: ["Whitespace playbook", "Opportunity history", "AI rules learning log"],
+        },
+      },
       { name: "Timing", score: 70, rationale: "Assesses whether the account journey is at the right moment for expansion." },
       { name: "Competitive position", score: 68, rationale: "Considers whether Tkxel is well positioned against internal or external alternatives." },
     ],
@@ -841,6 +933,15 @@ function onboardingSteps(sourceFileCount: number, draft: AccountDraft, suggestio
 function money(value: number) {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   return `$${Math.round(value / 1_000)}K`;
+}
+
+function parseArrValue(value: string) {
+  const normalized = value.trim().toUpperCase().replace(/[$,\s]/g, "");
+  const numeric = Number(normalized.replace(/[MK]/g, ""));
+  if (!Number.isFinite(numeric)) return 0;
+  if (normalized.endsWith("M")) return Math.round(numeric * 1_000_000);
+  if (normalized.endsWith("K")) return Math.round(numeric * 1_000);
+  return Math.round(numeric);
 }
 
 const taskTypeTone: Record<TaskType, string> = {
@@ -1335,6 +1436,7 @@ function KpiWeightSettingsModal({
               {kpiOverviewRows.map((row) => {
                 const currentWeight = kpiWeights[row.id] ?? parseWeightValue(row.weight);
                 const draft = weightDrafts[row.id] ?? { weight: String(currentWeight) };
+                const draftWeight = clampScore(draft.weight);
 
                 return (
                   <div key={row.id} className="rounded-2xl border border-[#E5DACD] bg-white/58 p-3">
@@ -1344,14 +1446,25 @@ function KpiWeightSettingsModal({
                     </div>
 
                     {isAssociate || canOverrideDirectly ? (
-                      <div className="mt-3">
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[11px] font-bold text-[#8A7A69]">0%</span>
+                          <span className="rounded-full border border-[#D8CAB9] bg-[#FFF9EF] px-3 py-1 text-[12px] font-black text-[#25352E]">
+                            {formatWeight(draftWeight)}
+                          </span>
+                          <span className="text-[11px] font-bold text-[#8A7A69]">100%</span>
+                        </div>
                         <input
-                          type="number"
+                          type="range"
                           min={0}
                           max={100}
-                          value={draft.weight}
+                          step={1}
+                          value={draftWeight}
                           onChange={(event) => onDraftChange(row.id, event.target.value)}
-                          className="h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/75 px-3 text-[14px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/40"
+                          className="h-3 w-full cursor-pointer appearance-none rounded-full bg-[#E8DED1] accent-[#25352E] outline-none"
+                          style={{
+                            background: `linear-gradient(to right, #25352E 0%, #25352E ${draftWeight}%, #E8DED1 ${draftWeight}%, #E8DED1 100%)`,
+                          }}
                           aria-label={`${row.name} weight`}
                         />
                       </div>
@@ -1550,6 +1663,11 @@ function OverviewTab({
                           <div className="flex h-7 items-center justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-2">
                               <p className="truncate text-[12px] font-black text-[#25352E]">{parameter.name}</p>
+                              {parameter.trend === "down" ? (
+                                <span className="inline-flex h-5 items-center rounded-full border border-[#F0BBB4] bg-[#FFF0ED] px-2 text-[10px] font-black text-[#B33D32]">
+                                  Falling
+                                </span>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1571,6 +1689,19 @@ function OverviewTab({
                             </span>
                           </div>
                           {scoreOverrides[targetId] ? <p className="mt-1 text-[11px] font-bold text-[#6F6254]">Override applied from {parameter.score}/100</p> : null}
+                          {parameter.trend === "down" && parameter.fallingWhy ? (
+                            <div className="mt-2 rounded-xl border border-[#F0D1C9] bg-[#FFF8F5] px-2.5 py-2">
+                              <p className="text-[11px] font-black text-[#B33D32]">Likely cause</p>
+                              <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[#25352E]">{parameter.fallingWhy.summary}</p>
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {parameter.fallingWhy.sources.map((source) => (
+                                  <span key={source} className="rounded-full border border-[#E5DACD] bg-white/70 px-2 py-0.5 text-[10px] font-bold text-[#6F6254]">
+                                    {source}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
                           {activeOverrideTargetId === targetId ? (
                             <div className="mt-3">
                               <ScoreOverrideEditor
@@ -3296,17 +3427,23 @@ function PortfolioCard({ account, readonly, onOpen }: { account: PortfolioAccoun
 
 function AccountSourceUploadDialog({
   open,
-  fileNames,
+  files,
+  isUploading,
+  uploadError,
   onOpenChange,
   onFilesChange,
   onContinue,
 }: {
   open: boolean;
-  fileNames: string[];
+  files: File[];
+  isUploading: boolean;
+  uploadError: string;
   onOpenChange: (open: boolean) => void;
-  onFilesChange: (fileNames: string[]) => void;
+  onFilesChange: (files: File[]) => void;
   onContinue: () => void;
 }) {
+  const fileNames = files.map((file) => file.name);
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -3335,8 +3472,7 @@ function AccountSourceUploadDialog({
               multiple
               className="mt-3 block w-full text-[13px] font-bold text-[#25352E] file:mr-3 file:rounded-full file:border-0 file:bg-[#25352E] file:px-4 file:py-2 file:text-[13px] file:font-bold file:text-[#FFF9EF]"
               onChange={(event) => {
-                const names = Array.from(event.target.files ?? []).map((file) => file.name);
-                onFilesChange(names);
+                onFilesChange(Array.from(event.target.files ?? []));
               }}
             />
             {fileNames.length > 0 ? (
@@ -3349,7 +3485,7 @@ function AccountSourceUploadDialog({
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        onFilesChange(fileNames.filter((name) => name !== fileName));
+                        onFilesChange(files.filter((file) => file.name !== fileName));
                       }}
                       className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#9B9084] transition-colors hover:bg-[#F1E7D8] hover:text-[#25352E]"
                       aria-label={`Remove ${fileName}`}
@@ -3362,6 +3498,12 @@ function AccountSourceUploadDialog({
             ) : null}
           </label>
 
+          {uploadError ? (
+            <div className="mt-3 rounded-2xl border border-[#F0C6BE] bg-[#FFF0ED] px-3 py-2 text-[13px] font-bold text-[#B33D32]">
+              {uploadError}
+            </div>
+          ) : null}
+
           <div className="mt-5 flex justify-end gap-2">
             <button type="button" onClick={() => onOpenChange(false)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]">
               Cancel
@@ -3369,10 +3511,10 @@ function AccountSourceUploadDialog({
             <button
               type="button"
               onClick={onContinue}
-              disabled={fileNames.length === 0}
+              disabled={files.length === 0 || isUploading}
               className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
             >
-              Continue
+              {isUploading ? "Parsing..." : "Continue"}
             </button>
           </div>
         </Dialog.Content>
@@ -3719,6 +3861,11 @@ function AccountOnboardingWorkspace({
   suggestions,
   documents,
   kycSections,
+  generatedKycDocument,
+  kycGenerationLoading,
+  kycGenerationError,
+  journeyAgentLoading,
+  journeyAgentError,
   assistantMessages,
   assistantLoading,
   assistantError,
@@ -3738,8 +3885,14 @@ function AccountOnboardingWorkspace({
   onJourneyChange,
   onAddJourneyItem,
   onDeleteJourneyItem,
+  onRunJourneyAgent,
+  onGenerateKycDocument,
+  onSubmitKycForKam,
+  onApproveKycDocument,
   onPromptChange,
   onApplyPrompt,
+  onSaveDraft,
+  onFinalizeAccount,
 }: {
   open: boolean;
   role: Role;
@@ -3748,6 +3901,11 @@ function AccountOnboardingWorkspace({
   suggestions: OnboardingSuggestion[];
   documents: OnboardingDocument[];
   kycSections: KycDraftSection[];
+  generatedKycDocument: GeneratedKycDocument | null;
+  kycGenerationLoading: boolean;
+  kycGenerationError: string;
+  journeyAgentLoading: boolean;
+  journeyAgentError: string;
   assistantMessages: string[];
   assistantLoading: boolean;
   assistantError: string;
@@ -3767,8 +3925,14 @@ function AccountOnboardingWorkspace({
   onJourneyChange: (itemId: string, field: keyof OnboardingJourneyDraftItem, value: string) => void;
   onAddJourneyItem: () => void;
   onDeleteJourneyItem: (itemId: string) => void;
+  onRunJourneyAgent: (mode: "generate" | "enhance") => void;
+  onGenerateKycDocument: () => void;
+  onSubmitKycForKam: () => void;
+  onApproveKycDocument: () => void;
   onPromptChange: (prompt: string) => void;
   onApplyPrompt: () => void;
+  onSaveDraft: () => void;
+  onFinalizeAccount: () => void;
 }) {
   const [activeStep, setActiveStep] = useState<AccountOnboardingStep>("profile");
   const [acceptedKycSections, setAcceptedKycSections] = useState<Set<string>>(() => new Set());
@@ -3885,11 +4049,27 @@ function AccountOnboardingWorkspace({
   function renderJourneyStep() {
     return (
       <div className="space-y-3">
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={() => onRunJourneyAgent("generate")} disabled={journeyAgentLoading} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#25352E] disabled:cursor-not-allowed disabled:opacity-50">
+            Generate with AI
+          </button>
+          <button type="button" onClick={() => onRunJourneyAgent("enhance")} disabled={journeyAgentLoading} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#25352E] disabled:cursor-not-allowed disabled:opacity-50">
+            Enhance with AI
+          </button>
           <button type="button" onClick={onAddJourneyItem} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
             Add item
           </button>
         </div>
+        {journeyAgentLoading ? (
+          <div className="rounded-2xl border border-[#DEC997] bg-[#FFF7E4] px-3 py-2 text-[13px] font-bold text-[#8A5C16]">
+            Journey agent is updating the plan...
+          </div>
+        ) : null}
+        {journeyAgentError ? (
+          <div className="rounded-2xl border border-[#F0C6BE] bg-[#FFF0ED] px-3 py-2 text-[13px] font-bold text-[#B33D32]">
+            {journeyAgentError}
+          </div>
+        ) : null}
         <div className="grid gap-2">
           {journey.map((item) => (
             <div key={item.id} className="grid gap-2 rounded-2xl border border-[#E5DACD] bg-white/60 p-3 md:grid-cols-[130px_1fr_160px_130px_auto]">
@@ -3936,9 +4116,39 @@ function AccountOnboardingWorkspace({
         </div>
         <div className="rounded-2xl border border-[#E5DACD] bg-white/62 p-3 md:col-span-2">
           <FieldLabel>KYC document handoff</FieldLabel>
-          <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#25352E]">
-            When the V2 KYC agent is wired, the accepted draft sections will be generated into a KYC document and saved into the Documents tab as a draft awaiting associate/KAM approval.
-          </p>
+          {generatedKycDocument ? (
+            <div className="mt-3 rounded-2xl border border-[#E5DACD] bg-[#FFF9EF]/80 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <a href={generatedKycDocument.fileUrl} target="_blank" rel="noreferrer" className="text-[15px] font-black text-[#25352E] underline-offset-4 hover:underline">
+                    {generatedKycDocument.title}
+                  </a>
+                  <p className="mt-1 text-[12px] font-bold text-[#6F6254]">{generatedKycDocument.summary}</p>
+                </div>
+                <span className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1 text-[11px] font-bold text-[#25352E]">{generatedKycDocument.approvalStatus}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {role === "ASSOCIATE" && generatedKycDocument.approvalStatus === "Draft" ? (
+                  <button type="button" onClick={onSubmitKycForKam} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
+                    Submit to KAM
+                  </button>
+                ) : null}
+                {isKam && generatedKycDocument.approvalStatus !== "Approved" ? (
+                  <button type="button" onClick={onApproveKycDocument} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
+                    Approve KYC
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {kycGenerationError ? (
+            <div className="mt-3 rounded-2xl border border-[#F0C6BE] bg-[#FFF0ED] px-3 py-2 text-[13px] font-bold text-[#B33D32]">
+              {kycGenerationError}
+            </div>
+          ) : null}
+          <button type="button" onClick={onGenerateKycDocument} disabled={kycGenerationLoading} className="mt-3 rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-50">
+            {kycGenerationLoading ? "Generating KYC..." : generatedKycDocument ? "Regenerate KYC" : "Generate KYC document"}
+          </button>
         </div>
       </div>
     );
@@ -4090,7 +4300,7 @@ function AccountOnboardingWorkspace({
               <div className="mb-2 flex items-center gap-2 rounded-xl border border-[#E5DACD] bg-white/70 px-3 py-2">
                 <FileText className="h-4 w-4 shrink-0 text-[#7D6E5F]" />
                 <p className="min-w-0 flex-1 truncate text-[12px] font-black text-[#25352E]">{documentDraft.fileName}</p>
-                <button type="button" onClick={() => onDocumentDraftChange({ ...documentDraft, fileName: "", fileUrl: "" })} className="text-[#9B9084] hover:text-[#25352E]" aria-label="Remove attached setup document">
+                <button type="button" onClick={() => onDocumentDraftChange({ ...documentDraft, fileName: "", fileUrl: "", file: undefined })} className="text-[#9B9084] hover:text-[#25352E]" aria-label="Remove attached setup document">
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -4112,7 +4322,7 @@ function AccountOnboardingWorkspace({
                       className="sr-only"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
-                        if (file) onDocumentDraftChange({ ...documentDraft, fileName: file.name, fileUrl: URL.createObjectURL(file) });
+                        if (file) onDocumentDraftChange({ ...documentDraft, fileName: file.name, fileUrl: URL.createObjectURL(file), file });
                       }}
                     />
                   </label>
@@ -4140,10 +4350,10 @@ function AccountOnboardingWorkspace({
               </div>
             </div>
             <div className="mt-3 flex gap-2">
-              <button type="button" className="flex-1 rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-2 text-[12px] font-bold text-[#6F6254]">
+              <button type="button" onClick={onSaveDraft} className="flex-1 rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-2 text-[12px] font-bold text-[#6F6254]">
                 Save draft
               </button>
-              <button type="button" className="flex-1 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF]">
+              <button type="button" onClick={onFinalizeAccount} className="flex-1 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF]">
                 {isKam ? "Create account" : "Submit to KAM"}
               </button>
             </div>
@@ -4199,16 +4409,91 @@ function NotificationsPanel({
   );
 }
 
-function CammiePanel() {
+function CammiePanel({
+  role,
+  accounts,
+  activeAccount,
+}: {
+  role: Role;
+  accounts: PortfolioAccount[];
+  activeAccount: PortfolioAccount | null;
+}) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [thread, setThread] = useState<string[]>(["Cammie is ready for portfolio or account questions."]);
+  const [thread, setThread] = useState<CammieMessage[]>([
+    { role: "assistant", content: "Cammie is ready for portfolio, account, document, and web research questions." },
+  ]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  function sendMessage() {
+  function cammieAccountPayload(account: PortfolioAccount) {
+    return {
+      id: account.id,
+      name: account.name,
+      industry: account.industry,
+      region: account.region,
+      country: account.country,
+      arr: money(account.arr),
+      healthScore: account.healthScore,
+      health: healthLabel[account.health],
+      renewalDays: account.renewalDays,
+      kamOwner: account.kamOwner,
+      associateOwner: account.associateOwner,
+      contactName: account.contactName,
+    };
+  }
+
+  async function sendMessage() {
     const value = message.trim();
-    if (!value) return;
-    setThread((items) => [...items, value, "I will use the active portfolio/account context once the V2 agent endpoint is wired."]);
+    if (!value || loading) return;
+    const nextThread: CammieMessage[] = [...thread, { role: "user", content: value }];
+    setThread(nextThread);
     setMessage("");
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/v2/cammie", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role,
+          message: value,
+          activeAccount: activeAccount ? cammieAccountPayload(activeAccount) : null,
+          accounts: accounts.map(cammieAccountPayload),
+          conversation: nextThread.slice(-8),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Cammie could not respond");
+      }
+      const documentNote = payload.generatedDocument
+        ? ""
+        : payload.intent === "document_request" && payload.documentRequest?.nextAction
+          ? `\n\nDocument route: ${payload.documentRequest.nextAction}`
+          : "";
+      setThread((items) => [
+        ...items,
+        {
+          role: "assistant",
+          content: `${String(payload.reply || "I reviewed the current context.")}${documentNote}`,
+          artifact: payload.generatedDocument
+            ? {
+                title: String(payload.generatedDocument.title || "Generated document"),
+                fileUrl: String(payload.generatedDocument.fileUrl || ""),
+                format: String(payload.generatedDocument.format || "Document"),
+                summary: String(payload.generatedDocument.summary || ""),
+              }
+            : undefined,
+        },
+      ]);
+    } catch (caught) {
+      const messageText = caught instanceof Error ? caught.message : "Cammie could not respond";
+      setError(messageText);
+      setThread((items) => [...items, { role: "assistant", content: "I could not reach the V2 assistant route. Try again after the server is ready." }]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -4226,7 +4511,7 @@ function CammiePanel() {
                 </div>
                 <div>
                   <h3 className="text-[18px] font-black tracking-[-0.05em] text-[#1F2722]">Cammie</h3>
-                  <p className="text-[12px] font-bold text-[#7D6E5F]">Portfolio assistant</p>
+                  <p className="text-[12px] font-bold text-[#7D6E5F]">Portfolio and research assistant</p>
                 </div>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254]" aria-label="Close Cammie">
@@ -4236,17 +4521,39 @@ function CammiePanel() {
           </div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
             {thread.map((item, index) => {
-              const userMessage = index % 2 === 1;
+              const userMessage = item.role === "user";
               return (
-                <div key={`${item}-${index}`} className={`flex ${userMessage ? "justify-end" : "justify-start"}`}>
-                  <p className={`max-w-[82%] rounded-2xl px-3 py-2 text-[13px] font-bold leading-relaxed ${
+                <div key={`${item.role}-${item.content}-${index}`} className={`flex ${userMessage ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-[13px] font-bold leading-relaxed ${
                     userMessage ? "bg-[#25352E] text-[#FFF9EF]" : "border border-[#E5DACD] bg-white/70 text-[#25352E]"
                   }`}>
-                    {item}
-                  </p>
+                    {item.content}
+                    {item.artifact?.fileUrl ? (
+                      <a
+                        href={item.artifact.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 block rounded-xl border border-[#D8CAB9] bg-[#FFF9EF] px-3 py-2 text-[#25352E] hover:bg-white"
+                      >
+                        <span className="block text-[12px] font-black">{item.artifact.title}</span>
+                        <span className="mt-1 block text-[11px] font-bold text-[#7D6E5F]">{item.artifact.format}</span>
+                        {item.artifact.summary ? <span className="mt-1 block text-[11px] font-bold text-[#6F6254]">{item.artifact.summary}</span> : null}
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
+            {loading ? (
+              <div className="flex justify-start">
+                <p className="max-w-[82%] rounded-2xl border border-[#E5DACD] bg-white/70 px-3 py-2 text-[13px] font-bold leading-relaxed text-[#6F6254]">
+                  Thinking...
+                </p>
+              </div>
+            ) : null}
+            {error ? (
+              <p className="rounded-2xl border border-[#EAB8B0] bg-[#FDEBE8] px-3 py-2 text-[12px] font-bold text-[#B33D32]">{error}</p>
+            ) : null}
           </div>
           <div className="border-t border-[#E5DACD] bg-[#FFF9EF]/92 p-3">
             <div className="flex gap-2 rounded-2xl border border-[#E1D7CA] bg-white/72 p-1">
@@ -4257,9 +4564,9 @@ function CammiePanel() {
                   if (event.key === "Enter") sendMessage();
                 }}
                 className="h-10 min-w-0 flex-1 bg-transparent px-3 text-[13px] font-bold text-[#25352E] outline-none placeholder:text-[#A69A8B]"
-                placeholder="Ask about an account, portfolio, or document"
+                placeholder="Ask about accounts, documents, or the web"
               />
-              <button type="button" onClick={sendMessage} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF]" aria-label="Send Cammie message">
+              <button type="button" onClick={sendMessage} disabled={loading} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send Cammie message">
                 <Sparkles className="h-4 w-4" />
               </button>
             </div>
@@ -4289,15 +4596,24 @@ export function PortfolioPage() {
   const [healthFilter, setHealthFilter] = useState<PortfolioHealth | "ALL">("ALL");
   const [selectedAccount, setSelectedAccount] = useState<PortfolioAccount | null>(null);
   const [selectedAccountTab, setSelectedAccountTab] = useState<AccountWorkspaceTab>("overview");
+  const [createdAccounts, setCreatedAccounts] = useState<PortfolioAccount[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pendingAccountReviewOpen, setPendingAccountReviewOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingStage, setOnboardingStage] = useState<OnboardingStage>("source-upload");
-  const [sourceFileNames, setSourceFileNames] = useState<string[]>([]);
+  const [selectedSourceFiles, setSelectedSourceFiles] = useState<File[]>([]);
+  const [sourceDocuments, setSourceDocuments] = useState<OnboardingDocument[]>([]);
+  const [sourceUploadLoading, setSourceUploadLoading] = useState(false);
+  const [sourceUploadError, setSourceUploadError] = useState("");
   const [accountDraft, setAccountDraft] = useState<AccountDraft>(emptyAccountDraft);
   const [onboardingSuggestions, setOnboardingSuggestions] = useState<OnboardingSuggestion[]>(seededOnboardingSuggestions);
   const [onboardingDocuments, setOnboardingDocuments] = useState<OnboardingDocument[]>([]);
   const [onboardingKycSections, setOnboardingKycSections] = useState<KycDraftSection[]>(kycDraftSections);
+  const [generatedKycDocument, setGeneratedKycDocument] = useState<GeneratedKycDocument | null>(null);
+  const [kycGenerationLoading, setKycGenerationLoading] = useState(false);
+  const [kycGenerationError, setKycGenerationError] = useState("");
+  const [journeyAgentLoading, setJourneyAgentLoading] = useState(false);
+  const [journeyAgentError, setJourneyAgentError] = useState("");
   const [onboardingAssistantMessages, setOnboardingAssistantMessages] = useState<string[]>([]);
   const [onboardingAssistantLoading, setOnboardingAssistantLoading] = useState(false);
   const [onboardingAssistantError, setOnboardingAssistantError] = useState("");
@@ -4311,7 +4627,7 @@ export function PortfolioPage() {
   const [suggestionDismissalDraft, setSuggestionDismissalDraft] = useState<SuggestionDismissalDraft | null>(null);
 
   const isExecutive = role === "EXECUTIVE" || role === "ADMIN" || role === "MANAGER";
-  const roleAccounts = role === "ASSOCIATE" ? associatePortfolio : portfolioAccounts;
+  const roleAccounts = role === "ASSOCIATE" ? associatePortfolio : [...createdAccounts, ...portfolioAccounts];
   const visibleAccounts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return roleAccounts.filter((account) => {
@@ -4327,14 +4643,23 @@ export function PortfolioPage() {
 
   const totalArr = visibleAccounts.reduce((sum, account) => sum + account.arr, 0);
   const upcomingRenewals = visibleAccounts.filter((account) => account.renewalDays <= 90).length;
+  const sourceFileNames = sourceDocuments.map((document) => document.fileName);
 
   function resetOnboardingState() {
     setOnboardingStage("source-upload");
-    setSourceFileNames([]);
+    setSelectedSourceFiles([]);
+    setSourceDocuments([]);
+    setSourceUploadLoading(false);
+    setSourceUploadError("");
     setAccountDraft(emptyAccountDraft);
     setOnboardingSuggestions(seededOnboardingSuggestions);
     setOnboardingDocuments([]);
     setOnboardingKycSections(kycDraftSections);
+    setGeneratedKycDocument(null);
+    setKycGenerationLoading(false);
+    setKycGenerationError("");
+    setJourneyAgentLoading(false);
+    setJourneyAgentError("");
     setOnboardingAssistantMessages([]);
     setOnboardingAssistantLoading(false);
     setOnboardingAssistantError("");
@@ -4353,8 +4678,35 @@ export function PortfolioPage() {
     setOnboardingOpen(true);
   }
 
-  function continueFromSourceUpload() {
-    if (sourceFileNames.length === 0) return;
+  async function uploadOnboardingDocuments(files: File[], type: string) {
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+    formData.append("type", type);
+
+    const response = await fetch("/api/v2/onboarding/documents/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "Document upload failed");
+    }
+    return Array.isArray(payload.documents) ? (payload.documents as OnboardingDocument[]) : [];
+  }
+
+  async function continueFromSourceUpload() {
+    if (selectedSourceFiles.length === 0 || sourceUploadLoading) return;
+    setSourceUploadLoading(true);
+    setSourceUploadError("");
+    let uploadedSources: OnboardingDocument[] = [];
+    try {
+      uploadedSources = await uploadOnboardingDocuments(selectedSourceFiles, "Account source");
+      setSourceDocuments(uploadedSources);
+    } catch (error) {
+      setSourceUploadError(error instanceof Error ? error.message : "Source upload failed");
+      setSourceUploadLoading(false);
+      return;
+    }
     setOnboardingStage("workspace");
     setAccountDraft((draft) => ({
       ...draft,
@@ -4362,7 +4714,8 @@ export function PortfolioPage() {
       associateOwner: role === "ASSOCIATE" ? "Current associate" : "Aisha Khan",
       nextTouchpoint: "Executive kickoff",
     }));
-    void runOnboardingAssistant("Review the uploaded source files and propose the first account profile, KYC, and journey updates.");
+    setSourceUploadLoading(false);
+    void runOnboardingAssistant("Review the uploaded source files and propose the first account profile, KYC, and journey updates.", onboardingDocuments, uploadedSources);
   }
 
   function acceptOnboardingSuggestion(suggestion: OnboardingSuggestion) {
@@ -4397,8 +4750,9 @@ export function PortfolioPage() {
     setSuggestionDismissalDraft(null);
   }
 
-  async function runOnboardingAssistant(promptOverride?: string, documentsOverride?: OnboardingDocument[]) {
+  async function runOnboardingAssistant(promptOverride?: string, documentsOverride?: OnboardingDocument[], sourceDocumentsOverride?: OnboardingDocument[]) {
     const prompt = (promptOverride ?? onboardingPrompt).trim();
+    const activeSourceDocuments = sourceDocumentsOverride ?? sourceDocuments;
     setOnboardingAssistantLoading(true);
     setOnboardingAssistantError("");
     try {
@@ -4407,13 +4761,16 @@ export function PortfolioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role,
-          sourceFiles: sourceFileNames,
+          sourceFiles: activeSourceDocuments.map((document) => document.fileName),
           prompt,
           draft: accountDraft,
-          documents: (documentsOverride ?? onboardingDocuments).map((document) => ({
+          documents: [...activeSourceDocuments, ...(documentsOverride ?? onboardingDocuments)].map((document) => ({
             fileName: document.fileName,
             type: document.type,
             uploadedAt: document.uploadedAt,
+            extractedText: document.extractedText?.slice(0, 5000),
+            preview: document.preview,
+            charCount: document.charCount,
           })),
           journey: onboardingJourney.map((item) => ({
             type: item.type,
@@ -4482,24 +4839,34 @@ export function PortfolioPage() {
     }
   }
 
-  function addOnboardingDocument() {
+  async function addOnboardingDocument() {
     if (!onboardingDocumentDraft.fileName) return;
-    const documentName = onboardingDocumentDraft.fileName;
-    const nextDocuments = [
-      {
+    const draftFile = onboardingDocumentDraft.file;
+    let uploadedDocuments: OnboardingDocument[] = [];
+    if (draftFile) {
+      try {
+        uploadedDocuments = await uploadOnboardingDocuments([draftFile], onboardingDocumentDraft.type);
+      } catch (error) {
+        setOnboardingAssistantError(error instanceof Error ? error.message : "Support document upload failed");
+        return;
+      }
+    } else {
+      uploadedDocuments = [{
         id: `setup-doc-${Date.now()}`,
         type: onboardingDocumentDraft.type,
-        fileName: documentName,
+        fileName: onboardingDocumentDraft.fileName,
         fileUrl: onboardingDocumentDraft.fileUrl,
         uploadedAt: "Today",
-      },
-      ...onboardingDocuments,
-    ];
+      }];
+    }
+    const documentName = uploadedDocuments[0]?.fileName ?? onboardingDocumentDraft.fileName;
+    const nextDocuments = [...uploadedDocuments, ...onboardingDocuments];
     setOnboardingDocuments(nextDocuments);
     setOnboardingDocumentDraft({
       type: documentTypes[0].type,
       fileName: "",
       fileUrl: "",
+      file: undefined,
     });
     void runOnboardingAssistant(`Review the newly attached ${onboardingDocumentDraft.type}: ${documentName}. Propose only updates that are supported by this document metadata and current draft context.`, nextDocuments);
   }
@@ -4525,12 +4892,154 @@ export function PortfolioPage() {
     setOnboardingJourney((items) => items.filter((item) => item.id !== itemId));
   }
 
+  async function runJourneyAgent(mode: "generate" | "enhance") {
+    setJourneyAgentLoading(true);
+    setJourneyAgentError("");
+    try {
+      const response = await fetch("/api/v2/onboarding/journey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role,
+          mode,
+          prompt: onboardingPrompt,
+          draft: accountDraft,
+          documents: [...sourceDocuments, ...onboardingDocuments].map((document) => ({
+            fileName: document.fileName,
+            type: document.type,
+            preview: document.preview,
+            extractedText: document.extractedText?.slice(0, 5000),
+          })),
+          journey: onboardingJourney.map((item) => ({
+            type: item.type,
+            title: item.title,
+            dueDate: item.dueDate,
+            recurrence: item.recurrence,
+          })),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Journey agent failed");
+      }
+      if (Array.isArray(payload.journeyItems) && payload.journeyItems.length > 0) {
+        setOnboardingJourney(
+          payload.journeyItems.map((item: Partial<OnboardingJourneyDraftItem>, index: number) => ({
+            id: `journey-agent-${Date.now()}-${index}`,
+            type: item.type === "Meeting" || item.type === "QBR" ? item.type : "To-do",
+            title: item.title ?? "Journey item",
+            dueDate: item.dueDate ?? "2026-06-30",
+            recurrence: item.recurrence ?? "Once",
+          })),
+        );
+      }
+      if (payload.assistantReply) {
+        setOnboardingAssistantMessages((messages) => [String(payload.assistantReply), ...messages]);
+      }
+      setOnboardingPrompt("");
+    } catch (error) {
+      setJourneyAgentError(error instanceof Error ? error.message : "Journey agent failed");
+    } finally {
+      setJourneyAgentLoading(false);
+    }
+  }
+
+  async function generateKycDocument() {
+    setKycGenerationLoading(true);
+    setKycGenerationError("");
+    try {
+      const response = await fetch("/api/v2/onboarding/kyc/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role,
+          draft: accountDraft,
+          sourceFiles: sourceFileNames,
+          documents: [...sourceDocuments, ...onboardingDocuments].map((document) => ({
+            fileName: document.fileName,
+            type: document.type,
+            preview: document.preview,
+            extractedText: document.extractedText?.slice(0, 5000),
+          })),
+          kycSections: onboardingKycSections,
+          journey: onboardingJourney.map((item) => ({
+            type: item.type,
+            title: item.title,
+            dueDate: item.dueDate,
+            recurrence: item.recurrence,
+          })),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "KYC generation failed");
+      }
+      setGeneratedKycDocument(payload as GeneratedKycDocument);
+      setOnboardingAssistantMessages((messages) => [`Generated final KYC document: ${payload.title}`, ...messages]);
+    } catch (error) {
+      setKycGenerationError(error instanceof Error ? error.message : "KYC generation failed");
+    } finally {
+      setKycGenerationLoading(false);
+    }
+  }
+
+  function submitKycForKam() {
+    setGeneratedKycDocument((document) => document ? { ...document, approvalStatus: "Submitted to KAM" } : document);
+    setOnboardingAssistantMessages((messages) => ["KYC document submitted to KAM for approval.", ...messages]);
+  }
+
+  function approveKycDocument() {
+    setGeneratedKycDocument((document) => document ? { ...document, approvalStatus: "Approved" } : document);
+    setOnboardingAssistantMessages((messages) => ["KYC document approved.", ...messages]);
+  }
+
   function applyOnboardingPrompt() {
     void runOnboardingAssistant();
   }
 
+  function saveOnboardingDraft() {
+    setOnboardingAssistantMessages((messages) => ["Account setup draft saved.", ...messages]);
+  }
+
+  function createPortfolioAccountFromDraft(): PortfolioAccount {
+    const arr = parseArrValue(accountDraft.arr);
+    const name = accountDraft.name.trim() || "New account";
+    const [countryPart, regionPart] = accountDraft.location.split("·").map((part) => part.trim());
+    return {
+      id: `v2-acct-created-${Date.now()}`,
+      name,
+      industry: accountDraft.industry.trim() || "Industry not set",
+      region: regionPart || "Region not set",
+      country: countryPart || accountDraft.location.trim() || "Country not set",
+      arr,
+      health: "HEALTHY",
+      healthScore: 80,
+      renewalDays: 180,
+      kamOwner: accountDraft.kamOwner.trim() || "Sarah Chen",
+      associateOwner: accountDraft.associateOwner.trim() || "Aisha Khan",
+      contactName: accountDraft.primaryContact.trim() || "Primary contact not set",
+      deliveryModel: accountDraft.segment.trim() || "Delivery model not set",
+      currentWork: accountDraft.openOpportunity.trim() || "Account setup in progress",
+      relationshipSignal: accountDraft.nextTouchpoint.trim() || "Next touchpoint not set",
+    };
+  }
+
+  function finalizeOnboardingAccount() {
+    if (role === "KAM") {
+      const nextAccount = createPortfolioAccountFromDraft();
+      setCreatedAccounts((accounts) => [nextAccount, ...accounts]);
+      setOnboardingAssistantMessages((messages) => [`Created account: ${nextAccount.name}.`, ...messages]);
+      setOnboardingOpen(false);
+      setSelectedAccountTab("overview");
+      setSelectedAccount(nextAccount);
+      return;
+    }
+    setOnboardingAssistantMessages((messages) => ["Account creation submitted to KAM for review.", ...messages]);
+    setOnboardingOpen(false);
+  }
+
   function openAccountByName(accountName: string, tab: AccountWorkspaceTab = "overview") {
-    const account = portfolioAccounts.find((item) => item.name === accountName) ?? associatePortfolio.find((item) => item.name === accountName);
+    const account = createdAccounts.find((item) => item.name === accountName) ?? portfolioAccounts.find((item) => item.name === accountName) ?? associatePortfolio.find((item) => item.name === accountName);
     if (account) {
       setSelectedAccountTab(tab);
       setSelectedAccount(account);
@@ -4688,7 +5197,7 @@ export function PortfolioPage() {
         <Bell className="h-4 w-4" />
       </button>
       <NotificationsPanel open={notificationsOpen} onOpenChange={setNotificationsOpen} onSelect={selectNotification} />
-      <CammiePanel />
+      <CammiePanel role={role} accounts={visibleAccounts} activeAccount={selectedAccount} />
       <PendingAccountCreationDialog
         open={pendingAccountReviewOpen}
         request={pendingAccountCreationRequests[0] ?? null}
@@ -4697,12 +5206,14 @@ export function PortfolioPage() {
       <AccountModal account={selectedAccount} open={Boolean(selectedAccount)} initialTab={selectedAccountTab} onOpenChange={(open) => !open && setSelectedAccount(null)} />
       <AccountSourceUploadDialog
         open={onboardingOpen && onboardingStage === "source-upload"}
-        fileNames={sourceFileNames}
+        files={selectedSourceFiles}
+        isUploading={sourceUploadLoading}
+        uploadError={sourceUploadError}
         onOpenChange={(open) => {
           setOnboardingOpen(open);
           if (!open) resetOnboardingState();
         }}
-        onFilesChange={setSourceFileNames}
+        onFilesChange={setSelectedSourceFiles}
         onContinue={continueFromSourceUpload}
       />
       <AccountOnboardingWorkspace
@@ -4713,6 +5224,11 @@ export function PortfolioPage() {
         suggestions={onboardingSuggestions}
         documents={onboardingDocuments}
         kycSections={onboardingKycSections}
+        generatedKycDocument={generatedKycDocument}
+        kycGenerationLoading={kycGenerationLoading}
+        kycGenerationError={kycGenerationError}
+        journeyAgentLoading={journeyAgentLoading}
+        journeyAgentError={journeyAgentError}
         assistantMessages={onboardingAssistantMessages}
         assistantLoading={onboardingAssistantLoading}
         assistantError={onboardingAssistantError}
@@ -4735,8 +5251,14 @@ export function PortfolioPage() {
         onJourneyChange={updateJourneyItem}
         onAddJourneyItem={addJourneyItem}
         onDeleteJourneyItem={deleteJourneyItem}
+        onRunJourneyAgent={runJourneyAgent}
+        onGenerateKycDocument={generateKycDocument}
+        onSubmitKycForKam={submitKycForKam}
+        onApproveKycDocument={approveKycDocument}
         onPromptChange={setOnboardingPrompt}
         onApplyPrompt={applyOnboardingPrompt}
+        onSaveDraft={saveOnboardingDraft}
+        onFinalizeAccount={finalizeOnboardingAccount}
       />
     </main>
   );

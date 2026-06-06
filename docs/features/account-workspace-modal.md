@@ -85,6 +85,7 @@ Expanding the row shows:
 
 - KPI sub-parameters
 - each sub-parameter score
+- falling sub-parameter diagnosis when a sub-parameter is declining
 - Why?
 - proposed task
 - proposed due date
@@ -95,13 +96,21 @@ Healthy rows do not show Why?, Task, or Accept / Deny panels unless there is a
 specific proposed action. Their expanded state uses compact equal-width
 sub-parameter score tiles and keeps the focus on score editing.
 
-Rows with recommendations currently use static placeholder why/task content.
-The future version will pull these from playbooks and account journey data.
+Falling sub-parameters now show a compact diagnosis inside the sub-parameter
+tile. Each diagnosis includes:
+
+- likely cause
+- playbook source
+- account history source
+- AI rules learning-log source
+
+This is the UI surface where playbook analysis, account journey/history, and
+the system-maintained learning playbook explain why a specific sub-parameter is
+falling.
 
 The KPI table has a settings cog in the top-right corner. Opening it shows a
-small KPI weight settings modal. The weight settings modal lays KPI weight
-inputs out in a compact two-column grid, followed by one overall reason
-textarea.
+small KPI weight settings modal. The weight settings modal uses sliders for KPI
+weights in a compact two-column grid, followed by one overall reason textarea.
 
 KPI weight changes are role-aware:
 

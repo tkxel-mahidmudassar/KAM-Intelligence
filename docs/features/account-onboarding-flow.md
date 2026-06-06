@@ -48,7 +48,15 @@ Each KYC section shows:
 - Draft text placeholder
 - Accept, dismiss, and enhance-with-assistant actions
 
-The review stage shows the KYC handoff state. The V2 onboarding assistant can now return updated KYC draft sections during setup. The final generated KYC document artifact and approval persistence still need to be wired in a later slice.
+The review stage shows the KYC handoff state. The V2 onboarding assistant can return updated KYC draft sections during setup, and the final KYC document can now be generated into an openable Markdown artifact.
+
+Generated KYC behavior:
+
+- `POST /api/v2/onboarding/kyc/generate` uses the V2 KYC document generation agent.
+- The generated KYC artifact is saved under `public/generated-documents/v2-kyc`.
+- Associate users can submit the generated KYC to the KAM.
+- KAM users can approve the generated KYC directly.
+- Current approval state is local UI state; database persistence is still a follow-up.
 
 ## Role behavior
 
@@ -61,19 +69,45 @@ The review stage shows the KYC handoff state. The V2 onboarding assistant can no
 
 ## Agent status
 
-This slice implements the onboarding shell, staged setup UI, visible KYC draft structure, and a V2-specific setup assistant route at `POST /api/v2/onboarding/assistant`.
+This slice implements the onboarding shell, staged setup UI, visible KYC draft structure, final KYC artifact generation, dedicated account journey generation/editing, a V2-specific setup assistant route at `POST /api/v2/onboarding/assistant`, and multipart onboarding document upload at `POST /api/v2/onboarding/documents/upload`.
 
 The assistant route:
 
 - uses the configured OpenAI provider through `src/lib/ai`
 - does not use old KYC or playbook agents
-- accepts source filenames, current draft fields, support-document metadata, journey items, role, and the user's assistant message
+- accepts source filenames, extracted document text, current draft fields, support-document metadata, journey items, role, and the user's assistant message
 - returns assistant replies, missing-information questions, profile suggestions, KYC section drafts, and suggested journey items
 
-Current limitation: browser-selected files are still represented as metadata/object URLs in this UI. The route does not yet receive or parse PDF/DOCX body text. A later slice should add multipart upload, file text extraction, and persisted proposal/approval records.
+The document upload route:
+
+- stores uploaded files under `public/uploads/v2-onboarding`
+- supports PDF, DOC, DOCX, TXT, Markdown, XLS, and XLSX files
+- extracts text through the V2 document parser wrapper
+- returns extracted text, a preview, character count, and a previewable file URL
+- feeds extracted source text into the setup assistant so suggestions and KYC draft sections are grounded in uploaded material
+
+Current limitation: proposal/approval records for onboarding documents are still in local UI state. A later slice should persist them to the database.
+
+## Account journey agent
+
+The Journey stage has a dedicated V2 journey agent at `POST /api/v2/onboarding/journey`.
+
+The journey agent:
+
+- can generate a complete recommended account journey
+- can enhance the current journey using the setup prompt
+- returns Meeting, QBR, and To-do items with due dates and recurrence
+- replaces the editable journey list with the generated/enhanced output
+- writes an assistant note after successful updates
 
 ## Related surfaces
 
 - The notifications panel routes selected notifications into the relevant surface. Current routes include pending account creation review and account workspace opening for account-specific notifications.
-- Cammie is available as a bottom-right chat widget. The launcher remains anchored while the chat window opens above it. The backend agent endpoint is not wired yet.
-- Cammie should be able to generate documents when the user asks for them by routing the request to the appropriate document-generation agent. Cammie should not generate complex documents ad hoc inside the chat layer; it should identify the requested document type, collect missing inputs, call the relevant agent, and return the generated artifact or status.
+- Cammie is available as a bottom-right chat widget. The launcher remains anchored while the chat window opens above it.
+- Cammie is wired to `POST /api/v2/cammie`, which uses the configured OpenAI provider through `src/lib/ai`.
+- Cammie receives role, visible portfolio account context, active account context when available, and recent conversation turns.
+- Cammie can generate general business documents through the V2 document-generation agent when the request is clear enough.
+- Cammie can also run web-backed account or market research through the V2 Cammie web-research route when the user asks to search, verify, research, or look up current external context.
+- Supported Cammie document requests are intentionally open-ended: QBR outlines, KYC drafts, account briefs, renewal plans, risk memos, meeting briefs, escalation notes, action plans, stakeholder summaries, onboarding notes, and email drafts can all be generated from supplied portfolio/account context.
+- Generated Cammie documents are saved as Markdown artifacts under `public/generated-documents/v2-cammie` and returned as openable links in the chat.
+- If Cammie cannot generate because a required account or core input is missing, it returns the missing input instead of fabricating.

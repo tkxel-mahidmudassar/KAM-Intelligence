@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
-import { RoleBar } from "@/components/layout/RoleBar";
+import { AppShell } from "@/components/layout/AppShell";
 import { RoleProvider } from "@/context/RoleContext";
 import "../styles/globals.css";
 
@@ -15,8 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <RoleProvider>
-            <RoleBar />
-            {children}
+            <AppShell>{children}</AppShell>
           </RoleProvider>
         </ThemeProvider>
       </body>

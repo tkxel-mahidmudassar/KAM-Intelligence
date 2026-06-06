@@ -1,0 +1,113 @@
+import { randomUUID } from "crypto";
+import { mkdir, writeFile } from "fs/promises";
+import { join } from "path";
+import { complete } from "@/lib/ai";
+
+export interface V2KycDocumentInput {
+  role: string;
+  draft: Record<string, string>;
+  kycSections: Array<{
+    title: string;
+    source: string;
+    status: string;
+    draft: string;
+  }>;
+  sourceFiles: string[];
+  documents: Array<{
+    fileName: string;
+    type: string;
+    preview?: string;
+    extractedText?: string;
+  }>;
+  journey: Array<{
+    type: string;
+    title: string;
+    dueDate: string;
+    recurrence: string;
+  }>;
+}
+
+export interface V2GeneratedKycDocument {
+  title: string;
+  fileName: string;
+  fileUrl: string;
+  summary: string;
+  approvalStatus: "Draft" | "Submitted to KAM" | "Approved";
+}
+
+function parseJson(content: string): { title?: string; summary?: string; markdown?: string } {
+  const raw = content.replace(/```json|```/g, "").trim();
+  return JSON.parse(raw);
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "kyc";
+}
+
+export async function generateV2KycDocument(input: V2KycDocumentInput): Promise<V2GeneratedKycDocument> {
+  const response = await complete({
+    task: "v2-kyc-document-generator",
+    jsonMode: true,
+    temperature: 0.12,
+    maxTokens: 3600,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are the V2 Tkxel KYC document generation agent. Generate a final KYC draft from accepted/drafted KYC sections, account profile fields, uploaded evidence, and journey context. Use only supplied context. Return valid JSON only.",
+      },
+      {
+        role: "user",
+        content: `Create the final KYC document.
+
+Role:
+${input.role}
+
+Account draft:
+${JSON.stringify(input.draft, null, 2)}
+
+Source files:
+${JSON.stringify(input.sourceFiles, null, 2)}
+
+Uploaded documents:
+${JSON.stringify(input.documents, null, 2)}
+
+KYC sections:
+${JSON.stringify(input.kycSections, null, 2)}
+
+Account journey:
+${JSON.stringify(input.journey, null, 2)}
+
+Return JSON:
+{
+  "title": "KYC title",
+  "summary": "one sentence summary",
+  "markdown": "complete Markdown KYC document"
+}
+
+Rules:
+- Preserve source attribution beside every material claim using inline source labels.
+- Include these sections when possible: executive summary, industry overview, company history, account history with Tkxel, stakeholders, financials, engagement history, Tkxel team, competitors, risks, opportunities, and next actions.
+- If a fact is missing, write "To be confirmed" instead of inventing it.
+- Make the document review-ready for Associate/KAM approval.`,
+      },
+    ],
+  });
+
+  const parsed = parseJson(response.content);
+  const title = String(parsed.title || `${input.draft.name || "Account"} KYC draft`).slice(0, 100);
+  const markdown = String(parsed.markdown || `# ${title}\n\nTo be confirmed.`);
+  const summary = String(parsed.summary || "Generated KYC draft.").slice(0, 180);
+  const fileName = `${slugify(title)}-${randomUUID().slice(0, 8)}.md`;
+  const outputDir = join(process.cwd(), "public", "generated-documents", "v2-kyc");
+  await mkdir(outputDir, { recursive: true });
+  await writeFile(join(outputDir, fileName), markdown, "utf-8");
+
+  return {
+    title,
+    fileName,
+    fileUrl: `/generated-documents/v2-kyc/${fileName}`,
+    summary,
+    approvalStatus: input.role === "KAM" ? "Approved" : "Draft",
+  };
+}

@@ -25,6 +25,9 @@ export interface V2OnboardingAgentInput {
     fileName: string;
     type: string;
     uploadedAt?: string;
+    extractedText?: string;
+    preview?: string;
+    charCount?: number;
   }>;
   journey: Array<{
     type: V2OnboardingTaskType;
@@ -168,7 +171,8 @@ Return JSON:
 
 Rules:
 - Do not use old KYC/playbook-agent assumptions.
-- If source files are only filenames, use them as directional evidence only.
+- Use extracted document text when provided.
+- If a document only has filename metadata, use it as directional evidence only.
 - Do not fabricate ARR, renewal dates, contacts, or scores if the current draft does not support them.
 - Keep suggestions directly actionable and suitable for accept/dismiss UI.
 - Ask missing questions instead of inventing critical account facts.
