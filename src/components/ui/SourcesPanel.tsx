@@ -7,7 +7,7 @@ import type { AgentSource } from "@/lib/ai/agents/types";
 
 const TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
   kpi:         { icon: BarChart2,   color: "#0755E9", label: "KPI"       },
-  signal:      { icon: Zap,         color: "#EF4444", label: "Signal"    },
+  signal:      { icon: Zap,         color: "#EF4444", label: "News"      },
   score:       { icon: TrendingUp,  color: "#22C55E", label: "Score"     },
   kyc:         { icon: FileText,    color: "#8B5CF6", label: "KYC"       },
   document:    { icon: FileText,    color: "#F59E0B", label: "Document"  },

@@ -15,7 +15,7 @@ export interface LLMRequest {
   temperature?: number;
   /** Label for logging (e.g. "score-narrative", "pulse-insight") */
   task?: string;
-  /** When true, instructs the provider to return valid JSON only (Gemini JSON mode) */
+  /** When true, instructs the provider to return valid JSON only */
   jsonMode?: boolean;
 }
 

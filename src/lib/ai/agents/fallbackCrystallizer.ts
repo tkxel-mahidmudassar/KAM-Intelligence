@@ -6,7 +6,7 @@
  * This prevents semantically different patterns within the same category from being merged.
  *
  * For clusters with sourceCount >= 3:
- *   - Calls Gemini (temperature 0.3) to generalize a rule condition + title
+ *   - Calls the configured AI provider (temperature 0.3) to generalize a rule condition + title
  *   - LLM returns a confidence score (0.0-1.0); candidates < 0.5 are flagged as "weak pattern"
  *   - Creates RuleCandidate records for Manager review
  *
@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
+import { RuleCandidateStatus } from "@prisma/client";
 import type { AgentStep } from "./masterOrchestrator";
 
 const SOURCE_COUNT_THRESHOLD = 3;
@@ -139,10 +140,10 @@ export async function runFallbackCrystallizerAgent(): Promise<FallbackCrystalliz
     const existingCandidate = await prisma.ruleCandidate.findFirst({
       where: {
         OR: [
-          { clusterKey: cluster.clusterKey, status: "PENDING" },
+          { clusterKey: cluster.clusterKey, status: RuleCandidateStatus.PENDING },
           // Fallback for old records without clusterKey
           ...(cluster.clusterKey === cluster.category
-            ? [{ category: cluster.category, clusterKey: null, status: "PENDING" }]
+            ? [{ category: cluster.category, clusterKey: null, status: RuleCandidateStatus.PENDING }]
             : []),
         ],
       },

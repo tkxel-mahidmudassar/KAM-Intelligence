@@ -6,7 +6,7 @@
  * 2. Fetches all active global PlaybookRules.
  * 3. Matches rules to the account's current state.
  * 4. Creates Recommendation records (PLAYBOOK source) for matched rules.
- * 5. Falls back to Gemini AI (AI_FALLBACK source) when no playbook rules match.
+ * 5. Falls back to the configured AI provider (AI_FALLBACK source) when no playbook rules match.
  * 6. Creates pre-approved Action items for every recommendation.
  *
  * Triggered on: playbook upload, score change, daily AI Pulse refresh.
@@ -43,6 +43,86 @@ interface AiFallbackRecommendation {
   recommendedAction: string;
   priority: 1 | 2 | 3;
   category: string;
+}
+
+function lowestScoreCategory(score: Awaited<ReturnType<typeof prisma.kamScore.findFirst>>): string {
+  if (!score) return "RELATIONSHIP";
+  const dimensions = [
+    { category: "CSAT", value: score.csat },
+    { category: "RELATIONSHIP", value: score.relationship },
+    { category: "RISK", value: score.risk },
+    { category: "CONTRACT", value: score.contractHealth },
+    { category: "PROJECT", value: score.projectHealth },
+    { category: "RESOURCE", value: score.resourceHealth },
+    { category: "FINANCIAL", value: score.financial },
+    { category: "WHITESPACE", value: score.whitespace },
+  ].filter((item): item is { category: string; value: number } => typeof item.value === "number");
+  return dimensions.sort((a, b) => a.value - b.value)[0]?.category ?? "RELATIONSHIP";
+}
+
+function deterministicFallbackRecommendations(
+  account: { name: string; health: string; industry: string | null },
+  latestScore: Awaited<ReturnType<typeof prisma.kamScore.findFirst>>,
+  openSignals: { title: string; severity: string }[]
+): AiFallbackRecommendation[] {
+  const lowestCategory = lowestScoreCategory(latestScore);
+  const overall = latestScore?.overall ?? 50;
+  const signal = openSignals[0];
+
+  if (signal) {
+    return [
+      {
+        title: `Triage ${signal.severity.toLowerCase()} news for ${account.name}`,
+        summary: `${account.name} has active ${signal.severity.toLowerCase()} news that should be validated against the current score and account plan.`,
+        recommendedAction: `Confirm the owner, customer-facing next step, and dated resolution path for: ${signal.title}`,
+        priority: signal.severity === "CRITICAL" ? 1 : 2,
+        category: "RISK",
+      },
+      {
+        title: `Update ${account.name} control plan`,
+        summary: `Use the latest KAM score (${overall}/100) to refresh the next account control checkpoint.`,
+        recommendedAction: `Review the weakest KPI area (${lowestCategory}), confirm whether it needs action, and document the next customer touchpoint.`,
+        priority: 2,
+        category: lowestCategory,
+      },
+    ];
+  }
+
+  if (account.health === "HEALTHY" && overall >= 70) {
+    return [
+      {
+        title: `Protect the ${account.name} champion motion`,
+        summary: `${account.name} is healthy, so the recommended task is to preserve momentum instead of waiting for risk to appear.`,
+        recommendedAction: "Confirm executive sponsor cadence, document the current success story, and identify the next stakeholder who can expand the relationship.",
+        priority: 3,
+        category: "RELATIONSHIP",
+      },
+      {
+        title: `Convert ${account.name} whitespace into a dated next step`,
+        summary: `The account is stable enough to turn whitespace analysis into a concrete growth action.`,
+        recommendedAction: "Pick one expansion candidate, attach an owner, and schedule the next commercial validation step within the next two weeks.",
+        priority: 2,
+        category: "WHITESPACE",
+      },
+    ];
+  }
+
+  return [
+    {
+      title: `Stabilize ${account.name}'s weakest KPI`,
+      summary: `${account.name}'s lowest score dimension is ${lowestCategory}; this should drive the next account action.`,
+      recommendedAction: `Create a corrective task for ${lowestCategory}, assign an owner, and set a client-facing checkpoint.`,
+      priority: overall < 45 ? 1 : 2,
+      category: lowestCategory,
+    },
+    {
+      title: `Refresh ${account.name} account plan`,
+      summary: "No active playbook rule matched, so use a basic KAM control-plan fallback.",
+      recommendedAction: "Review score movement, open actions, stakeholder coverage, and renewal posture; then record the next dated action.",
+      priority: 2,
+      category: "RELATIONSHIP",
+    },
+  ];
 }
 
 export async function runRecommendationOrchestrator(
@@ -130,8 +210,9 @@ export async function runRecommendationOrchestrator(
   // ── 2. Match playbook rules to account state ──────────────────────────────
   const matchStart = Date.now();
 
-  // Use Gemini to match rules against account context — fast, low temp
+  // Use the configured AI provider to match rules against account context — fast, low temp
   let matchedRuleIds: string[] = [];
+  let matchError: string | null = null;
 
   if (eligibleRules.length > 0) {
     const rulesText = eligibleRules
@@ -150,18 +231,18 @@ ${rulesText}
 
 Return a JSON array of rule IDs (strings) that match the account's current state. Only include rules whose condition is clearly met based on the account data. Return an empty array if none apply.`;
 
-    const matchResponse = await complete({
-      messages: [{ role: "user", content: matchPrompt }],
-      task: "playbook-rule-matching",
-      maxTokens: 512,
-      jsonMode: true, // temperature enforced to 0.0 at provider level
-      accountId: input.accountId,
-    });
-
     try {
+      const matchResponse = await complete({
+        messages: [{ role: "user", content: matchPrompt }],
+        task: "playbook-rule-matching",
+        maxTokens: 512,
+        jsonMode: true, // temperature enforced to 0.0 at provider level
+        accountId: input.accountId,
+      });
       const parsed = JSON.parse(matchResponse.content);
       matchedRuleIds = Array.isArray(parsed) ? parsed : (parsed.ruleIds ?? []);
-    } catch {
+    } catch (err) {
+      matchError = err instanceof Error ? err.message : "LLM rule matching failed";
       matchedRuleIds = [];
     }
   }
@@ -169,7 +250,7 @@ Return a JSON array of rule IDs (strings) that match the account's current state
   steps.push({
     name: "match-rules",
     input: `${eligibleRules.length} eligible rules`,
-    output: `${matchedRuleIds.length} matched`,
+    output: matchError ? `0 matched; LLM unavailable, using fallback path` : `${matchedRuleIds.length} matched`,
     latencyMs: Date.now() - matchStart,
   });
 
@@ -242,6 +323,7 @@ Return a JSON array of rule IDs (strings) that match the account's current state
   // ── 4. AI fallback when no playbook rules matched ─────────────────────────
   if (matchedRules.length === 0) {
     const fbStart = Date.now();
+    let fallbackError: string | null = null;
 
     const fallbackPrompt = `You are a KAM (Key Account Management) assistant. Generate 2-3 actionable recommendations for this account.
 
@@ -260,21 +342,25 @@ Return a JSON array of recommendations. Each item:
   "category": "CSAT|RELATIONSHIP|RISK|CONTRACT|PROJECT|RESOURCE|FINANCIAL|WHITESPACE|RENEWAL|DELIVERY|GROWTH"
 }`;
 
-    const fbResponse = await complete({
-      messages: [{ role: "user", content: fallbackPrompt }],
-      task: "recommendation-ai-fallback",
-      temperature: 0.4, // explicit exception: generative AI fallback recommendations
-      maxTokens: 1024,
-      jsonMode: true,
-      accountId: input.accountId,
-    });
-
     let fallbackRecs: AiFallbackRecommendation[] = [];
     try {
+      const fbResponse = await complete({
+        messages: [{ role: "user", content: fallbackPrompt }],
+        task: "recommendation-ai-fallback",
+        temperature: 0.4, // explicit exception: generative AI fallback recommendations
+        maxTokens: 1024,
+        jsonMode: true,
+        accountId: input.accountId,
+      });
       const parsed = JSON.parse(fbResponse.content);
       fallbackRecs = Array.isArray(parsed) ? parsed : (parsed.recommendations ?? []);
-    } catch {
+    } catch (err) {
+      fallbackError = err instanceof Error ? err.message : "LLM fallback generation failed";
       fallbackRecs = [];
+    }
+
+    if (fallbackRecs.length === 0) {
+      fallbackRecs = deterministicFallbackRecommendations(account, latestScore, openSignals);
     }
 
     for (const rec of fallbackRecs) {
@@ -284,6 +370,15 @@ Return a JSON array of recommendations. Each item:
       // Set expiresAt = 30 days from now
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
+
+      const existing = await prisma.recommendation.findFirst({
+        where: {
+          accountId: input.accountId,
+          title: rec.title,
+          status: "ACTIVE",
+        },
+      });
+      if (existing) continue;
 
       const created = await prisma.recommendation.create({
         data: {
@@ -331,8 +426,8 @@ Return a JSON array of recommendations. Each item:
 
     steps.push({
       name: "ai-fallback",
-      input: `no playbook rules matched`,
-      output: `${fallbackRecs.length} AI fallback recommendation(s)`,
+      input: fallbackError ? `no playbook rules matched; LLM unavailable` : `no playbook rules matched`,
+      output: `${fallbackRecs.length} fallback recommendation(s)${fallbackError ? " from deterministic fallback" : ""}`,
       latencyMs: Date.now() - fbStart,
     });
   }

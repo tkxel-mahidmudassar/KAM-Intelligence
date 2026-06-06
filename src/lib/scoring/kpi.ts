@@ -48,7 +48,7 @@ export const KPI_RATIONALE: Record<KpiScoreKey, { label: string; rationale: stri
   csat: {
     label: "CSAT Score",
     rationale: "Direct client satisfaction and most important relationship-quality signal.",
-    formula: "33% NPS + 33% CSAT/engagement KPI + 33% meeting sentiment",
+    formula: "50% CSAT/client feedback KPI + 50% stakeholder touchpoint sentiment",
   },
   relationship: {
     label: "Relationship Score",
@@ -172,17 +172,13 @@ export function calculateKpiSubscores({
   const relationshipKpis = byCategory("relationship");
   const financialKpis = byCategory("financial");
 
-  // ── CSAT: 3 equal sub-components (33% each) ──────────────────────────────
-  // 1. NPS (normalised from [-100,100] to [0,100])
-  const npsScore = clampScore(((worksphere.npsScore ?? 0) + 100) / 2);
-  // 2. Explicit CSAT KPI or engagement KPI fallback
+  // ── CSAT: client feedback plus recent stakeholder touchpoint sentiment ───
   const explicitCsat = kpis.find((k) => k.name.toLowerCase().includes("csat"));
   const csatKpiScore = explicitCsat
     ? clampScore((explicitCsat.value / (explicitCsat.target || 1)) * 100)
     : avgKpis(engagementKpis);
-  // 3. Meeting sentiment
   const sentimentScore = meetingSentimentScore(worksphere.recentMeetings.map((m) => m.sentiment));
-  const csat = clampScore((npsScore + csatKpiScore + sentimentScore) / 3);
+  const csat = clampScore((csatKpiScore + sentimentScore) / 2);
 
   // ── Relationship: 4 equal sub-components (25% each) ──────────────────────
   // 1. Stakeholder depth — relationship KPIs
@@ -287,9 +283,8 @@ export function calculateKpiSubscores({
     scores,
     breakdown: {
       csat: makeBreakdown("csat", csat, [
-        { label: "NPS", value: `${worksphere.npsScore ?? "N/A"}`, score: npsScore },
-        { label: explicitCsat ? explicitCsat.name : "Engagement KPI", value: explicitCsat ? `${explicitCsat.value}/${explicitCsat.target}` : `${engagementKpis.length} KPI(s)`, score: csatKpiScore },
-        { label: "Meeting sentiment", value: `${worksphere.recentMeetings.length} meeting(s)`, score: sentimentScore },
+        { label: explicitCsat ? explicitCsat.name : "Client feedback KPI", value: explicitCsat ? `${explicitCsat.value}/${explicitCsat.target}` : `${engagementKpis.length} KPI(s)`, score: csatKpiScore },
+        { label: "Touchpoint sentiment", value: `${worksphere.recentMeetings.length} recent touchpoint(s)`, score: sentimentScore },
       ]),
       relationship: makeBreakdown("relationship", relationship, [
         { label: "Stakeholder depth", value: `${relationshipKpis.length || 1} relationship KPI(s)`, score: stakeholderDepthScore },

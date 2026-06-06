@@ -31,10 +31,13 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/score-overrides  — KAM requests an override
+// POST /api/score-overrides  — Associate requests an override for KAM review
 export async function POST(req: NextRequest) {
   try {
     const role = getRoleFromRequest(req);
+    if (role !== "ASSOCIATE") {
+      return badRequest("Only Associates can request score overrides");
+    }
     const denied = guard(role, "score:view");
     if (denied) return denied;
 

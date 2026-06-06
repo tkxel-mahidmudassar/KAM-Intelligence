@@ -39,7 +39,7 @@ export async function runQbrPrepAgent(
     { type: "score",     label: "Score history",          value: scores || "none" },
     { type: "score",     label: "Account health",         value: account.health },
     ...(account.contractEnd ? [{ type: "score" as const, label: "Contract end", value: account.contractEnd.toISOString().split("T")[0] }] : []),
-    ...account.signals.map((s): AgentSource => ({ type: "signal", label: `Signal: ${s.title}`, value: s.severity })),
+    ...account.signals.map((s): AgentSource => ({ type: "signal", label: `News: ${s.title}`, value: s.severity })),
     ...account.actions.slice(0, 5).map((a): AgentSource => ({ type: "action", label: `Action: ${a.title}`, value: a.status })),
     ...account.touchpoints.slice(0, 4).map((t): AgentSource => ({ type: "touchpoint", label: `Touchpoint: ${t.type}`, value: new Date(t.date).toLocaleDateString() })),
     ...(account.kycVersions[0]?.executiveSummary ? [{ type: "kyc" as const, label: "KYC summary", value: account.kycVersions[0].executiveSummary?.slice(0, 80) }] : []),
@@ -54,7 +54,7 @@ Score history: ${scores}
 Contract end: ${account.contractEnd?.toISOString().split("T")[0] ?? "N/A"}
 KYC summary: ${account.kycVersions[0]?.executiveSummary ?? "N/A"}
 Strategic goals: ${account.kycVersions[0]?.strategicGoals ?? "N/A"}
-Open signals: ${account.signals.map((s) => `[${s.severity}] ${s.title}`).join("; ") || "none"}
+Open news: ${account.signals.map((s) => `[${s.severity}] ${s.title}`).join("; ") || "none"}
 Open actions: ${account.actions.map((a) => a.title).join("; ") || "none"}
 Recent touchpoints: ${account.touchpoints.map((t) => `${t.type} (${new Date(t.date).toLocaleDateString()})`).join(", ") || "none"}
 Previous session: ${lastSession ? `"${lastSession.title}" (${lastSession.status})` : "none"}
@@ -116,7 +116,7 @@ Generate 5-8 agenda items. Return JSON only:
   } = {
     items: [
       { order: 1, category: "REVIEW",   title: "Account Health & Score Review",    content: `Review ${account.name} health (${account.health}).`, status: "OPEN" },
-      { order: 2, category: "RISK",     title: "Open Signals & Risks",             content: `${account.signals.length} unresolved signal(s).`, status: "OPEN" },
+      { order: 2, category: "RISK",     title: "Open News & Risks",                content: `${account.signals.length} unresolved news item(s).`, status: "OPEN" },
       { order: 3, category: "ACTION",   title: "Action Items Review",              content: `${account.actions.length} open action(s).`, status: "OPEN" },
       { order: 4, category: "EXPANSION",title: "Growth Opportunities",             content: "Identify expansion potential.", status: "OPEN" },
       { order: 5, category: "WRAP_UP",  title: "Next Steps & Commitments",         content: "Agree on owners and dates.", status: "OPEN" },

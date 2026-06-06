@@ -1,29 +1,18 @@
-# README #
+# KAM Intelligence V2 Enhanced
 
-This README would normally document whatever steps are necessary to get your application up and running.
+Fresh rebuild workspace for the enhanced KAM Intelligence product.
 
-### What is this repository for? ###
+## Foundation copied from V1
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+- Next.js / React / TypeScript configuration
+- Prisma schema, migrations, and seed files
+- Existing `.env` and `.env.example` shape for the shared DB and OpenAI provider
+- API routes for current data access and AI provider calls
+- Shared `src/lib`, `src/context`, `src/hooks`, `src/types`
+- UI primitives and global design tokens
 
-### How do I get set up? ###
+## Intent
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
-
-### Contribution guidelines ###
-
-* Writing tests
-* Code review
-* Other guidelines
-
-### Who do I talk to? ###
-
-* Repo owner or admin
-* Other community or team contact
+This folder is intentionally a clean product shell, not a full V1 page clone.
+We will add the actual modules one at a time based on dictated requirements,
+then QA each slice before moving to the next.

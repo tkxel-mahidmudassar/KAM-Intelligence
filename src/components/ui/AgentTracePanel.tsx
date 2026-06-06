@@ -46,13 +46,13 @@ function StepRow({ step, index }: { step: AgentStep; index: number }) {
       {open && (
         <div className="border-t border-[var(--border-subtle)] divide-y divide-[var(--border-subtle)]">
           <div className="px-3 py-2 space-y-1">
-            <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Prompt (truncated)</p>
+            <p className="text-[10px] font-semibold text-[var(--text-muted)]">Prompt (truncated)</p>
             <pre className="text-[11px] text-[var(--text-secondary)] whitespace-pre-wrap break-words font-mono leading-relaxed max-h-32 overflow-y-auto">
               {step.input || "(empty)"}
             </pre>
           </div>
           <div className="px-3 py-2 space-y-1">
-            <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Response (truncated)</p>
+            <p className="text-[10px] font-semibold text-[var(--text-muted)]">Response (truncated)</p>
             <pre className="text-[11px] text-[var(--text-secondary)] whitespace-pre-wrap break-words font-mono leading-relaxed max-h-32 overflow-y-auto">
               {step.output || "(empty)"}
             </pre>
@@ -82,7 +82,7 @@ export function AgentTracePanel({ steps, model, totalLatencyMs, className }: Age
           AI Reasoning Steps
         </span>
         <span className="text-[10px] text-[var(--text-muted)] shrink-0">
-          {steps.length} step{steps.length !== 1 ? "s" : ""} &middot; {model ?? "gemini"} &middot; {totalMs < 1000 ? `${totalMs}ms` : `${(totalMs / 1000).toFixed(1)}s`}
+          {steps.length} step{steps.length !== 1 ? "s" : ""} &middot; {model ?? "openai"} &middot; {totalMs < 1000 ? `${totalMs}ms` : `${(totalMs / 1000).toFixed(1)}s`}
         </span>
         {expanded
           ? <ChevronDown className="h-3.5 w-3.5 text-[#A855F7] shrink-0" />

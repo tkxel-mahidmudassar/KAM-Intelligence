@@ -56,7 +56,7 @@ const RULES: TriggerRule[] = [
     criticalThreshold:  40,
     warningThreshold:   62,
     titleFn: (s) => `Customer satisfaction at risk (CSAT ${s}/100)`,
-    descFn:  (s) => `CSAT dimension scored ${s}/100 — NPS or platform utilisation is below benchmark. Proactive outreach is recommended to prevent churn.`,
+    descFn:  (s) => `CSAT dimension scored ${s}/100 — client feedback or stakeholder sentiment is below benchmark. Proactive outreach is recommended to prevent churn.`,
   },
   {
     kpiKey:             "risk",

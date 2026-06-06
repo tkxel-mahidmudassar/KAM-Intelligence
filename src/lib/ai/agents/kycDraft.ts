@@ -24,7 +24,7 @@ Stored KYC field mapping:
 - strategicGoals = Account History with Tkxel + strategic goals.
 - riskFactors = current account risks, relationship gaps, delivery/financial/customer risk.
 - expansionOpportunity = whitespace, upsell, Tkxel team/opportunity context.
-- csatHistory = Engagement History, CSAT/NPS, relationship health, major touchpoints.
+- csatHistory = Engagement History, CSAT/client feedback, relationship health, major touchpoints.
 - competitiveLandscape = Competitors and displacement risk.
 - financialOverview = Company Financials + Tkxel commercial/contract view.
 
@@ -164,7 +164,7 @@ Return JSON only with these exact keys:
   "strategicGoals": "Account history with Tkxel + strategic goals/milestones, with source markers and final Sources line.",
   "riskFactors": "Current delivery, relationship, commercial, and data confidence risks, with source markers and final Sources line.",
   "expansionOpportunity": "Whitespace/upsell/Tkxel team opportunity context, with source markers and final Sources line.",
-  "csatHistory": "Engagement history, CSAT/NPS, projects, timelines, and relationship health, with source markers and final Sources line.",
+  "csatHistory": "Engagement history, CSAT/client feedback, projects, timelines, and relationship health, with source markers and final Sources line.",
   "competitiveLandscape": "Known competitors, exposure, displacement risk, unknowns, with source markers and final Sources line.",
   "financialOverview": "ARR/contract/funding/revenue concentration/dependency/renewal outlook, with source markers and final Sources line."
 }`;

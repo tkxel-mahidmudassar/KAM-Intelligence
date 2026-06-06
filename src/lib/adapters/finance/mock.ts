@@ -90,6 +90,57 @@ const MOCK_DATA: Record<string, FinanceData> = {
     lastSyncedAt: now,
   },
 
+  "acc-nexacloud-006": {
+    accountId: "acc-nexacloud-006",
+    arr: 680_000,
+    mrr: 56_667,
+    currency: "USD",
+    paymentTermsDays: 30,
+    outstandingBalance: 56_667,
+    overdueAmount: 0,
+    revenueUtilizationPct: 108,
+    revenueHistory: revenueHistory(680_000, [94, 96, 99, 102, 105, 108]),
+    invoices: [
+      { id: "inv-nx1", amount: 56_667, currency: "USD", status: "paid", issuedDate: daysAgo(45), dueDate: daysAgo(15), paidDate: daysAgo(12), daysOverdue: 0 },
+      { id: "inv-nx2", amount: 56_667, currency: "USD", status: "pending", issuedDate: daysAgo(15), dueDate: daysAgo(-15), paidDate: null, daysOverdue: 0 },
+    ],
+    lastSyncedAt: now,
+  },
+
+  "acc-vertex-007": {
+    accountId: "acc-vertex-007",
+    arr: 920_000,
+    mrr: 76_667,
+    currency: "USD",
+    paymentTermsDays: 30,
+    outstandingBalance: 76_667,
+    overdueAmount: 0,
+    revenueUtilizationPct: 112,
+    revenueHistory: revenueHistory(920_000, [96, 99, 102, 106, 110, 112]),
+    invoices: [
+      { id: "inv-vx1", amount: 76_667, currency: "USD", status: "paid", issuedDate: daysAgo(45), dueDate: daysAgo(15), paidDate: daysAgo(11), daysOverdue: 0 },
+      { id: "inv-vx2", amount: 76_667, currency: "USD", status: "pending", issuedDate: daysAgo(15), dueDate: daysAgo(-15), paidDate: null, daysOverdue: 0 },
+    ],
+    lastSyncedAt: now,
+  },
+
+  "acc-medisync-008": {
+    accountId: "acc-medisync-008",
+    arr: 450_000,
+    mrr: 37_500,
+    currency: "CAD",
+    paymentTermsDays: 45,
+    outstandingBalance: 112_500,
+    overdueAmount: 37_500,
+    revenueUtilizationPct: 61,
+    revenueHistory: revenueHistory(450_000, [82, 78, 73, 69, 65, 61]),
+    invoices: [
+      { id: "inv-md1", amount: 37_500, currency: "CAD", status: "overdue", issuedDate: daysAgo(75), dueDate: daysAgo(30), paidDate: null, daysOverdue: 30 },
+      { id: "inv-md2", amount: 37_500, currency: "CAD", status: "pending", issuedDate: daysAgo(30), dueDate: daysAgo(-15), paidDate: null, daysOverdue: 0 },
+    ],
+    lastSyncedAt: now,
+  },
+
   "acc-crestline-005": {
     accountId: "acc-crestline-005",
     arr: 1_200_000,

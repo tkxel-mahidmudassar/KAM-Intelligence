@@ -74,11 +74,15 @@ const ASSOCIATE_PERMISSIONS: Permission[] = [
   // Signals — view only
   "signal:view",
 
-  // Documents — view only
+  // Documents — associates can upload account support material
   "document:view",
+  "document:create",
 
-  // KYC — view only (KAM drafts, associate supports)
+  // KYC — associate drafts and submits for KAM review
   "kyc:view",
+  "kyc:create",
+  "kyc:update",
+  "kyc:submit",
 
   // QBR — view only
   "qbr:view",
@@ -130,7 +134,7 @@ const KAM_PERMISSIONS: Permission[] = [
   "kpi:create",
   "kpi:export",
 
-  // Scores — view + approve AI-proposed scores
+  // Scores — view + approve requested score overrides
   "score:view",
   "score:approve",
   "score:export",
@@ -152,11 +156,8 @@ const KAM_PERMISSIONS: Permission[] = [
   "document:create",
   "document:delete",
 
-  // KYC — can draft and submit, cannot approve
+  // KYC — KAM reviews associate-submitted drafts
   "kyc:view",
-  "kyc:create",
-  "kyc:update",
-  "kyc:submit",
 
   // QBR — full ownership
   "qbr:view",
@@ -198,7 +199,7 @@ const KAM_PERMISSIONS: Permission[] = [
   "playbook:update",
   "playbook:delete",
 
-  // KYC — full lifecycle including approve/reject
+  // KYC — approve/reject submitted drafts
   "kyc:approve",
   "kyc:reject",
 

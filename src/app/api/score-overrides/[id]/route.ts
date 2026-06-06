@@ -10,11 +10,11 @@ export async function PATCH(
 ) {
   try {
     const role = getRoleFromRequest(req);
-    // Only managers and executives can approve/decline
-    if (role !== "KAM" && role !== "MANAGER" && role !== "EXECUTIVE") {
-      return forbidden("Only managers and executives can action score overrides");
+    // KAMs review associate-submitted score override requests.
+    if (role !== "KAM" && role !== "MANAGER" && role !== "ADMIN") {
+      return forbidden("Only KAM reviewer roles can action score overrides");
     }
-    const denied = guard(role, "score:view");
+    const denied = guard(role, "score:approve");
     if (denied) return denied;
 
     const { id } = await params;

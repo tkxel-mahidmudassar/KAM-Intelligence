@@ -51,7 +51,7 @@ export async function GET() {
     }
 
     return ok({
-      aiProvider:  process.env.AI_PROVIDER  ?? "gemini",
+      aiProvider:  process.env.AI_PROVIDER  ?? "openai",
       adapterMode: process.env.ADAPTER_MODE ?? "mock",
       appUrl:      process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
       nodeEnv:     process.env.NODE_ENV ?? "development",

@@ -222,7 +222,7 @@ model KamScore {
   accountId      String
   overall        Float
   // 8-KPI model (PRD v3)
-  csat           Float?   // 20% weight — customer satisfaction, NPS, utilisation
+  csat           Float?   // 20% weight — customer satisfaction and client sentiment
   relationship   Float?   // 15% weight — stakeholder engagement, exec coverage
   risk           Float?   // 15% weight — churn signals, escalations, ticket load
   contractHealth Float?   // 15% weight — ARR utilisation, invoicing, renewal proximity
@@ -344,7 +344,7 @@ model KycVersion {
   riskFactors          String?   @db.Text
   expansionOpportunity String?   @db.Text
   // Section 7-9 (PRD v3 additions)
-  csatHistory          String?   @db.Text  // CSAT & satisfaction history, NPS trend
+  csatHistory          String?   @db.Text  // CSAT and satisfaction history
   competitiveLandscape String?   @db.Text  // Competitors, displacement risk
   financialOverview    String?   @db.Text  // Contract terms, billing, ARR composition
   submittedAt          DateTime?

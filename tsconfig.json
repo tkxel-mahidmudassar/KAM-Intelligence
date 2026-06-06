@@ -21,6 +21,7 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
@@ -44,7 +45,8 @@
         "./src/styles/*"
       ]
     },
-    "target": "ES2017"
+    "target": "ES2017",
+    "ignoreDeprecations": "6.0"
   },
   "include": [
     "next-env.d.ts",

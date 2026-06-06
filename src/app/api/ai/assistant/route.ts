@@ -5,7 +5,7 @@ import type { LLMMessage } from "@/lib/ai";
 import { getRoleFromRequest, ok, badRequest, serverError, guard } from "@/lib/api";
 
 // ─── Demo Fallback ─────────────────────────────────────────────────────────────
-// Used when Gemini quota is exhausted — generates contextually accurate responses
+// Used when the live AI provider is unavailable — generates contextually accurate responses
 // directly from the system context string so the POC demo always works.
 
 function isQuotaError(err: unknown): boolean {
@@ -47,13 +47,13 @@ function demoFallback(userQuestion: string, systemContext: string): string {
       const risky = [...criticals, ...atRisk];
       if (risky.length === 0) return "✅ Great news — all accounts are currently in a healthy state with no active churn risk indicators.";
       const atRiskARR = parsed.filter((a) => a.health !== "HEALTHY").reduce((s, a) => s + a.arr, 0);
-      return `## ⚠️ Churn Risk Assessment\n\nThe following accounts present the highest churn risk:\n\n${risky.map((l) => `- ${l}`).join("\n")}\n\n**At-risk ARR:** $${atRiskARR.toLocaleString()}\n\n**Recommended actions:**\n\n1. Schedule executive sponsor calls within the next 14 days\n2. Review open critical signals and assign owners\n3. Prepare recovery plans with clear milestones\n4. Escalate to management if no engagement within 7 days`;
+      return `## ⚠️ Churn Risk Assessment\n\nThe following accounts present the highest churn risk:\n\n${risky.map((l) => `- ${l}`).join("\n")}\n\n**At-risk ARR:** $${atRiskARR.toLocaleString()}\n\n**Recommended actions:**\n\n1. Schedule executive sponsor calls within the next 14 days\n2. Review open critical news and assign owners\n3. Prepare recovery plans with clear milestones\n4. Escalate to management if no engagement within 7 days`;
     }
 
     if (q.includes("health") || q.includes("portfolio") || q.includes("summar")) {
       const totalARR = parsed.reduce((s, a) => s + a.arr, 0);
       const avgScore = parsed.length ? Math.round(parsed.reduce((s, a) => s + a.score, 0) / parsed.length) : 0;
-      return `## 📊 Portfolio Health Summary\n\n**Overall Status:**\n\n- 🔴 Critical: **${criticals.length}** account${criticals.length !== 1 ? "s" : ""}\n- 🟡 At Risk: **${atRisk.length}** account${atRisk.length !== 1 ? "s" : ""}\n- 🟢 Healthy: **${healthy.length}** account${healthy.length !== 1 ? "s" : ""}\n\n**Total Portfolio ARR:** $${totalARR.toLocaleString()} | **Average KAM Score:** ${avgScore}/100\n\n**Account Breakdown:**\n\n${parsed.map((a) => `- **${a.name}**: ${a.health} | Score ${a.score}/100 | ARR $${a.arr.toLocaleString()}`).join("\n")}\n\n---\n\n**Priorities this week:** Focus on critical and at-risk accounts. Ensure all open signals have assigned owners and target completion dates.`;
+      return `## 📊 Portfolio Health Summary\n\n**Overall Status:**\n\n- 🔴 Critical: **${criticals.length}** account${criticals.length !== 1 ? "s" : ""}\n- 🟡 At Risk: **${atRisk.length}** account${atRisk.length !== 1 ? "s" : ""}\n- 🟢 Healthy: **${healthy.length}** account${healthy.length !== 1 ? "s" : ""}\n\n**Total Portfolio ARR:** $${totalARR.toLocaleString()} | **Average KAM Score:** ${avgScore}/100\n\n**Account Breakdown:**\n\n${parsed.map((a) => `- **${a.name}**: ${a.health} | Score ${a.score}/100 | ARR $${a.arr.toLocaleString()}`).join("\n")}\n\n---\n\n**Priorities this week:** Focus on critical and at-risk accounts. Ensure all open news items have assigned owners and target completion dates.`;
     }
 
     if (q.includes("arr") || q.includes("revenue")) {
@@ -65,7 +65,7 @@ function demoFallback(userQuestion: string, systemContext: string): string {
     if (q.includes("action") || q.includes("this week") || q.includes("priority") || q.includes("top 3")) {
       const urgent = parsed.filter((a) => a.health !== "HEALTHY").slice(0, 3);
       if (urgent.length === 0) return "✅ All accounts are healthy this week. Continue regular cadence and ensure upcoming renewals are tracked.";
-      return `## ✅ Top Actions This Week\n\n${urgent.map((a, i) => `**${i + 1}. ${a.name}** *(${a.health}, Score: ${a.score}/100)*\n- Review all unresolved signals and assign owners\n- Schedule a check-in call within 7 days\n- Ensure open actions have clear due dates`).join("\n\n")}\n\n---\n\n**General hygiene:**\n\n- Close out any overdue actions\n- Review upcoming contract renewals in the next 90 days\n- Update KYC documents for accounts with EXPIRED status`;
+      return `## ✅ Top Actions This Week\n\n${urgent.map((a, i) => `**${i + 1}. ${a.name}** *(${a.health}, Score: ${a.score}/100)*\n- Review all unresolved news items and assign owners\n- Schedule a check-in call within 7 days\n- Ensure open actions have clear due dates`).join("\n\n")}\n\n---\n\n**General hygiene:**\n\n- Close out any overdue actions\n- Review upcoming contract renewals in the next 90 days\n- Update KYC documents for accounts with EXPIRED status`;
     }
 
     if (q.includes("kam") || q.includes("manager")) {
@@ -85,8 +85,8 @@ function demoFallback(userQuestion: string, systemContext: string): string {
     const arrM     = ctx.match(/ARR:\s*\$([\d,]+)/);
     const scoreM   = ctx.match(/KAM Score:\s*(\d+)/);
     const narM     = ctx.match(/AI Narrative:\s*(.+)/);
-    const kpisM    = ctx.match(/KPIs:\n([\s\S]*?)\n\nActive Signals/);
-    const signalsM = ctx.match(/Active Signals \((\d+)\):\n([\s\S]*?)\n\nOpen Actions/);
+    const kpisM    = ctx.match(/KPIs:\n([\s\S]*?)\n\nActive News/);
+    const signalsM = ctx.match(/Active News \((\d+)\):\n([\s\S]*?)\n\nOpen Actions/);
     const actionsM = ctx.match(/Open Actions \((\d+)\):\n([\s\S]*?)\n\nKYC/);
 
     const name    = nameM    ? nameM[1].trim()    : "this account";
@@ -101,11 +101,11 @@ function demoFallback(userQuestion: string, systemContext: string): string {
     const actLines= actionsM ? actionsM[2].trim() : "None";
 
     if (q.includes("summar") || q.includes("overview") || q.includes("status")) {
-      return `## 📋 ${name} — Account Summary\n\n**Health:** ${health} | **KAM Score:** ${score}/100 | **ARR:** $${arr}\n\n${narr ? `> ${narr}\n\n` : ""}**KPIs:**\n\n${kpis || "No KPI data available."}\n\n**Active Signals (${sigCount}):**\n\n${sigLines || "None"}\n\n**Open Actions (${actCount}):**\n\n${actLines || "None"}`;
+      return `## 📋 ${name} — Account Summary\n\n**Health:** ${health} | **KAM Score:** ${score}/100 | **ARR:** $${arr}\n\n${narr ? `> ${narr}\n\n` : ""}**KPIs:**\n\n${kpis || "No KPI data available."}\n\n**Active News (${sigCount}):**\n\n${sigLines || "None"}\n\n**Open Actions (${actCount}):**\n\n${actLines || "None"}`;
     }
 
     if (q.includes("risk") || q.includes("signal") || q.includes("concern")) {
-      return `## ⚠️ Risk & Signals — ${name}\n\n**Account Health:** ${health} | **Score:** ${score}/100\n\n**Active Signals (${sigCount}):**\n\n${sigLines || "No active signals."}\n\n${health !== "HEALTHY" ? "**Recommendation:** Schedule an executive review, address the highest-severity signals immediately, and update the account recovery plan." : "✅ Account is in good standing. Continue regular cadence."}`;
+      return `## ⚠️ Risk & News — ${name}\n\n**Account Health:** ${health} | **Score:** ${score}/100\n\n**Active News (${sigCount}):**\n\n${sigLines || "No active news."}\n\n${health !== "HEALTHY" ? "**Recommendation:** Schedule an executive review, address the highest-severity news items immediately, and update the account recovery plan." : "✅ Account is in good standing. Continue regular cadence."}`;
     }
 
     if (q.includes("action") || q.includes("next step") || q.includes("do")) {
@@ -116,7 +116,7 @@ function demoFallback(userQuestion: string, systemContext: string): string {
       return `## 📈 KPIs & Metrics — ${name}\n\n**Overall Score:** ${score}/100\n\n${kpis || "No KPI data available."}\n\nCompare against benchmarks and identify dimensions scoring below 60 for immediate attention.`;
     }
 
-    return `## ${name} — Quick Overview\n\n**Health:** ${health} | **Score:** ${score}/100 | **ARR:** $${arr}\n\n${narr ? `> *${narr}*\n\n` : ""}**Signals:** ${sigCount} active | **Actions:** ${actCount} open\n\nAsk me about specific signals, actions, KPIs, or risks for a deeper dive.`;
+    return `## ${name} — Quick Overview\n\n**Health:** ${health} | **Score:** ${score}/100 | **ARR:** $${arr}\n\n${narr ? `> *${narr}*\n\n` : ""}**News:** ${sigCount} active | **Actions:** ${actCount} open\n\nAsk me about specific news, actions, KPIs, or risks for a deeper dive.`;
   }
 
   return "I don't have enough context to answer that question. Please select an account or portfolio context and try again.";
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
 
     // Build system context from DB
     let systemContext = `You are KAM Intel Assistant, an AI co-pilot for Key Account Managers at Tkxel.
-You have access to real-time account data, KPI metrics, signals, and action items.
+You have access to real-time account data, KPI metrics, news items, and action items.
 Be concise, specific, and always ground your answers in the data provided.
 If data is unavailable, say so clearly rather than guessing.`;
 
@@ -173,7 +173,7 @@ Key Contacts: ${account.contacts.map((c) => `${c.name} (${c.title})`).join(", ")
 KPIs:
 ${account.kpiDimensions.map((k) => `  ${k.name}: ${k.value}${k.unit ?? ""} vs target ${k.target ?? "N/A"}${k.unit ?? ""} [${k.trend ?? "flat"}]`).join("\n")}
 
-Active Signals (${account.signals.length}):
+Active News (${account.signals.length}):
 ${account.signals.slice(0, 5).map((s) => `  [${s.severity}] ${s.title}`).join("\n") || "  None"}
 
 Open Actions (${account.actions.length}):
@@ -199,7 +199,7 @@ ${accounts.map((a) => `${a.name}: ${a.health}, Score ${a.kamScores[0]?.overall ?
       ...messages,
     ];
 
-    // ── Attempt live Gemini call; fall back to demo mode on quota errors ────────
+    // ── Attempt live AI call; fall back to demo mode on provider errors ────────
     const userQuestion = messages[messages.length - 1]?.content ?? "";
 
     try {
@@ -226,7 +226,7 @@ ${accounts.map((a) => `${a.name}: ${a.health}, Score ${a.kamScores[0]?.overall ?
         return ok({
           content:      fallbackContent,
           model:        "demo-mode",
-          provider:     "gemini",
+          provider:     "openai",
           latencyMs:    120,
           promptTokens: 0,
           outputTokens: 0,

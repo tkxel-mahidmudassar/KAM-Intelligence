@@ -145,7 +145,7 @@ async function main() {
     },
   });
 
-  // 5. Crestline Capital — AT_RISK (investment platform, ticket spike + NPS drop)
+  // 5. Crestline Capital — AT_RISK (investment platform, ticket spike + sentiment drop)
   const crestline = await prisma.account.upsert({
     where: { id: "acc-crestline-005" },
     update: {},
@@ -186,7 +186,7 @@ async function main() {
     },
   });
 
-  // 7. Vertex Systems — HEALTHY (enterprise software, NPS champion, expansion in progress)
+  // 7. Vertex Systems — HEALTHY (enterprise software, strong client sentiment, expansion in progress)
   // Assigned to Sarah so her portfolio has a second healthy account
   const vertex = await prisma.account.upsert({
     where: { id: "acc-vertex-007" },
@@ -274,7 +274,7 @@ async function main() {
       // Helix Payments — struggling
       { accountId: helix.id, name: "Revenue Utilisation", category: "financial", value: 54, target: 90, unit: "%", trend: "down", trendPct: -20, period: "2025-Q1", source: "salesforce" },
       { accountId: helix.id, name: "Open Support Tickets", category: "support", value: 52, target: 10, unit: "count", trend: "up", trendPct: 140, period: "2025-Q1", source: "jira" },
-      { accountId: helix.id, name: "NPS Score", category: "engagement", value: 11, target: 50, unit: "score", trend: "down", trendPct: -38, period: "2025-Q1", source: "manual" },
+      { accountId: helix.id, name: "Client Sentiment", category: "engagement", value: 11, target: 50, unit: "score", trend: "down", trendPct: -38, period: "2025-Q1", source: "manual" },
       { accountId: helix.id, name: "Feature Adoption", category: "engagement", value: 29, target: 70, unit: "%", trend: "down", trendPct: -15, period: "2025-Q1", source: "manual" },
       { accountId: helix.id, name: "Exec Engagement", category: "relationship", value: 15, target: 80, unit: "%", trend: "down", trendPct: -45, period: "2025-Q1", source: "manual" },
       { accountId: helix.id, name: "CSAT", category: "support", value: 2.8, target: 4.5, unit: "/5", trend: "down", trendPct: -22, period: "2025-Q1", source: "manual" },
@@ -282,49 +282,49 @@ async function main() {
       // ClearBridge — sliding
       { accountId: clearbridge.id, name: "Revenue Utilisation", category: "financial", value: 72, target: 90, unit: "%", trend: "down", trendPct: -9, period: "2025-Q1", source: "salesforce" },
       { accountId: clearbridge.id, name: "Open Support Tickets", category: "support", value: 24, target: 12, unit: "count", trend: "up", trendPct: 50, period: "2025-Q1", source: "jira" },
-      { accountId: clearbridge.id, name: "NPS Score", category: "engagement", value: 30, target: 55, unit: "score", trend: "flat", trendPct: -2, period: "2025-Q1", source: "manual" },
+      { accountId: clearbridge.id, name: "Client Sentiment", category: "engagement", value: 30, target: 55, unit: "score", trend: "flat", trendPct: -2, period: "2025-Q1", source: "manual" },
       { accountId: clearbridge.id, name: "Monthly Active Users", category: "engagement", value: 59, target: 80, unit: "%", trend: "down", trendPct: -8, period: "2025-Q1", source: "manual" },
       { accountId: clearbridge.id, name: "Onboarding Completion", category: "engagement", value: 44, target: 85, unit: "%", trend: "down", trendPct: -18, period: "2025-Q1", source: "manual" },
 
       // Ironclad — strong
       { accountId: ironclad.id, name: "Revenue Utilisation", category: "financial", value: 96, target: 90, unit: "%", trend: "up", trendPct: 7, period: "2025-Q1", source: "salesforce" },
       { accountId: ironclad.id, name: "Open Support Tickets", category: "support", value: 3, target: 10, unit: "count", trend: "down", trendPct: -60, period: "2025-Q1", source: "jira" },
-      { accountId: ironclad.id, name: "NPS Score", category: "engagement", value: 74, target: 60, unit: "score", trend: "up", trendPct: 14, period: "2025-Q1", source: "manual" },
+      { accountId: ironclad.id, name: "Client Sentiment", category: "engagement", value: 74, target: 60, unit: "score", trend: "up", trendPct: 14, period: "2025-Q1", source: "manual" },
       { accountId: ironclad.id, name: "Expansion ARR Pipeline", category: "financial", value: 200_000, target: 100_000, unit: "$", trend: "up", trendPct: 100, period: "2025-Q1", source: "salesforce" },
       { accountId: ironclad.id, name: "On-Time Delivery Rate", category: "engagement", value: 97, target: 90, unit: "%", trend: "up", trendPct: 5, period: "2025-Q1", source: "jira" },
 
       // Beacon — growing fast
       { accountId: beacon.id, name: "Revenue Utilisation", category: "financial", value: 99, target: 90, unit: "%", trend: "up", trendPct: 9, period: "2025-Q1", source: "salesforce" },
       { accountId: beacon.id, name: "Open Support Tickets", category: "support", value: 2, target: 8, unit: "count", trend: "flat", trendPct: 0, period: "2025-Q1", source: "jira" },
-      { accountId: beacon.id, name: "NPS Score", category: "engagement", value: 83, target: 65, unit: "score", trend: "up", trendPct: 17, period: "2025-Q1", source: "manual" },
+      { accountId: beacon.id, name: "Client Sentiment", category: "engagement", value: 83, target: 65, unit: "score", trend: "up", trendPct: 17, period: "2025-Q1", source: "manual" },
       { accountId: beacon.id, name: "Sprint Velocity", category: "engagement", value: 91, target: 80, unit: "%", trend: "up", trendPct: 11, period: "2025-Q1", source: "jira" },
       { accountId: beacon.id, name: "Daily Active Users", category: "engagement", value: 78, target: 70, unit: "%", trend: "up", trendPct: 8, period: "2025-Q1", source: "manual" },
 
       // Crestline — warning signs
       { accountId: crestline.id, name: "Revenue Utilisation", category: "financial", value: 67, target: 90, unit: "%", trend: "down", trendPct: -16, period: "2025-Q1", source: "salesforce" },
       { accountId: crestline.id, name: "Open Support Tickets", category: "support", value: 41, target: 15, unit: "count", trend: "up", trendPct: 95, period: "2025-Q1", source: "jira" },
-      { accountId: crestline.id, name: "NPS Score", category: "engagement", value: 25, target: 50, unit: "score", trend: "down", trendPct: -25, period: "2025-Q1", source: "manual" },
+      { accountId: crestline.id, name: "Client Sentiment", category: "engagement", value: 25, target: 50, unit: "score", trend: "down", trendPct: -25, period: "2025-Q1", source: "manual" },
       { accountId: crestline.id, name: "Exec Engagement", category: "relationship", value: 40, target: 75, unit: "%", trend: "down", trendPct: -22, period: "2025-Q1", source: "manual" },
       { accountId: crestline.id, name: "Bug Resolution Time", category: "support", value: 14, target: 5, unit: "days", trend: "up", trendPct: 75, period: "2025-Q1", source: "jira" },
 
       // NexaCloud — strong growth
       { accountId: nexacloud.id, name: "Revenue Utilisation", category: "financial", value: 108, target: 90, unit: "%", trend: "up", trendPct: 12, period: "2025-Q1", source: "salesforce" },
       { accountId: nexacloud.id, name: "Open Support Tickets", category: "support", value: 4, target: 10, unit: "count", trend: "down", trendPct: -33, period: "2025-Q1", source: "jira" },
-      { accountId: nexacloud.id, name: "NPS Score", category: "engagement", value: 68, target: 55, unit: "score", trend: "up", trendPct: 9, period: "2025-Q1", source: "manual" },
+      { accountId: nexacloud.id, name: "Client Sentiment", category: "engagement", value: 68, target: 55, unit: "score", trend: "up", trendPct: 9, period: "2025-Q1", source: "manual" },
       { accountId: nexacloud.id, name: "Platform Utilisation", category: "engagement", value: 91, target: 80, unit: "%", trend: "up", trendPct: 6, period: "2025-Q1", source: "manual" },
       { accountId: nexacloud.id, name: "Feature Adoption", category: "engagement", value: 79, target: 70, unit: "%", trend: "up", trendPct: 11, period: "2025-Q1", source: "manual" },
 
       // Vertex Systems — excellent
       { accountId: vertex.id, name: "Revenue Utilisation", category: "financial", value: 112, target: 90, unit: "%", trend: "up", trendPct: 18, period: "2025-Q1", source: "salesforce" },
       { accountId: vertex.id, name: "Open Support Tickets", category: "support", value: 1, target: 8, unit: "count", trend: "down", trendPct: -80, period: "2025-Q1", source: "jira" },
-      { accountId: vertex.id, name: "NPS Score", category: "engagement", value: 88, target: 65, unit: "score", trend: "up", trendPct: 21, period: "2025-Q1", source: "manual" },
+      { accountId: vertex.id, name: "Client Sentiment", category: "engagement", value: 88, target: 65, unit: "score", trend: "up", trendPct: 21, period: "2025-Q1", source: "manual" },
       { accountId: vertex.id, name: "Exec Engagement", category: "relationship", value: 95, target: 75, unit: "%", trend: "up", trendPct: 15, period: "2025-Q1", source: "manual" },
       { accountId: vertex.id, name: "Sprint Delivery Rate", category: "engagement", value: 98, target: 90, unit: "%", trend: "up", trendPct: 4, period: "2025-Q1", source: "jira" },
 
       // MediSync — at risk
       { accountId: medisync.id, name: "Revenue Utilisation", category: "financial", value: 61, target: 90, unit: "%", trend: "down", trendPct: -14, period: "2025-Q1", source: "salesforce" },
       { accountId: medisync.id, name: "Open Support Tickets", category: "support", value: 31, target: 12, unit: "count", trend: "up", trendPct: 72, period: "2025-Q1", source: "jira" },
-      { accountId: medisync.id, name: "NPS Score", category: "engagement", value: 32, target: 55, unit: "score", trend: "down", trendPct: -19, period: "2025-Q1", source: "manual" },
+      { accountId: medisync.id, name: "Client Sentiment", category: "engagement", value: 32, target: 55, unit: "score", trend: "down", trendPct: -19, period: "2025-Q1", source: "manual" },
       { accountId: medisync.id, name: "Integration Completion", category: "engagement", value: 48, target: 85, unit: "%", trend: "flat", trendPct: 2, period: "2025-Q1", source: "jira" },
       { accountId: medisync.id, name: "Monthly Active Users", category: "engagement", value: 55, target: 80, unit: "%", trend: "down", trendPct: -11, period: "2025-Q1", source: "manual" },
     ],
@@ -338,15 +338,15 @@ async function main() {
   await prisma.kamScore.createMany({
     data: [
       // ── Helix Payments: CRITICAL — sharp decline ──────────────────────────
-      { accountId: helix.id, overall: 71, financial: 74, csat: 69, risk: 72, relationship: 68, contractHealth: 72, projectHealth: 72, resourceHealth: 69, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Healthy trajectory. Contract utilisation above target and NPS holding at 49." },
+      { accountId: helix.id, overall: 71, financial: 74, csat: 69, risk: 72, relationship: 68, contractHealth: 72, projectHealth: 72, resourceHealth: 69, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Healthy trajectory. Contract performance above target and client sentiment holding steady." },
       { accountId: helix.id, overall: 66, financial: 69, csat: 64, risk: 68, relationship: 62, contractHealth: 67, projectHealth: 67, resourceHealth: 64, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Minor engagement softening observed. Feature adoption at 45%, worth monitoring." },
-      { accountId: helix.id, overall: 58, financial: 61, csat: 52, risk: 60, relationship: 55, contractHealth: 62, projectHealth: 62, resourceHealth: 52, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(90), aiNarrative: "AT_RISK transition. v4.0 migration causing early support friction. NPS fell to 38." },
+      { accountId: helix.id, overall: 58, financial: 61, csat: 52, risk: 60, relationship: 55, contractHealth: 62, projectHealth: 62, resourceHealth: 52, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(90), aiNarrative: "AT_RISK transition. v4.0 migration causing early support friction and declining stakeholder sentiment." },
       { accountId: helix.id, overall: 45, financial: 50, csat: 38, risk: 42, relationship: 40, contractHealth: 55, projectHealth: 55, resourceHealth: 38, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(60), aiNarrative: "Continued deterioration. Support tickets doubled post v4.1 release. Executive engagement declining." },
-      { accountId: helix.id, overall: 33, financial: 37, csat: 26, risk: 28, relationship: 28, contractHealth: 48, projectHealth: 48, resourceHealth: 26, whitespace: 50, health: AccountHealth.CRITICAL, computedAt: daysAgo(30), aiNarrative: "CRITICAL. NPS collapsed to 18. Ticket surge at 140% QoQ. Renewal conversation urgently needed." },
-      { accountId: helix.id, overall: 24, financial: 30, csat: 18, risk: 14, relationship: 15, contractHealth: 42, projectHealth: 42, resourceHealth: 18, whitespace: 50, health: AccountHealth.CRITICAL, computedAt: daysAgo(1), aiNarrative: "Helix Payments is in critical condition. Open tickets are up 140% QoQ, NPS has collapsed to 11, and the contract expires in 55 days with no renewal motion underway. Executive escalation is required immediately." },
+      { accountId: helix.id, overall: 33, financial: 37, csat: 26, risk: 28, relationship: 28, contractHealth: 48, projectHealth: 48, resourceHealth: 26, whitespace: 50, health: AccountHealth.CRITICAL, computedAt: daysAgo(30), aiNarrative: "CRITICAL. Stakeholder sentiment collapsed. Ticket surge at 140% QoQ. Renewal conversation urgently needed." },
+      { accountId: helix.id, overall: 24, financial: 30, csat: 18, risk: 14, relationship: 15, contractHealth: 42, projectHealth: 42, resourceHealth: 18, whitespace: 50, health: AccountHealth.CRITICAL, computedAt: daysAgo(1), aiNarrative: "Helix Payments is in critical condition. Open tickets are up 140% QoQ, stakeholder sentiment has collapsed, and the contract expires in 55 days with no renewal motion underway. Executive escalation is required immediately." },
 
       // ── ClearBridge Health: AT_RISK — gradual decline ─────────────────────
-      { accountId: clearbridge.id, overall: 72, financial: 78, csat: 68, risk: 74, relationship: 70, contractHealth: 71, projectHealth: 71, resourceHealth: 68, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Solid account. MAU at 71%, NPS steady. v4 interface rollout beginning." },
+      { accountId: clearbridge.id, overall: 72, financial: 78, csat: 68, risk: 74, relationship: 70, contractHealth: 71, projectHealth: 71, resourceHealth: 68, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Solid account. Engagement is steady and v4 interface rollout is beginning." },
       { accountId: clearbridge.id, overall: 69, financial: 75, csat: 64, risk: 71, relationship: 68, contractHealth: 68, projectHealth: 68, resourceHealth: 64, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Slight MAU softening to 67% post v4 interface launch. Early onboarding issues observed in clinical cohort." },
       { accountId: clearbridge.id, overall: 65, financial: 71, csat: 58, risk: 66, relationship: 64, contractHealth: 66, projectHealth: 66, resourceHealth: 58, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(90), aiNarrative: "MAU declining. Ticket volume increasing. Onboarding completion for new clinical staff cohort is 44%." },
       { accountId: clearbridge.id, overall: 60, financial: 66, csat: 52, risk: 60, relationship: 61, contractHealth: 62, projectHealth: 62, resourceHealth: 52, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(60), aiNarrative: "Crossed AT_RISK threshold. MAU at 62%, 18 open tickets. CDO relationship maintained but engineering engagement softening." },
@@ -355,51 +355,51 @@ async function main() {
 
       // ── Ironclad Logistics: HEALTHY — strong growth ────────────────────────
       { accountId: ironclad.id, overall: 76, financial: 79, csat: 74, risk: 80, relationship: 72, contractHealth: 75, projectHealth: 75, resourceHealth: 74, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Strong account. All KPIs above target. Renewal booked 6 months early." },
-      { accountId: ironclad.id, overall: 80, financial: 84, csat: 78, risk: 83, relationship: 76, contractHealth: 79, projectHealth: 79, resourceHealth: 78, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Continued growth. NPS reached 66, up 6 points. Route optimisation module deployed successfully." },
+      { accountId: ironclad.id, overall: 80, financial: 84, csat: 78, risk: 83, relationship: 76, contractHealth: 79, projectHealth: 79, resourceHealth: 78, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Continued growth. Client sentiment improved and the route optimisation module deployed successfully." },
       { accountId: ironclad.id, overall: 83, financial: 87, csat: 81, risk: 86, relationship: 80, contractHealth: 82, projectHealth: 82, resourceHealth: 81, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(90), aiNarrative: "Excellent trajectory. On-time delivery rate 96%. Pieter initiating Eastern Europe scoping." },
       { accountId: ironclad.id, overall: 86, financial: 90, csat: 84, risk: 89, relationship: 83, contractHealth: 84, projectHealth: 84, resourceHealth: 84, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(60), aiNarrative: "Outstanding quarter. Eastern Europe expansion budget approved in principle." },
-      { accountId: ironclad.id, overall: 88, financial: 92, csat: 86, risk: 91, relationship: 87, contractHealth: 85, projectHealth: 85, resourceHealth: 86, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(30), aiNarrative: "NPS at 72, tickets near zero. Expansion deal in final negotiation. Case study approved." },
-      { accountId: ironclad.id, overall: 90, financial: 94, csat: 87, risk: 92, relationship: 89, contractHealth: 86, projectHealth: 86, resourceHealth: 87, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(1), aiNarrative: "Ironclad Logistics is the standout performer this quarter. NPS is 14 points above target, tickets are near zero, and an expansion pipeline worth €200K is in play. Recommended for case study and a co-marketing motion." },
+      { accountId: ironclad.id, overall: 88, financial: 92, csat: 86, risk: 91, relationship: 87, contractHealth: 85, projectHealth: 85, resourceHealth: 86, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(30), aiNarrative: "Client sentiment is strong and tickets are near zero. Expansion deal in final negotiation. Case study approved." },
+      { accountId: ironclad.id, overall: 90, financial: 94, csat: 87, risk: 92, relationship: 89, contractHealth: 86, projectHealth: 86, resourceHealth: 87, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(1), aiNarrative: "Ironclad Logistics is the standout performer this quarter. Client sentiment is above target, tickets are near zero, and an expansion pipeline worth €200K is in play. Recommended for case study and a co-marketing motion." },
 
       // ── Beacon Analytics: HEALTHY — rapidly improving ─────────────────────
       { accountId: beacon.id, overall: 74, financial: 78, csat: 72, risk: 80, relationship: 68, contractHealth: 73, projectHealth: 73, resourceHealth: 72, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Fast-growing account. Usage consistently above growth tier limits. CEO engaged." },
-      { accountId: beacon.id, overall: 79, financial: 83, csat: 77, risk: 85, relationship: 73, contractHealth: 77, projectHealth: 77, resourceHealth: 77, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "NPS improved to 74. Sprint velocity 89%. Series A funding confirmed, team scaling." },
-      { accountId: beacon.id, overall: 83, financial: 88, csat: 81, risk: 88, relationship: 78, contractHealth: 80, projectHealth: 80, resourceHealth: 81, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(90), aiNarrative: "Exceptional. Revenue utilisation 97%, NPS 78. SOC2 Type II programme begun." },
+      { accountId: beacon.id, overall: 79, financial: 83, csat: 77, risk: 85, relationship: 73, contractHealth: 77, projectHealth: 77, resourceHealth: 77, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Client sentiment improved. Sprint velocity 89%. Series A funding confirmed, team scaling." },
+      { accountId: beacon.id, overall: 83, financial: 88, csat: 81, risk: 88, relationship: 78, contractHealth: 80, projectHealth: 80, resourceHealth: 81, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(90), aiNarrative: "Exceptional. Billing and delivery health are strong. SOC2 Type II programme begun." },
       { accountId: beacon.id, overall: 87, financial: 92, csat: 85, risk: 91, relationship: 83, contractHealth: 86, projectHealth: 86, resourceHealth: 85, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(60), aiNarrative: "Approaching top-quartile performance. Daily active users 75%, up 5% QoQ. Enterprise upgrade discussions begun." },
       { accountId: beacon.id, overall: 90, financial: 94, csat: 89, risk: 93, relationship: 86, contractHealth: 89, projectHealth: 89, resourceHealth: 89, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(30), aiNarrative: "Near-perfect account. CEO offered reference. Upgrade pathway drafted." },
-      { accountId: beacon.id, overall: 93, financial: 96, csat: 92, risk: 95, relationship: 88, contractHealth: 91, projectHealth: 91, resourceHealth: 92, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(1), aiNarrative: "Beacon Analytics is the highest-scoring account in the portfolio. Revenue utilisation is at 99%, NPS is 83, and sprint velocity consistently exceeds targets. Ideal for referral programme and an enterprise tier upsell." },
+      { accountId: beacon.id, overall: 93, financial: 96, csat: 92, risk: 95, relationship: 88, contractHealth: 91, projectHealth: 91, resourceHealth: 92, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(1), aiNarrative: "Beacon Analytics is the highest-scoring account in the portfolio. Billing health is strong, stakeholder sentiment is excellent, and sprint velocity consistently exceeds targets. Ideal for referral programme and an enterprise tier upsell." },
 
       // ── Crestline Capital: AT_RISK — moderate decline ─────────────────────
-      { accountId: crestline.id, overall: 68, financial: 65, csat: 62, risk: 74, relationship: 71, contractHealth: 70, projectHealth: 70, resourceHealth: 62, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Stable account. Revenue utilisation at 84%, NPS 38. Seat count growing." },
+      { accountId: crestline.id, overall: 68, financial: 65, csat: 62, risk: 74, relationship: 71, contractHealth: 70, projectHealth: 70, resourceHealth: 62, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Stable account. Billing health is acceptable and engagement footprint is growing." },
       { accountId: crestline.id, overall: 64, financial: 61, csat: 57, risk: 70, relationship: 67, contractHealth: 68, projectHealth: 68, resourceHealth: 57, whitespace: 50, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Slight revenue utilisation dip to 79%. Analytics module v2.0 delivery approaching." },
       { accountId: crestline.id, overall: 59, financial: 55, csat: 52, risk: 62, relationship: 62, contractHealth: 65, projectHealth: 65, resourceHealth: 52, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(90), aiNarrative: "AT_RISK flag. Analytics module v2.1 shipped — early ticket volume elevated." },
-      { accountId: crestline.id, overall: 52, financial: 47, csat: 44, risk: 48, relationship: 57, contractHealth: 60, projectHealth: 60, resourceHealth: 44, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(60), aiNarrative: "Ticket volume spiking to 28. NPS at 30 and declining. Module quality issues need urgent attention." },
-      { accountId: crestline.id, overall: 46, financial: 41, csat: 38, risk: 38, relationship: 52, contractHealth: 56, projectHealth: 56, resourceHealth: 38, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(30), aiNarrative: "Continuing deterioration. 35 open tickets, NPS now 27. COO has raised concerns. EBR required." },
-      { accountId: crestline.id, overall: 41, financial: 38, csat: 35, risk: 32, relationship: 48, contractHealth: 52, projectHealth: 52, resourceHealth: 35, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(2), aiNarrative: "Crestline Capital is deteriorating. A 95% ticket surge following the portfolio module release, combined with NPS at 25, signals a quality crisis. With renewal in 130 days, urgent intervention and a dedicated fix sprint are necessary." },
+      { accountId: crestline.id, overall: 52, financial: 47, csat: 44, risk: 48, relationship: 57, contractHealth: 60, projectHealth: 60, resourceHealth: 44, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(60), aiNarrative: "Ticket volume spiking to 28. Client sentiment is declining. Module quality issues need urgent attention." },
+      { accountId: crestline.id, overall: 46, financial: 41, csat: 38, risk: 38, relationship: 52, contractHealth: 56, projectHealth: 56, resourceHealth: 38, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(30), aiNarrative: "Continuing deterioration. 35 open tickets and COO concerns. EBR required." },
+      { accountId: crestline.id, overall: 41, financial: 38, csat: 35, risk: 32, relationship: 48, contractHealth: 52, projectHealth: 52, resourceHealth: 35, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(2), aiNarrative: "Crestline Capital is deteriorating. A 95% ticket surge following the portfolio module release, combined with poor stakeholder sentiment, signals a quality crisis. With renewal in 130 days, urgent intervention and a dedicated fix sprint are necessary." },
 
       // ── NexaCloud Ltd: HEALTHY — steady climb ─────────────────────────────
       { accountId: nexacloud.id, overall: 74, financial: 78, csat: 70, risk: 76, relationship: 72, contractHealth: 73, projectHealth: 73, resourceHealth: 70, whitespace: 60, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "Solid start. Platform adoption ahead of target. Engineering team engaged." },
-      { accountId: nexacloud.id, overall: 77, financial: 81, csat: 74, risk: 79, relationship: 75, contractHealth: 76, projectHealth: 76, resourceHealth: 74, whitespace: 65, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Continued growth. NPS up to 60, feature adoption approaching 70%." },
+      { accountId: nexacloud.id, overall: 77, financial: 81, csat: 74, risk: 79, relationship: 75, contractHealth: 76, projectHealth: 76, resourceHealth: 74, whitespace: 65, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Continued growth. Client sentiment is improving and feature adoption is approaching target." },
       { accountId: nexacloud.id, overall: 80, financial: 84, csat: 78, risk: 82, relationship: 79, contractHealth: 79, projectHealth: 79, resourceHealth: 78, whitespace: 70, health: AccountHealth.HEALTHY, computedAt: daysAgo(90), aiNarrative: "Strong quarter. Revenue utilisation exceeded 100%. Support ticket count well below target." },
       { accountId: nexacloud.id, overall: 83, financial: 87, csat: 81, risk: 85, relationship: 82, contractHealth: 82, projectHealth: 82, resourceHealth: 81, whitespace: 75, health: AccountHealth.HEALTHY, computedAt: daysAgo(60), aiNarrative: "Platform seeing broad adoption. CTO proactive in roadmap discussions." },
-      { accountId: nexacloud.id, overall: 86, financial: 90, csat: 84, risk: 88, relationship: 85, contractHealth: 84, projectHealth: 84, resourceHealth: 84, whitespace: 80, health: AccountHealth.HEALTHY, computedAt: daysAgo(30), aiNarrative: "NPS at 66 and rising. Expansion conversation initiated for AI module add-on." },
-      { accountId: nexacloud.id, overall: 88, financial: 92, csat: 86, risk: 90, relationship: 87, contractHealth: 85, projectHealth: 85, resourceHealth: 86, whitespace: 85, health: AccountHealth.HEALTHY, computedAt: daysAgo(1), aiNarrative: "NexaCloud is performing excellently. Revenue utilisation is 108%, NPS is 68, and a new AI module opportunity of ~$120K is in qualifying stage. Recommend scheduling a roadmap QBR to lock in expansion." },
+      { accountId: nexacloud.id, overall: 86, financial: 90, csat: 84, risk: 88, relationship: 85, contractHealth: 84, projectHealth: 84, resourceHealth: 84, whitespace: 80, health: AccountHealth.HEALTHY, computedAt: daysAgo(30), aiNarrative: "Client sentiment is rising. Expansion conversation initiated for AI module add-on." },
+      { accountId: nexacloud.id, overall: 88, financial: 92, csat: 86, risk: 90, relationship: 87, contractHealth: 85, projectHealth: 85, resourceHealth: 86, whitespace: 85, health: AccountHealth.HEALTHY, computedAt: daysAgo(1), aiNarrative: "NexaCloud is performing excellently. Billing health and stakeholder sentiment are strong, and a new AI module opportunity of ~$120K is in qualifying stage. Recommend scheduling a roadmap QBR to lock in expansion." },
 
       // ── Vertex Systems: HEALTHY — outstanding ─────────────────────────────
       { accountId: vertex.id, overall: 82, financial: 85, csat: 79, risk: 88, relationship: 80, contractHealth: 81, projectHealth: 81, resourceHealth: 79, whitespace: 70, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "High-performing account. Exec engagement strong. Renewal ahead of schedule." },
-      { accountId: vertex.id, overall: 85, financial: 88, csat: 83, risk: 91, relationship: 84, contractHealth: 84, projectHealth: 84, resourceHealth: 83, whitespace: 75, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "NPS improved to 78. Near-zero ticket count. Case study opportunity emerging." },
+      { accountId: vertex.id, overall: 85, financial: 88, csat: 83, risk: 91, relationship: 84, contractHealth: 84, projectHealth: 84, resourceHealth: 83, whitespace: 75, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Client sentiment improved. Near-zero ticket count. Case study opportunity emerging." },
       { accountId: vertex.id, overall: 88, financial: 91, csat: 86, risk: 93, relationship: 87, contractHealth: 87, projectHealth: 87, resourceHealth: 86, whitespace: 80, health: AccountHealth.HEALTHY, computedAt: daysAgo(90), aiNarrative: "Excellent delivery metrics. CEO personally commended team in quarterly review." },
-      { accountId: vertex.id, overall: 90, financial: 94, csat: 88, risk: 95, relationship: 89, contractHealth: 89, projectHealth: 89, resourceHealth: 88, whitespace: 82, health: AccountHealth.HEALTHY, computedAt: daysAgo(60), aiNarrative: "Premier account. Sprint delivery rate 97%, NPS 84. Whitespace for platform licence expansion identified." },
+      { accountId: vertex.id, overall: 90, financial: 94, csat: 88, risk: 95, relationship: 89, contractHealth: 89, projectHealth: 89, resourceHealth: 88, whitespace: 82, health: AccountHealth.HEALTHY, computedAt: daysAgo(60), aiNarrative: "Premier account. Sprint delivery rate 97% and stakeholder sentiment is excellent. Whitespace for platform expansion identified." },
       { accountId: vertex.id, overall: 92, financial: 96, csat: 90, risk: 96, relationship: 91, contractHealth: 90, projectHealth: 90, resourceHealth: 90, whitespace: 85, health: AccountHealth.HEALTHY, computedAt: daysAgo(30), aiNarrative: "Outstanding quarter. Referral initiated. Executive sponsor actively promoting Tkxel internally." },
-      { accountId: vertex.id, overall: 94, financial: 98, csat: 92, risk: 97, relationship: 93, contractHealth: 92, projectHealth: 92, resourceHealth: 92, whitespace: 88, health: AccountHealth.HEALTHY, computedAt: daysAgo(1), aiNarrative: "Vertex Systems is the top-performing account in the portfolio. NPS of 88, near-zero tickets, and CEO-level engagement. Active co-marketing discussion and a $200K expansion proposal in final review." },
+      { accountId: vertex.id, overall: 94, financial: 98, csat: 92, risk: 97, relationship: 93, contractHealth: 92, projectHealth: 92, resourceHealth: 92, whitespace: 88, health: AccountHealth.HEALTHY, computedAt: daysAgo(1), aiNarrative: "Vertex Systems is the top-performing account in the portfolio. Stakeholder sentiment is excellent, tickets are near zero, and CEO-level engagement is active. A co-marketing discussion and a $200K expansion proposal are in final review." },
 
       // ── MediSync Health: AT_RISK — recent slip ─────────────────────────────
       { accountId: medisync.id, overall: 73, financial: 75, csat: 70, risk: 76, relationship: 71, contractHealth: 72, projectHealth: 72, resourceHealth: 70, whitespace: 55, health: AccountHealth.HEALTHY, computedAt: daysAgo(150), aiNarrative: "On track. Integration progressing, onboarding completion at 62%." },
-      { accountId: medisync.id, overall: 70, financial: 72, csat: 66, risk: 73, relationship: 68, contractHealth: 70, projectHealth: 70, resourceHealth: 66, whitespace: 55, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Integration scope expanded. Minor delivery delay flagged. NPS stable at 44." },
+      { accountId: medisync.id, overall: 70, financial: 72, csat: 66, risk: 73, relationship: 68, contractHealth: 70, projectHealth: 70, resourceHealth: 66, whitespace: 55, health: AccountHealth.HEALTHY, computedAt: daysAgo(120), aiNarrative: "Integration scope expanded. Minor delivery delay flagged. Client sentiment remains stable." },
       { accountId: medisync.id, overall: 65, financial: 67, csat: 60, risk: 67, relationship: 63, contractHealth: 66, projectHealth: 66, resourceHealth: 60, whitespace: 55, health: AccountHealth.HEALTHY, computedAt: daysAgo(90), aiNarrative: "Integration delays starting to affect adoption. MAU softening. Escalation risk emerging." },
       { accountId: medisync.id, overall: 58, financial: 60, csat: 52, risk: 58, relationship: 57, contractHealth: 61, projectHealth: 61, resourceHealth: 52, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(60), aiNarrative: "AT_RISK. Tickets increasing — primarily integration and API authentication issues." },
-      { accountId: medisync.id, overall: 52, financial: 54, csat: 44, risk: 48, relationship: 51, contractHealth: 57, projectHealth: 57, resourceHealth: 44, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(30), aiNarrative: "Continued slide. NPS now 35. CIO raising concerns about integration timelines." },
-      { accountId: medisync.id, overall: 48, financial: 50, csat: 40, risk: 42, relationship: 46, contractHealth: 54, projectHealth: 54, resourceHealth: 40, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(2), aiNarrative: "MediSync is sliding. Integration delivery is 13 weeks behind schedule, NPS has dropped to 32, and the contract renews in 95 days. A recovery plan and dedicated integration sprint are urgently required." },
+      { accountId: medisync.id, overall: 52, financial: 54, csat: 44, risk: 48, relationship: 51, contractHealth: 57, projectHealth: 57, resourceHealth: 44, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(30), aiNarrative: "Continued slide. CIO raising concerns about integration timelines." },
+      { accountId: medisync.id, overall: 48, financial: 50, csat: 40, risk: 42, relationship: 46, contractHealth: 54, projectHealth: 54, resourceHealth: 40, whitespace: 50, health: AccountHealth.AT_RISK, computedAt: daysAgo(2), aiNarrative: "MediSync is sliding. Integration delivery is 13 weeks behind schedule, stakeholder sentiment has dropped, and the contract renews in 95 days. A recovery plan and dedicated integration sprint are urgently required." },
     ],
   });
 
@@ -410,10 +410,10 @@ async function main() {
   await prisma.signal.createMany({
     data: [
       // Helix Payments
-      { accountId: helix.id, type: SignalType.CHURN_RISK, severity: SignalSeverity.CRITICAL, title: "81% churn probability detected", description: "Model assigns 81% churn probability based on collapsing NPS, ticket surge, and 55-day contract expiry with no renewal initiated.", source: "ai", detectedAt: daysAgo(2) },
+      { accountId: helix.id, type: SignalType.CHURN_RISK, severity: SignalSeverity.CRITICAL, title: "81% churn probability detected", description: "Model assigns 81% churn probability based on collapsing stakeholder sentiment, ticket surge, and 55-day contract expiry with no renewal initiated.", source: "ai", detectedAt: daysAgo(2) },
       { accountId: helix.id, type: SignalType.CONTRACT_EXPIRY, severity: SignalSeverity.CRITICAL, title: "Contract expires in 55 days", description: "MSA expires " + daysFromNow(55).toDateString() + ". No renewal conversation has been started.", source: "salesforce", detectedAt: daysAgo(4) },
       { accountId: helix.id, type: SignalType.TICKET_SPIKE, severity: SignalSeverity.CRITICAL, title: "Support tickets up 140% QoQ", description: "52 open tickets vs 10-ticket target. Spike aligns with the v4.1 payment gateway migration 4 weeks ago.", source: "jira", detectedAt: daysAgo(6) },
-      { accountId: helix.id, type: SignalType.NPS_DECLINE, severity: SignalSeverity.WARNING, title: "NPS collapsed to 11 (was 49)", description: "Down from 49 in Q4 2024. Primary detractor themes: gateway downtime, slow resolution times, and insufficient proactive communication.", source: "manual", detectedAt: daysAgo(9) },
+      { accountId: helix.id, type: SignalType.NPS_DECLINE, severity: SignalSeverity.WARNING, title: "Client sentiment collapsed", description: "Primary negative feedback themes: gateway downtime, slow resolution times, and insufficient proactive communication.", source: "manual", detectedAt: daysAgo(9) },
       { accountId: helix.id, type: SignalType.ENGAGEMENT_LOW, severity: SignalSeverity.WARNING, title: "Executive engagement at 15% — 5-month low", description: "Jordan Walsh (CTO) and Nina Osei (VP Product) last engaged 3 weeks ago. No exec sponsor contact in 5 months.", source: "manual", detectedAt: daysAgo(12) },
       { accountId: helix.id, type: SignalType.ENGAGEMENT_LOW, severity: SignalSeverity.WARNING, title: "Feature adoption down 15% — API marketplace stalling", description: "API marketplace feature adoption dropped from 44% to 29% since v4.1 launch. Correlates with gateway stability issues.", source: "manual", detectedAt: daysAgo(7) },
 
@@ -424,7 +424,7 @@ async function main() {
 
       // Crestline Capital
       { accountId: crestline.id, type: SignalType.TICKET_SPIKE, severity: SignalSeverity.CRITICAL, title: "Ticket volume up 95% — highest ever", description: "41 open tickets, highest in account history. Issue cluster: new portfolio analytics module shipped 5 weeks ago. 25 tickets directly attributable.", source: "jira", detectedAt: daysAgo(3) },
-      { accountId: crestline.id, type: SignalType.NPS_DECLINE, severity: SignalSeverity.WARNING, title: "NPS fell to 25 (was 38 last quarter)", description: "Down 34% vs prior quarter. Recurring feedback: slow bug fixes and unpredictable release quality. Two users left negative Trustpilot reviews.", source: "manual", detectedAt: daysAgo(5) },
+      { accountId: crestline.id, type: SignalType.NPS_DECLINE, severity: SignalSeverity.WARNING, title: "Client sentiment deteriorated after release", description: "Recurring feedback: slow bug fixes and unpredictable release quality. Two users left negative Trustpilot reviews.", source: "manual", detectedAt: daysAgo(5) },
       { accountId: crestline.id, type: SignalType.CONTRACT_EXPIRY, severity: SignalSeverity.WARNING, title: "Renewal due in 130 days", description: "Renewal window opens in 40 days. At current health score (41/100), early commercial intervention is essential.", source: "salesforce", detectedAt: daysAgo(1) },
       { accountId: crestline.id, type: SignalType.ENGAGEMENT_LOW, severity: SignalSeverity.WARNING, title: "Revenue utilisation declined to 67%", description: "Down from 83% at contract start. At-risk seats likely reducing active usage rather than full churn, but MRR impact is real.", source: "salesforce", detectedAt: daysAgo(4) },
 
@@ -445,8 +445,8 @@ async function main() {
 
       // MediSync — risk signals
       { accountId: medisync.id, type: SignalType.TICKET_SPIKE, severity: SignalSeverity.WARNING, title: "Integration tickets up 72% — API auth cluster", description: "31 open tickets, majority related to HL7 FHIR API authentication failures in staging environment. Integration delivery at risk.", source: "jira", detectedAt: daysAgo(4) },
-      { accountId: medisync.id, type: SignalType.NPS_DECLINE, severity: SignalSeverity.WARNING, title: "NPS dropped to 32 — integration frustration", description: "NPS fell 12 points in 90 days. Detractor themes: slow integration delivery, lack of technical documentation, unclear timeline.", source: "manual", detectedAt: daysAgo(6) },
-      { accountId: medisync.id, type: SignalType.CONTRACT_EXPIRY, severity: SignalSeverity.WARNING, title: "Contract renewal in 95 days", description: "Renewal window approaching. Integration delays and NPS decline create renewal risk. Early commercial discussion recommended.", source: "salesforce", detectedAt: daysAgo(1) },
+      { accountId: medisync.id, type: SignalType.NPS_DECLINE, severity: SignalSeverity.WARNING, title: "Client sentiment down — integration frustration", description: "Stakeholder feedback has worsened over 90 days. Themes: slow integration delivery, lack of technical documentation, unclear timeline.", source: "manual", detectedAt: daysAgo(6) },
+      { accountId: medisync.id, type: SignalType.CONTRACT_EXPIRY, severity: SignalSeverity.WARNING, title: "Contract renewal in 95 days", description: "Renewal window approaching. Integration delays and weakening client sentiment create renewal risk. Early commercial discussion recommended.", source: "salesforce", detectedAt: daysAgo(1) },
     ],
   });
 
@@ -475,11 +475,11 @@ async function main() {
 
       // Ironclad — growth
       { accountId: ironclad.id, ownerId: marcus.id, title: "Submit Eastern Europe expansion proposal", description: "Build commercial proposal for 4 new hubs: Warsaw, Prague, Bucharest, Budapest. Target close within Q2.", status: ActionStatus.IN_PROGRESS, priority: ActionPriority.HIGH, source: ActionSource.HUMAN_CREATED, dueDate: daysFromNow(14) },
-      { accountId: ironclad.id, ownerId: marcus.id, title: "Nominate Ironclad for Tkxel case study", description: "Coordinate with marketing to document NPS improvement and ROI metrics for a public case study.", status: ActionStatus.OPEN, priority: ActionPriority.MEDIUM, source: ActionSource.AI_PROPOSED, aiConfidence: 0.80, dueDate: daysFromNow(30) },
+      { accountId: ironclad.id, ownerId: marcus.id, title: "Nominate Ironclad for Tkxel case study", description: "Coordinate with marketing to document delivery outcomes, client feedback, and ROI metrics for a public case study.", status: ActionStatus.OPEN, priority: ActionPriority.MEDIUM, source: ActionSource.AI_PROPOSED, aiConfidence: 0.80, dueDate: daysFromNow(30) },
       { accountId: ironclad.id, ownerId: marcus.id, title: "Scope customs compliance module with Lena Hofer", description: "Phase 2 discovery: document requirements for cross-border customs automation. Estimated value €80K.", status: ActionStatus.OPEN, priority: ActionPriority.MEDIUM, source: ActionSource.HUMAN_CREATED, dueDate: daysFromNow(21) },
       // Ironclad completed
       { accountId: ironclad.id, ownerId: marcus.id, title: "Conduct Q1 2025 QBR with Pieter and Lena", description: "Full quarterly review. All KPIs green. Eastern Europe expansion scoped. Case study approved.", status: ActionStatus.DONE, priority: ActionPriority.HIGH, source: ActionSource.HUMAN_CREATED, dueDate: daysAgo(12) },
-      { accountId: ironclad.id, ownerId: marcus.id, title: "Deliver route optimisation module Phase 2", description: "Phase 2 delivery complete. On-time, zero critical bugs. NPS improved +8 following release.", status: ActionStatus.DONE, priority: ActionPriority.HIGH, source: ActionSource.HUMAN_CREATED, dueDate: daysAgo(45) },
+      { accountId: ironclad.id, ownerId: marcus.id, title: "Deliver route optimisation module Phase 2", description: "Phase 2 delivery complete. On-time, zero critical bugs. Client feedback improved following release.", status: ActionStatus.DONE, priority: ActionPriority.HIGH, source: ActionSource.HUMAN_CREATED, dueDate: daysAgo(45) },
 
       // Beacon
       { accountId: beacon.id, ownerId: marcus.id, title: "Initiate referral conversation with Zoe Park (CEO)", description: "Follow up on Zoe's offer to be a reference customer. Align with marketing on logistics and incentives.", status: ActionStatus.OPEN, priority: ActionPriority.MEDIUM, source: ActionSource.AI_PROPOSED, aiConfidence: 0.83, dueDate: daysFromNow(10) },
@@ -499,7 +499,7 @@ async function main() {
       // NexaCloud — expansion focus
       { accountId: nexacloud.id, ownerId: marcus.id, title: "Schedule AI module expansion roadmap QBR", description: "Book a joint roadmap session with Alex Thornton to scope the AI/ML add-on and agree on delivery timeline.", status: ActionStatus.OPEN, priority: ActionPriority.HIGH, source: ActionSource.AI_PROPOSED, aiConfidence: 0.88, dueDate: daysFromNow(12) },
       { accountId: nexacloud.id, ownerId: marcus.id, title: "Prepare $120K AI module commercial proposal", description: "Build pricing options for the AI inference and model training add-on. Include 12-month and 24-month commit tiers.", status: ActionStatus.OPEN, priority: ActionPriority.HIGH, source: ActionSource.HUMAN_CREATED, dueDate: daysFromNow(18) },
-      { accountId: nexacloud.id, ownerId: marcus.id, title: "Nominate NexaCloud for cloud case study", description: "Revenue utilisation exceeded 100%, NPS 68. Perfect case study candidate for cloud infrastructure vertical.", status: ActionStatus.OPEN, priority: ActionPriority.MEDIUM, source: ActionSource.AI_PROPOSED, aiConfidence: 0.77, dueDate: daysFromNow(30) },
+      { accountId: nexacloud.id, ownerId: marcus.id, title: "Nominate NexaCloud for cloud case study", description: "Billing health and client sentiment are strong. Good case study candidate for cloud infrastructure vertical.", status: ActionStatus.OPEN, priority: ActionPriority.MEDIUM, source: ActionSource.AI_PROPOSED, aiConfidence: 0.77, dueDate: daysFromNow(30) },
 
       // Vertex Systems — maintain + expand
       { accountId: vertex.id, ownerId: marcus.id, title: "Close $200K platform expansion proposal", description: "Michael Kane's legal team is reviewing. Coordinate with Tkxel legal to align on SLA terms and contract structure.", status: ActionStatus.IN_PROGRESS, priority: ActionPriority.HIGH, source: ActionSource.HUMAN_CREATED, dueDate: daysFromNow(8) },
@@ -509,7 +509,7 @@ async function main() {
       // MediSync — recovery
       { accountId: medisync.id, ownerId: sarah.id, title: "Escalate integration delays to CIO (Dr. Patricia Obi)", description: "CIO raised concerns at last check-in. Prepare honest assessment and revised timeline with buffer. Request 2-week extension.", status: ActionStatus.OPEN, priority: ActionPriority.CRITICAL, source: ActionSource.AI_PROPOSED, aiConfidence: 0.90, dueDate: daysFromNow(3) },
       { accountId: medisync.id, ownerId: sarah.id, title: "Assign dedicated integration engineer to MediSync", description: "Integration complexity is beyond standard delivery. A named senior integration engineer will unblock the 5 stalled API tasks.", status: ActionStatus.IN_PROGRESS, priority: ActionPriority.HIGH, source: ActionSource.HUMAN_CREATED, dueDate: daysFromNow(5) },
-      { accountId: medisync.id, ownerId: sarah.id, title: "Initiate NPS recovery plan", description: "NPS has dropped 12 points in 90 days. Design a 30-day touchpoint programme: weekly check-ins, product updates, quick wins.", status: ActionStatus.OPEN, priority: ActionPriority.HIGH, source: ActionSource.AI_PROPOSED, aiConfidence: 0.84, dueDate: daysFromNow(10) },
+      { accountId: medisync.id, ownerId: sarah.id, title: "Initiate client sentiment recovery plan", description: "Stakeholder sentiment has weakened over 90 days. Design a 30-day touchpoint programme: weekly check-ins, product updates, quick wins.", status: ActionStatus.OPEN, priority: ActionPriority.HIGH, source: ActionSource.AI_PROPOSED, aiConfidence: 0.84, dueDate: daysFromNow(10) },
     ],
   });
 
@@ -567,9 +567,9 @@ async function main() {
         businessModel: "B2B SaaS — API-first payment gateway. Revenue from usage-based processing fees plus platform subscription.",
         keyStakeholders: JSON.stringify([{ name: "Jordan Walsh", role: "CTO", influence: "Decision Maker" }, { name: "Nina Osei", role: "VP Product", influence: "Influencer" }, { name: "Carlos Reyes", role: "Head of Engineering", influence: "Technical Gatekeeper" }]),
         strategicGoals: "Expand API marketplace to 150 integrations by Q4 2025. Launch in the EU market Q3 2025.",
-        riskFactors: "Critical: 81% churn probability, NPS at 11, contract expiry in 55 days, gateway stability issues post v4.1 migration.",
+        riskFactors: "Critical: 81% churn probability, poor stakeholder sentiment, contract expiry in 55 days, gateway stability issues post v4.1 migration.",
         expansionOpportunity: "EU expansion support, SRE engagement, and premium SLA tier represent a potential $500K upsell.",
-        csatHistory: "NPS declined from 49 (Q3 2024) → 38 (Q4 2024) → 18 (Q1 2025) → 11 (current). CSAT score 2.8/5 on last survey. Satisfaction collapse correlates directly with v4.1 gateway migration in February 2025. Executive sponsor last engaged 5 months ago.",
+        csatHistory: "Stakeholder sentiment has declined across recent periods. CSAT score 2.8/5 on last survey. Satisfaction collapse correlates directly with v4.1 gateway migration in February 2025. Executive sponsor last engaged 5 months ago.",
         competitiveLandscape: "Primary threat: Stripe Treasury and Adyen Embedded Finance — both actively pitching Helix. Secondary risk from ModernFi (backed by a16z). Tkxel differentiated on API customisation depth and white-glove migration support, but relationship damage has eroded this advantage.",
         financialOverview: "ARR $1.75M. Annual contract, auto-renewal clause, expires in 55 days. No outstanding invoices. Q4 2024 revenue utilisation 87% — down from 95%. Expansion fee waiver granted for v4 migration (credit $42K applied). Next renewal target: $1.9M (+9%).",
         submittedAt: daysAgo(28),
@@ -586,7 +586,7 @@ async function main() {
         strategicGoals: "Reach 80% MAU within 18 months. Expand to 4 additional hospital networks in Alberta.",
         riskFactors: "Declining MAU (59%), unresolved SSO/export issues, softening engagement at engineering level. Onboarding completion at 44% for new cohort.",
         expansionOpportunity: "Alberta expansion and a new patient-facing mobile module represent ~$220K upsell.",
-        csatHistory: "NPS 30 (Q1 2025), down from 42 (Q3 2024). CSAT stable at 3.6/5. CDO (Dr. Ravi Menon) satisfaction high — engineering-level trust declining. Last executive check-in 6 weeks ago. Two formal complaints filed via IT Director in Q1 around SSO reliability.",
+        csatHistory: "Client sentiment is down from earlier periods. CSAT stable at 3.6/5. CDO (Dr. Ravi Menon) satisfaction high — engineering-level trust declining. Last executive check-in 6 weeks ago. Two formal complaints filed via IT Director in Q1 around SSO reliability.",
         competitiveLandscape: "Oracle Health and Epic MyChart are embedded with procurement. Tkxel differentiates on mid-market pricing and integration flexibility. No active competitive evaluation known but renewal proximity increases displacement risk. Secondary threat from MedTech startups (Medisafe, Validic) for point-solution displacement.",
         financialOverview: "ARR $980K. Multi-year contract, Year 2 of 3. Annual invoicing — current year paid in full. Revenue utilisation 91%. Implementation services revenue $120K (one-time, fully recognised). Next review milestone: Alberta pilot funding approval Q3 2025 (est. $180K incremental).",
         submittedAt: daysAgo(8),
@@ -602,7 +602,7 @@ async function main() {
         strategicGoals: "Expand to Eastern Europe (PL, CZ, HU, RO) in 2025. Launch cross-border customs compliance module.",
         riskFactors: "Low risk. Primary watch item: scope management during rapid expansion phase.",
         expansionOpportunity: "Eastern European expansion worth €200K ARR. Co-development of a customs compliance module (est. €80K).",
-        csatHistory: "NPS 72 (Q1 2025), up from 58 (Q3 2024). CSAT 4.7/5. Pieter van Dijk is an active reference customer — spoke at Tkxel's logistics webinar in March. No complaints in past 18 months. On-time delivery rate 97%.",
+        csatHistory: "Client sentiment is strong and improving. CSAT 4.7/5. Pieter van Dijk is an active reference customer — spoke at Tkxel's logistics webinar in March. No complaints in past 18 months. On-time delivery rate 97%.",
         competitiveLandscape: "No active competitive evaluation. SAP TM evaluated and declined 18 months ago due to cost and implementation complexity. Tkxel's mid-market positioning and speed of deployment are key differentiators. Key risk: if Ironclad reaches €5M ARR, SAP and Oracle may re-engage at board level.",
         financialOverview: "ARR €720K (~$790K). Renewed 6 months early on a 2-year term. NRR 118% including services. Revenue utilisation 97%. Expansion budget of €200K for Eastern Europe approved in principle by board — formal PO expected Q2 2025. No outstanding invoices.",
         submittedAt: daysAgo(55),
@@ -619,7 +619,7 @@ async function main() {
         strategicGoals: "Reach $6M ARR by end of 2025. Achieve SOC2 Type II. Launch in EMEA.",
         riskFactors: "Fast-scaling startup — key person risk. Competitive pressure from incumbents in observability space.",
         expansionOpportunity: "Enterprise tier upgrade at $130K incremental ARR. Co-marketing and referral programme. EMEA expansion support est. $85K.",
-        csatHistory: "NPS 83 (Q1 2025), up from 65 (Q3 2024). CSAT 4.8/5. CEO Zoe Park offered to be a reference in January. Positive Slack community feedback. Zero support escalations in 6 months. DAU growth +8% QoQ.",
+        csatHistory: "Client sentiment is excellent and improving. CSAT 4.8/5. CEO Zoe Park offered to be a reference in January. Positive Slack community feedback. Zero support escalations in 6 months.",
         competitiveLandscape: "Datadog and Grafana Cloud are primary competitors. Monte Carlo is emerging in data observability. Tkxel differentiated by customisation speed and Beacon's specific real-time streaming requirements. Beacon evaluated Datadog in Q4 2024 and chose to stay — documented in account notes.",
         financialOverview: "ARR $420K on growth tier. Series A ($18M) closed Feb 2025 — finances healthy. Monthly invoicing, consistently on-time. Revenue utilisation 94%. Enterprise upgrade proposal submitted ($550K ARR) — decision expected Q2 2025. No outstanding invoices.",
         submittedAt: daysAgo(40),
@@ -634,9 +634,9 @@ async function main() {
         businessModel: "B2B SaaS — per-seat subscription. Revenue from platform access plus optional compliance reporting module.",
         keyStakeholders: JSON.stringify([{ name: "Oliver Hartmann", role: "COO", influence: "Decision Maker" }, { name: "Amara Diallo", role: "Engineering Lead", influence: "Technical Gatekeeper" }, { name: "Rebecca Stone", role: "Head of Compliance", influence: "Regulatory Gatekeeper" }]),
         strategicGoals: "Launch AI-powered portfolio rebalancing by Q3 2025. Grow to 1,600 seats by year-end.",
-        riskFactors: "95% ticket surge and NPS at 25 following analytics module release. Renewal in 130 days. FCA compliance adds delivery pressure.",
+        riskFactors: "95% ticket surge and poor client sentiment following analytics module release. Renewal in 130 days. FCA compliance adds delivery pressure.",
         expansionOpportunity: "AI rebalancing co-development and seat expansion to 1,600 represent ~$320K opportunity.",
-        csatHistory: "NPS 25 (Q1 2025), down from 44 (Q3 2024). CSAT 3.2/5. Oliver Hartmann (COO) expressed frustration on a call in March over bug resolution times. Formal complaint letter submitted to Tkxel account director Feb 28. Two escalated tickets unresolved for 14+ days.",
+        csatHistory: "Client sentiment has deteriorated since Q3 2024. CSAT 3.2/5. Oliver Hartmann (COO) expressed frustration on a call in March over bug resolution times. Formal complaint letter submitted to Tkxel account director Feb 28. Two escalated tickets unresolved for 14+ days.",
         competitiveLandscape: "Intelliflo (Adviser Cloud) and Iress are the primary incumbent alternatives. FNZ Altus actively pitching for full-platform replacement. Tkxel's risk: the analytics module failure gives FNZ a direct opening. Crestline's compliance team has started an informal RFP process (not officially confirmed).",
         financialOverview: "ARR $1.2M. Annual contract, Year 1 of 1 — renewal in 130 days. Quarterly invoicing — Q1 2025 invoice paid 18 days late. Revenue utilisation 88%. Overdue balance: $0 (cleared). AI rebalancing co-development SOW value: $180K (not yet signed). Renewal target: $1.35M (+13%).",
         submittedAt: daysAgo(12),
@@ -665,11 +665,11 @@ async function main() {
 
   await prisma.qbrItem.createMany({
     data: [
-      { sessionId: helixQbr.id, order: 1, category: "review", title: "Q1 2025 Performance Review", content: "Walk through KPIs vs targets. Acknowledge NPS and ticket issues directly — no sugarcoating.", status: "pending" },
+      { sessionId: helixQbr.id, order: 1, category: "review", title: "Q1 2025 Performance Review", content: "Walk through KPIs vs targets. Acknowledge client sentiment and ticket issues directly — no sugarcoating.", status: "pending" },
       { sessionId: helixQbr.id, order: 2, category: "risk", title: "Gateway v4.1 — RCA & Fix Timeline", content: "Engineering to present root cause, affected transaction volume, and committed resolution milestones with dates.", status: "pending" },
       { sessionId: helixQbr.id, order: 3, category: "action", title: "Renewal Proposal Presentation", content: "Present 12-month renewal with 10% loyalty discount, premium SLA tier, and named support engineer commitment.", status: "pending" },
       { sessionId: helixQbr.id, order: 4, category: "expansion", title: "EU Launch Support Roadmap", content: "Overview of Tkxel capabilities to support Helix's planned EU market entry — SRE, compliance, and data residency support.", status: "pending" },
-      { sessionId: helixQbr.id, order: 5, category: "action", title: "Define Success Metrics for Recovery", content: "Agree measurable milestones: NPS target for Q2, ticket resolution SLA, and named KPIs for renewal decision.", status: "pending" },
+      { sessionId: helixQbr.id, order: 5, category: "action", title: "Define Success Metrics for Recovery", content: "Agree measurable milestones: client sentiment target for Q2, ticket resolution SLA, and named KPIs for renewal decision.", status: "pending" },
     ],
   });
 
@@ -684,13 +684,13 @@ async function main() {
       scheduledAt: daysAgo(12),
       conductedAt: daysAgo(12),
       attendees: JSON.stringify(["Pieter van Dijk", "Lena Hofer", "Marcus Okafor"]),
-      aiSummary: "Exceptional quarter. All sprint commitments delivered on time, NPS is 14 points above target, and the Eastern Europe expansion proposal is being fast-tracked. Pieter confirmed budget approval is likely before end of Q2. Lena raised interest in the customs compliance module for Phase 2. Marcus to submit formal proposal within 2 weeks.",
+      aiSummary: "Exceptional quarter. All sprint commitments delivered on time, client sentiment is above target, and the Eastern Europe expansion proposal is being fast-tracked. Pieter confirmed budget approval is likely before end of Q2. Lena raised interest in the customs compliance module for Phase 2. Marcus to submit formal proposal within 2 weeks.",
     },
   });
 
   await prisma.qbrItem.createMany({
     data: [
-      { sessionId: ironcladQbr.id, order: 1, category: "review", title: "Q1 2025 Highlights", content: "NPS 74 (target 60). 4/4 sprint milestones delivered. Tickets near zero. Revenue utilisation 96%.", status: "discussed" },
+      { sessionId: ironcladQbr.id, order: 1, category: "review", title: "Q1 2025 Highlights", content: "Client sentiment above target. 4/4 sprint milestones delivered. Tickets near zero. Billing health strong.", status: "discussed" },
       { sessionId: ironcladQbr.id, order: 2, category: "expansion", title: "Eastern Europe Expansion Scoping", content: "4 hubs: Warsaw, Prague, Budapest, Bucharest. Estimated 7-month engagement. Budget likely before Q2 close.", status: "resolved" },
       { sessionId: ironcladQbr.id, order: 3, category: "action", title: "Case Study & Co-Marketing", content: "Pieter approved ROI case study. Joint webinar on supply chain digitisation proposed for Q2.", status: "resolved" },
       { sessionId: ironcladQbr.id, order: 4, category: "expansion", title: "Phase 2 — Customs Compliance Module", content: "Lena confirmed interest in cross-border customs module. Marcus to scope requirements and submit proposal.", status: "discussed" },
@@ -731,13 +731,13 @@ async function main() {
       scheduledAt: daysAgo(20),
       conductedAt: daysAgo(20),
       attendees: JSON.stringify(["Zoe Park", "Tariq Hassan", "Marcus Okafor"]),
-      aiSummary: "Beacon's best quarter on record. NPS at 83, all sprint commitments delivered ahead of schedule, and daily active users up 8% to 78%. Zoe confirmed Series A close at $18M and outlined EMEA expansion plans. Enterprise tier upgrade proposal requested — Tariq to review pricing and share back within one week. Marcus to align with Tkxel marketing on referral programme.",
+      aiSummary: "Beacon's best quarter on record. Client sentiment is excellent, all sprint commitments delivered ahead of schedule, and stakeholder engagement is strong. Zoe confirmed Series A close at $18M and outlined EMEA expansion plans. Enterprise tier upgrade proposal requested — Tariq to review pricing and share back within one week. Marcus to align with Tkxel marketing on referral programme.",
     },
   });
 
   await prisma.qbrItem.createMany({
     data: [
-      { sessionId: beaconQbr.id, order: 1, category: "review", title: "Q1 2025 Highlights", content: "NPS 83 (target 65). All 4 data pipeline features shipped on schedule. DAU 78%, up 8% QoQ. Revenue utilisation 99%.", status: "discussed" },
+      { sessionId: beaconQbr.id, order: 1, category: "review", title: "Q1 2025 Highlights", content: "Client sentiment above target. All 4 data pipeline features shipped on schedule. Stakeholder engagement is strong. Billing health is strong.", status: "discussed" },
       { sessionId: beaconQbr.id, order: 2, category: "expansion", title: "Series A & EMEA Expansion", content: "Zoe confirmed $18M Series A close. EMEA expansion planned H2 2025 — Tkxel's European delivery network is a strong fit.", status: "discussed" },
       { sessionId: beaconQbr.id, order: 3, category: "action", title: "Enterprise Tier Upgrade Proposal", content: "Tariq to review enterprise pricing. Marcus to follow up with commercial team. Target close: 30 days.", status: "resolved" },
       { sessionId: beaconQbr.id, order: 4, category: "action", title: "Reference Customer & Referral Programme", content: "Zoe happy to be reference customer. Marketing to scope co-branded case study and referral incentive structure.", status: "discussed" },
@@ -761,7 +761,7 @@ async function main() {
   await prisma.qbrItem.createMany({
     data: [
       { sessionId: crestlineEbr.id, order: 1, category: "review", title: "Analytics Module — RCA & Fix Sprint", content: "Present root cause of v2.1 issues. Amara to confirm fix sprint scope: 25 tickets in 8 business days.", status: "pending" },
-      { sessionId: crestlineEbr.id, order: 2, category: "risk", title: "NPS & Customer Sentiment Recovery", content: "Acknowledge NPS drop to 25. Share recovery plan: proactive user communication, hotfix milestones, and feedback loop.", status: "pending" },
+      { sessionId: crestlineEbr.id, order: 2, category: "risk", title: "Customer Sentiment Recovery", content: "Acknowledge the sentiment drop. Share recovery plan: proactive stakeholder communication, hotfix milestones, and feedback loop.", status: "pending" },
       { sessionId: crestlineEbr.id, order: 3, category: "action", title: "Renewal Commercial Discussion", content: "130 days to renewal. Present health recovery roadmap as the foundation for a renewed commercial relationship.", status: "pending" },
       { sessionId: crestlineEbr.id, order: 4, category: "expansion", title: "AI Rebalancing Co-Development — Early Signal", content: "Oliver has mentioned interest in AI rebalancing. Early scoping discussion to show forward momentum beyond current issues.", status: "pending" },
     ],
@@ -770,10 +770,10 @@ async function main() {
   console.log("✅  QBR Sessions created");
 
   // AI Pulse Insights are intentionally NOT seeded.
-  // They are generated live by the Gemini API when a user clicks
+  // They are generated live by the configured AI provider when a user clicks
   // "Generate AI Insight" on the AI Pulse page (POST /api/ai/pulse).
 
-  console.log("✅  AI Pulse Insights skipped (generated live via Gemini)");
+  console.log("✅  AI Pulse Insights skipped (generated live via configured AI provider)");
 
   // ── Activity Logs ──────────────────────────────────────────────────────────
 
@@ -802,7 +802,7 @@ async function main() {
       { accountId: helix.id, type: "MEETING", date: daysAgo(3),  loggedBy: "Sarah Chen", stakeholders: "Jordan Walsh, Nina Osei", notes: "Emergency call triggered by CTO email. Jordan is frustrated with v4.1 gateway instability. Agreed to share RCA within 48 hours. Temperature: cold." },
       { accountId: helix.id, type: "EMAIL",   date: daysAgo(8),  loggedBy: "Sarah Chen", stakeholders: "Jordan Walsh", notes: "Sent migration impact report and preliminary root cause summary. Jordan acknowledged receipt, tone neutral." },
       { accountId: helix.id, type: "CALL",    date: daysAgo(18), loggedBy: "Sarah Chen", stakeholders: "Carlos Reyes", notes: "Engineering-to-engineering call on v4.1 deployment. Carlos confirmed 52 tickets traced to payment gateway timeout regression. Fix ETA 10 days." },
-      { accountId: helix.id, type: "MEETING", date: daysAgo(35), loggedBy: "Sarah Chen", stakeholders: "Jordan Walsh, Nina Osei, Carlos Reyes", notes: "Quarterly check-in pre-issues. All KPIs reviewed, NPS at 38 (declining). Jordan flagged concerns about EU launch readiness. Follow-up action set." },
+      { accountId: helix.id, type: "MEETING", date: daysAgo(35), loggedBy: "Sarah Chen", stakeholders: "Jordan Walsh, Nina Osei, Carlos Reyes", notes: "Quarterly check-in pre-issues. All KPIs reviewed, client sentiment declining. Jordan flagged concerns about EU launch readiness. Follow-up action set." },
       { accountId: helix.id, type: "EMAIL",   date: daysAgo(52), loggedBy: "Sarah Chen", stakeholders: "Nina Osei", notes: "Shared v4 roadmap preview with VP Product. Positive reception. Nina confirmed budget review in Q2 for EU expansion." },
 
       // ClearBridge Health — proactive engagement
@@ -815,10 +815,10 @@ async function main() {
       { accountId: ironclad.id, type: "QBR",     date: daysAgo(12), loggedBy: "Marcus Okafor", stakeholders: "Pieter van Dijk, Lena Hofer", notes: "Q1 QBR completed. Exceptional metrics across all KPIs. Eastern Europe expansion budget likely approved before Q2 close. Case study approved. Customs compliance module scoped for Phase 2." },
       { accountId: ironclad.id, type: "CALL",    date: daysAgo(25), loggedBy: "Marcus Okafor", stakeholders: "Pieter van Dijk", notes: "Mid-quarter check-in. Pieter confirmed EE expansion board discussion planned for next month. Very positive tone." },
       { accountId: ironclad.id, type: "MEETING", date: daysAgo(45), loggedBy: "Marcus Okafor", stakeholders: "Lena Hofer", notes: "Operations review. Lena confirmed Phase 2 interest in customs compliance module. Requirements document requested." },
-      { accountId: ironclad.id, type: "EMAIL",   date: daysAgo(60), loggedBy: "Marcus Okafor", stakeholders: "Pieter van Dijk", notes: "Shared route optimisation Phase 2 delivery confirmation. NPS survey completed by Pieter, score 74. Offered co-marketing opportunity." },
+      { accountId: ironclad.id, type: "EMAIL",   date: daysAgo(60), loggedBy: "Marcus Okafor", stakeholders: "Pieter van Dijk", notes: "Shared route optimisation Phase 2 delivery confirmation. Pieter gave positive client feedback. Offered co-marketing opportunity." },
 
       // Beacon Analytics — growth momentum
-      { accountId: beacon.id, type: "QBR",     date: daysAgo(20), loggedBy: "Marcus Okafor", stakeholders: "Zoe Park, Tariq Hassan", notes: "Best QBR on record. NPS 83, Series A confirmed at $18M. Enterprise upgrade proposal requested by Tariq. Zoe offered to be a reference customer. Referral discussion initiated." },
+      { accountId: beacon.id, type: "QBR",     date: daysAgo(20), loggedBy: "Marcus Okafor", stakeholders: "Zoe Park, Tariq Hassan", notes: "Best QBR on record. Client sentiment excellent, Series A confirmed at $18M. Enterprise upgrade proposal requested by Tariq. Zoe offered to be a reference customer. Referral discussion initiated." },
       { accountId: beacon.id, type: "MEETING", date: daysAgo(38), loggedBy: "Marcus Okafor", stakeholders: "Tariq Hassan", notes: "Technical deep-dive on enterprise tier features. Tariq reviewed advanced SLA terms. Positive signals on upgrade timeline." },
       { accountId: beacon.id, type: "CALL",    date: daysAgo(55), loggedBy: "Marcus Okafor", stakeholders: "Maya Flores", notes: "Engineering check-in post data pipeline sprint delivery. Maya confirmed all 4 features performing in production. Sprint velocity at 91%." },
       { accountId: beacon.id, type: "EMAIL",   date: daysAgo(70), loggedBy: "Marcus Okafor", stakeholders: "Zoe Park", notes: "Shared SOC2 Type II advisory framework. Zoe confirmed Maya Flores leading internally. Tkxel to provide advisory support as part of enterprise tier value." },
@@ -831,13 +831,13 @@ async function main() {
 
       // NexaCloud Ltd — expansion focus
       { accountId: nexacloud.id, type: "MEETING", date: daysAgo(6),  loggedBy: "Sarah Chen", stakeholders: "Alex Thornton", notes: "AI module discovery session. Alex confirmed Q2 budget interest for AI inference add-on. Proposal requested by end of month. Excellent engagement." },
-      { accountId: nexacloud.id, type: "QBR",     date: daysAgo(28), loggedBy: "Sarah Chen", stakeholders: "Alex Thornton, Priya Sharma", notes: "Q1 QBR. Revenue utilisation 108%, NPS 68, platform adoption 91%. Expansion discussion confirmed. AI module opportunity scoped at $120K." },
+      { accountId: nexacloud.id, type: "QBR",     date: daysAgo(28), loggedBy: "Sarah Chen", stakeholders: "Alex Thornton, Priya Sharma", notes: "Q1 QBR. Billing health and client sentiment strong. Expansion discussion confirmed. AI module opportunity scoped at $120K." },
       { accountId: nexacloud.id, type: "CALL",    date: daysAgo(50), loggedBy: "Sarah Chen", stakeholders: "Priya Sharma", notes: "Engineering cadence call. VP Engineering confirmed all sprint deliverables on track. Feature adoption growing week-over-week." },
 
       // Vertex Systems — champion account
       { accountId: vertex.id, type: "MEETING", date: daysAgo(4),  loggedBy: "Marcus Okafor", stakeholders: "Michael Kane", notes: "CEO briefing on $200K expansion proposal. Legal review in progress. Michael very supportive. Expected close within 8 days." },
       { accountId: vertex.id, type: "CALL",    date: daysAgo(15), loggedBy: "Marcus Okafor", stakeholders: "Sandra Lee", notes: "Customer success alignment call. Sandra confirmed Q2 webinar participation. Co-marketing content strategy discussed." },
-      { accountId: vertex.id, type: "QBR",     date: daysAgo(32), loggedBy: "Marcus Okafor", stakeholders: "Michael Kane, Sandra Lee", notes: "Q1 QBR. NPS 88, zero tickets, 98% sprint delivery rate. CEO personally commended the team. Platform expansion proposal well received." },
+      { accountId: vertex.id, type: "QBR",     date: daysAgo(32), loggedBy: "Marcus Okafor", stakeholders: "Michael Kane, Sandra Lee", notes: "Q1 QBR. Client sentiment excellent, zero tickets, 98% sprint delivery rate. CEO personally commended the team. Platform expansion proposal well received." },
       { accountId: vertex.id, type: "EMAIL",   date: daysAgo(60), loggedBy: "Marcus Okafor", stakeholders: "Michael Kane", notes: "Sent premier support onboarding confirmation. Dedicated Slack channel and named CSE assigned. Michael replied within the hour with positive feedback." },
 
       // MediSync Health — recovery mode
@@ -858,7 +858,7 @@ async function main() {
         accountId: helix.id,
         type: "COMMERCIAL",
         severity: "CRITICAL",
-        description: "Contract expires in 55 days with no renewal motion underway. NPS collapse and ticket surge create a high-risk renewal scenario. Immediate executive intervention required. Escalated to account director and senior leadership.",
+        description: "Contract expires in 55 days with no renewal motion underway. Client sentiment collapse and ticket surge create a high-risk renewal scenario. Immediate executive intervention required. Escalated to account director and senior leadership.",
         linkedProject: "Helix Payments MSA Renewal",
         openedById: sarah.id,
         status: "OPEN",

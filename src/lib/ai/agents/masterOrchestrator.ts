@@ -6,7 +6,7 @@
  * 2. Manage agent dependencies (sequential vs. parallel)
  * 3. Aggregate a unified steps[] trace across all agents
  * 4. Handle failures with one retry per agent
- * 5. AI override: lightweight Gemini call for borderline conditional decisions
+ * 5. AI override: lightweight provider call for borderline conditional decisions
  *
  * Routing table:
  *   score_computed        → ScoreActions → RecOrchestrator → OutcomeAnalyzer*
@@ -16,7 +16,7 @@
  *   pulse_refresh         → RecOrchestrator → OutcomeAnalyzer
  *   manual_full_refresh   → RecOrchestrator → RuleQualityScorer → FallbackCrystallizer
  *
- * * = AI override applies (Gemini decides whether to skip based on data availability)
+ * * = AI override applies (configured provider decides whether to skip based on data availability)
  */
 
 import { prisma } from "@/lib/prisma";

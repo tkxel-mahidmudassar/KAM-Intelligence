@@ -1,7 +1,7 @@
 /**
  * Playbook Rule Extraction Agent.
  *
- * Takes parsed text chunks from a playbook file and uses Gemini (JSON mode)
+ * Takes parsed text chunks from a playbook file and uses the configured AI provider in JSON mode
  * to extract structured PlaybookRule records. Updates the Playbook status
  * to ACTIVE (at least 1 valid rule) or PENDING_REVIEW (0 valid rules) on completion,
  * or FAILED on unrecoverable error.

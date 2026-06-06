@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         title,
         fileName: file.name,
         fileType,
-        mimeType: file.type || null,
+        mimeType: file.type || "",
         fileSize: file.size,
         storagePath: stored.storagePath,
         uploadedById,

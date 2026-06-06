@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
+import { RoleBar } from "@/components/layout/RoleBar";
 import { RoleProvider } from "@/context/RoleContext";
 import "../styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "KAM Intelligence",
-  description: "Key Account Management Intelligence Platform — Tkxel",
+  title: "KAM Intelligence V2",
+  description: "Enhanced Key Account Management Intelligence Platform by Tkxel",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <RoleProvider>
+            <RoleBar />
             {children}
           </RoleProvider>
         </ThemeProvider>

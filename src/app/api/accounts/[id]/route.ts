@@ -71,6 +71,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         worksphere: {
           ...worksphere.data,
           totalUsers: worksphere.data.totalLicenses,
+          recentMeetingCount: worksphere.data.recentMeetings.length,
           lastMeetingDate: worksphere.data.recentMeetings[0]?.date ?? null,
         },
         finance: {
@@ -104,6 +105,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         arr:      body.arr,
         health:   body.health,
         kamId:    body.kamId,
+        contractStart: body.contractStart ? new Date(body.contractStart) : body.contractStart,
+        contractEnd:   body.contractEnd   ? new Date(body.contractEnd)   : body.contractEnd,
       },
     });
 

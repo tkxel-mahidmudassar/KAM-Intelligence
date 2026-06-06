@@ -69,6 +69,54 @@ const MOCK_DATA: Record<string, SalesforceData> = {
     lastSyncedAt: now,
   },
 
+  "acc-nexacloud-006": {
+    accountId: "acc-nexacloud-006",
+    accountName: "NexaCloud",
+    arr: 680_000,
+    renewalDate: new Date(Date.now() + 320 * 864e5).toISOString(),
+    healthScore: 82,
+    opportunities: [
+      { id: "opp-nx1", name: "NexaCloud — AI Module Expansion", stage: "Proposal", amount: 120_000, closeDate: new Date(Date.now() + 45 * 864e5).toISOString().split("T")[0], probability: 70, type: "Upsell" },
+    ],
+    contacts: [
+      { id: "c-nx1", name: "Daniel Park", title: "VP Engineering", email: "d.park@nexacloud.io", lastActivityDate: new Date(Date.now() - 4 * 864e5).toISOString(), engagementScore: 84 },
+      { id: "c-nx2", name: "Maya Iqbal", title: "Product Director", email: "m.iqbal@nexacloud.io", lastActivityDate: new Date(Date.now() - 6 * 864e5).toISOString(), engagementScore: 78 },
+    ],
+    lastSyncedAt: now,
+  },
+
+  "acc-vertex-007": {
+    accountId: "acc-vertex-007",
+    accountName: "Vertex Systems",
+    arr: 920_000,
+    renewalDate: new Date(Date.now() + 410 * 864e5).toISOString(),
+    healthScore: 88,
+    opportunities: [
+      { id: "opp-vx1", name: "Vertex Systems — Platform Expansion", stage: "Proposal", amount: 200_000, closeDate: new Date(Date.now() + 35 * 864e5).toISOString().split("T")[0], probability: 80, type: "Upsell" },
+    ],
+    contacts: [
+      { id: "c-vx1", name: "Sandra Lee", title: "CRO", email: "s.lee@vertexsystems.com", lastActivityDate: new Date(Date.now() - 3 * 864e5).toISOString(), engagementScore: 93 },
+      { id: "c-vx2", name: "Ethan Brooks", title: "VP Product", email: "e.brooks@vertexsystems.com", lastActivityDate: new Date(Date.now() - 1 * 864e5).toISOString(), engagementScore: 90 },
+    ],
+    lastSyncedAt: now,
+  },
+
+  "acc-medisync-008": {
+    accountId: "acc-medisync-008",
+    accountName: "MediSync Health",
+    arr: 450_000,
+    renewalDate: new Date(Date.now() + 95 * 864e5).toISOString(),
+    healthScore: 48,
+    opportunities: [
+      { id: "opp-md1", name: "MediSync Health — Renewal FY26", stage: "Discovery", amount: 405_000, closeDate: new Date(Date.now() + 90 * 864e5).toISOString().split("T")[0], probability: 45, type: "Renewal" },
+    ],
+    contacts: [
+      { id: "c-md1", name: "Dr. Patricia Obi", title: "CIO", email: "p.obi@medisynchealth.ca", lastActivityDate: new Date(Date.now() - 5 * 864e5).toISOString(), engagementScore: 42 },
+      { id: "c-md2", name: "Liam Chen", title: "Integration Lead", email: "l.chen@medisynchealth.ca", lastActivityDate: new Date(Date.now() - 8 * 864e5).toISOString(), engagementScore: 39 },
+    ],
+    lastSyncedAt: now,
+  },
+
   "acc-crestline-005": {
     accountId: "acc-crestline-005",
     accountName: "Crestline Capital",

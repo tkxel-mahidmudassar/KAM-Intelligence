@@ -3,7 +3,7 @@
  *
  * All app code calls getProvider() — never imports a provider directly.
  * Switch providers via AI_PROVIDER env var: "openai" | "claude" | "gemini"
- * Defaults to "gemini" (free key for POC).
+ * Defaults to "openai".
  *
  * @example
  * const ai = getProvider();
@@ -24,7 +24,7 @@ let _cached: LLMProvider | null = null;
 export function getProvider(): LLMProvider {
   if (_cached) return _cached;
 
-  const providerName = (process.env.AI_PROVIDER ?? "gemini") as AiProvider;
+  const providerName = (process.env.AI_PROVIDER ?? "openai") as AiProvider;
 
   switch (providerName) {
     case "openai": {

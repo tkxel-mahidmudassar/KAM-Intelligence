@@ -4,7 +4,7 @@ import { complete } from "@/lib/ai";
 import { getRoleFromRequest, ok, badRequest, notFound, serverError, guard } from "@/lib/api";
 
 // POST /api/ai/qbr/generate  { accountId, title?, type? }
-// Uses Gemini to generate a full QBR/DBR session with agenda items, saves to DB, returns session.
+// Uses the configured AI provider to generate a full QBR/DBR session with agenda items, saves to DB, returns session.
 export async function POST(req: NextRequest) {
   try {
     const role = getRoleFromRequest(req);
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 Account: ${account.name} | Industry: ${account.industry ?? "N/A"} | ARR: $${account.arr.toLocaleString()}
 Health: ${account.health} | Score: ${account.kamScores[0]?.overall ?? "N/A"}/100
 Contract ends: ${account.contractEnd?.toISOString().split("T")[0] ?? "N/A"}
-Open signals: ${account.signals.map((s) => `${s.type}: ${s.title}`).join("; ") || "none"}
+Open news: ${account.signals.map((s) => `${s.type}: ${s.title}`).join("; ") || "none"}
 Open actions: ${account.actions.map((a) => a.title).join("; ") || "none"}
 KPIs: ${account.kpiDimensions.map((k) => `${k.name}: ${k.value}${k.unit ?? ""} vs target ${k.target ?? "N/A"}${k.unit ?? ""}`).join("; ") || "none"}
 ${lastSession ? `Last session: "${lastSession.title}" (${lastSession.status}) with ${lastSession.items.length} items` : "No previous sessions"}
@@ -71,7 +71,7 @@ Generate 5-8 agenda items relevant to this account's health status and open issu
       temperature: 0.4,
     });
 
-    // Parse Gemini response
+    // Parse AI response
     let parsed: {
       items: Array<{ order: number; category: string; title: string; content: string; status: string }>;
       suggestedAttendees: string[];
@@ -102,11 +102,11 @@ Generate 5-8 agenda items relevant to this account's health status and open issu
       console.log("[qbr/generate] parsed OK — items:", parsed.items.length, "summary:", parsed.executiveSummary?.slice(0, 60));
     } catch (parseErr) {
       console.error("[qbr/generate] JSON parse failed:", parseErr instanceof Error ? parseErr.message : parseErr);
-      // Fallback: create a minimal skeleton if Gemini response is unparseable
+      // Fallback: create a minimal skeleton if the AI response is unparseable
       parsed = {
         items: [
           { order: 1, category: "REVIEW",     title: "Account Health & Score Review",   content: `Review of ${account.name}'s current health status and KAM score trends.`, status: "OPEN" },
-          { order: 2, category: "RISK",        title: "Open Signals & Risk Discussion",  content: `Address ${account.signals.length} unresolved signal(s) affecting the account.`, status: "OPEN" },
+          { order: 2, category: "RISK",        title: "Open News & Risk Discussion",     content: `Address ${account.signals.length} unresolved news item(s) affecting the account.`, status: "OPEN" },
           { order: 3, category: "ACTION",      title: "Action Items Review",             content: `Review and update status on ${account.actions.length} open action(s).`, status: "OPEN" },
           { order: 4, category: "EXPANSION",   title: "Growth & Expansion Opportunities",content: "Identify upsell and cross-sell opportunities aligned with strategic goals.", status: "OPEN" },
           { order: 5, category: "WRAP_UP",     title: "Next Steps & Commitments",        content: "Agree on action items, owners, and dates before close of session.", status: "OPEN" },

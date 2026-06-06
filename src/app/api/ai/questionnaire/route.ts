@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const SECTION_QUESTIONS: Record<string, Array<{ id: string; label: string; inputType: string; options?: string[] }>> = {
       csat: [
         { id: "csat_score",         label: "CSAT score from last survey (1–10)",    inputType: "SCALE",   options: ["1","2","3","4","5","6","7","8","9","10"] },
-        { id: "nps_score",          label: "Net Promoter Score (0–10)",               inputType: "SCALE",   options: ["0","1","2","3","4","5","6","7","8","9","10"] },
+        { id: "client_sentiment",   label: "Client sentiment score (1–5)",            inputType: "SCALE",   options: ["1","2","3","4","5"] },
         { id: "survey_recency",     label: "Survey conducted within last 90 days?",   inputType: "BOOLEAN" },
         { id: "satisfaction_trend", label: "Satisfaction trend",                       inputType: "SELECT",  options: ["IMPROVING","STABLE","DECLINING"] },
       ],
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
         { id: "untapped_products",    label: "Untapped product/service lines (0–5)",  inputType: "SCALE",   options: ["0","1","2","3","4","5"] },
         { id: "upsell_potential",     label: "Upsell potential score (1–5)",           inputType: "SCALE",   options: ["1","2","3","4","5"] },
         { id: "cross_sell_potential", label: "Cross-sell potential score (1–5)",       inputType: "SCALE",   options: ["1","2","3","4","5"] },
-        { id: "solution_utilization", label: "Current solution utilization %",         inputType: "SCALE",   options: ["0","10","20","30","40","50","60","70","80","90","100"] },
+        { id: "solution_utilization", label: "Current engagement adoption %",          inputType: "SCALE",   options: ["0","10","20","30","40","50","60","70","80","90","100"] },
       ],
     };
 

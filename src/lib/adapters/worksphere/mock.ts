@@ -90,6 +90,69 @@ const MOCK_DATA: Record<string, WorksphereData> = {
     lastSyncedAt: now,
   },
 
+  "acc-nexacloud-006": {
+    accountId: "acc-nexacloud-006",
+    activeUsers: 82,
+    totalLicenses: 90,
+    utilizationPct: 91,
+    engagement: {
+      loginFrequency: 5.1,
+      featureAdoptionPct: 79,
+      lastLoginDate: daysAgo(0),
+      powerUsers: 34,
+      inactiveUsers: 3,
+    },
+    recentMeetings: [
+      { id: "m-nx1", title: "NexaCloud — AI Module Expansion Workshop", date: daysAgo(6), attendees: ["Daniel Park", "Sarah Chen"], durationMinutes: 60, hasRecording: true, sentiment: "positive" },
+      { id: "m-nx2", title: "NexaCloud — Platform Health Check", date: daysAgo(13), attendees: ["Maya Iqbal", "Sarah Chen"], durationMinutes: 45, hasRecording: false, sentiment: "positive" },
+    ],
+    npsScore: 68,
+    npsSampleSize: 31,
+    lastSyncedAt: now,
+  },
+
+  "acc-vertex-007": {
+    accountId: "acc-vertex-007",
+    activeUsers: 96,
+    totalLicenses: 100,
+    utilizationPct: 96,
+    engagement: {
+      loginFrequency: 6.4,
+      featureAdoptionPct: 88,
+      lastLoginDate: daysAgo(0),
+      powerUsers: 52,
+      inactiveUsers: 1,
+    },
+    recentMeetings: [
+      { id: "m-vx1", title: "Vertex Systems — Executive Expansion Review", date: daysAgo(4), attendees: ["Sandra Lee", "Marcus Okafor"], durationMinutes: 60, hasRecording: true, sentiment: "positive" },
+      { id: "m-vx2", title: "Vertex Systems — Delivery Standup", date: daysAgo(1), attendees: ["Ethan Brooks", "Marcus Okafor"], durationMinutes: 30, hasRecording: false, sentiment: "positive" },
+    ],
+    npsScore: 88,
+    npsSampleSize: 44,
+    lastSyncedAt: now,
+  },
+
+  "acc-medisync-008": {
+    accountId: "acc-medisync-008",
+    activeUsers: 44,
+    totalLicenses: 80,
+    utilizationPct: 55,
+    engagement: {
+      loginFrequency: 2.1,
+      featureAdoptionPct: 48,
+      lastLoginDate: daysAgo(2),
+      powerUsers: 7,
+      inactiveUsers: 24,
+    },
+    recentMeetings: [
+      { id: "m-md1", title: "MediSync — Integration Escalation", date: daysAgo(3), attendees: ["Dr. Patricia Obi", "Sarah Chen"], durationMinutes: 45, hasRecording: false, sentiment: "negative" },
+      { id: "m-md2", title: "MediSync — Renewal Risk Review", date: daysAgo(11), attendees: ["Liam Chen", "Sarah Chen"], durationMinutes: 60, hasRecording: true, sentiment: "negative" },
+    ],
+    npsScore: 32,
+    npsSampleSize: 26,
+    lastSyncedAt: now,
+  },
+
   "acc-crestline-005": {
     accountId: "acc-crestline-005",
     activeUsers: 44,

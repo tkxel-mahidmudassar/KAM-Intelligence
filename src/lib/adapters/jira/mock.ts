@@ -102,6 +102,75 @@ const MOCK_DATA: Record<string, JiraData> = {
     lastSyncedAt: now,
   },
 
+  "acc-nexacloud-006": {
+    accountId: "acc-nexacloud-006",
+    projectKey: "NXC",
+    openTickets: 4,
+    criticalTickets: 0,
+    avgResolutionDays: 2.6,
+    activeSprint: {
+      id: "sp-nxc-12",
+      name: "NexaCloud Sprint 12",
+      state: "active",
+      startDate: daysAgo(5),
+      endDate: new Date(Date.now() + 9 * 864e5).toISOString(),
+      completedPoints: 36,
+      totalPoints: 42,
+      velocity: 86,
+    },
+    tickets: [
+      { id: "t-nx1", key: "NXC-144", summary: "AI module export polish before expansion demo", status: "In Progress", priority: "Minor", type: "Task", createdAt: daysAgo(3), updatedAt: daysAgo(1), resolvedAt: null, assignee: "growth-team", labels: ["ai-module", "expansion"] },
+      { id: "t-nx2", key: "NXC-139", summary: "Document autosave occasionally delays under large payloads", status: "Open", priority: "Minor", type: "Bug", createdAt: daysAgo(6), updatedAt: daysAgo(2), resolvedAt: null, assignee: null, labels: ["autosave"] },
+    ],
+    lastSyncedAt: now,
+  },
+
+  "acc-vertex-007": {
+    accountId: "acc-vertex-007",
+    projectKey: "VTX",
+    openTickets: 1,
+    criticalTickets: 0,
+    avgResolutionDays: 1.4,
+    activeSprint: {
+      id: "sp-vtx-19",
+      name: "Vertex Sprint 19",
+      state: "active",
+      startDate: daysAgo(4),
+      endDate: new Date(Date.now() + 10 * 864e5).toISOString(),
+      completedPoints: 49,
+      totalPoints: 50,
+      velocity: 98,
+    },
+    tickets: [
+      { id: "t-vx1", key: "VTX-222", summary: "Finalize $200K platform expansion proposal artifacts", status: "In Progress", priority: "Minor", type: "Task", createdAt: daysAgo(2), updatedAt: daysAgo(0), resolvedAt: null, assignee: "solutions-team", labels: ["expansion", "proposal"] },
+    ],
+    lastSyncedAt: now,
+  },
+
+  "acc-medisync-008": {
+    accountId: "acc-medisync-008",
+    projectKey: "MDS",
+    openTickets: 31,
+    criticalTickets: 6,
+    avgResolutionDays: 11.7,
+    activeSprint: {
+      id: "sp-mds-7",
+      name: "MediSync Sprint 7",
+      state: "active",
+      startDate: daysAgo(8),
+      endDate: new Date(Date.now() + 6 * 864e5).toISOString(),
+      completedPoints: 18,
+      totalPoints: 38,
+      velocity: 47,
+    },
+    tickets: [
+      { id: "t-md1", key: "MDS-91", summary: "Integration mapping failures on clinical data import", status: "Open", priority: "Critical", type: "Incident", createdAt: daysAgo(4), updatedAt: daysAgo(1), resolvedAt: null, assignee: null, labels: ["integration", "clinical-import"] },
+      { id: "t-md2", key: "MDS-88", summary: "Eligibility sync jobs timing out for enterprise tenants", status: "In Progress", priority: "Critical", type: "Bug", createdAt: daysAgo(7), updatedAt: daysAgo(2), resolvedAt: null, assignee: "integration-team", labels: ["sync"] },
+      { id: "t-md3", key: "MDS-84", summary: "Slow patient record lookup during peak hours", status: "Open", priority: "Major", type: "Bug", createdAt: daysAgo(12), updatedAt: daysAgo(3), resolvedAt: null, assignee: null, labels: ["performance"] },
+    ],
+    lastSyncedAt: now,
+  },
+
   "acc-crestline-005": {
     accountId: "acc-crestline-005",
     projectKey: "CRL",

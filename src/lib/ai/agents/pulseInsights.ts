@@ -4,7 +4,7 @@
  * Generates 5 account-specific AI Pulse insights (one per InsightType) by:
  *   1. Fetching all accounts with their scores, signals, actions, opportunities
  *   2. Gathering real-time public intelligence (Google News, Reddit, Yahoo Finance, Business Recorder)
- *   3. Running 5 parallel Gemini calls — one per insight type — each producing
+ *   3. Running 5 parallel AI calls — one per insight type — each producing
  *      a single account-specific insight grounded in both internal data and public news
  *   4. Persisting results to AIPulseInsight
  *
@@ -244,9 +244,9 @@ function validateClaims(
 // ─── Prompt templates per insight type ───────────────────────────────────────
 
 const TYPE_INSTRUCTIONS: Record<InsightType, string> = {
-  RISK: `Identify the SINGLE most urgent risk across the portfolio. Look for: declining health scores, expiring contracts, churn signals, negative public news (lawsuits, layoffs, leadership exits, funding issues), NPS drops, or engagement collapse. Focus on what could lose this account.`,
+  RISK: `Identify the SINGLE most urgent risk across the portfolio. Look for: declining health scores, expiring contracts, churn signals, negative public news (lawsuits, layoffs, leadership exits, funding issues), client sentiment drops, or engagement collapse. Focus on what could lose this account.`,
 
-  OPPORTUNITY: `Identify the SINGLE best expansion or upsell opportunity across the portfolio. Look for: high whitespace scores, positive news (funding rounds, expansion plans, hiring surges, product launches), healthy accounts exceeding platform limits, or accounts whose public news signals a need for more services. Focus on revenue growth potential.`,
+  OPPORTUNITY: `Identify the SINGLE best expansion or upsell opportunity across the portfolio. Look for: high whitespace scores, positive news (funding rounds, expansion plans, hiring surges, product launches), strong delivery outcomes, or accounts whose public news signals a need for more services. Focus on revenue growth potential.`,
 
   TREND: `Identify the most meaningful TREND across the portfolio — either for a specific account or based on its industry. Look for: consistent score trajectory (improving/declining over time), industry headwinds or tailwinds visible in the news, seasonal patterns, or behavioural shifts in engagement or usage. Must be grounded in data, not speculation.`,
 
@@ -661,7 +661,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
     toCreate = buildFallbackInsights(accountContexts);
     steps.push(makeStep(
       "fallback-insights",
-      "Gemini returned no parseable pulse insights",
+      "AI provider returned no parseable pulse insights",
       `Generated ${toCreate.length} fallback insights from internal account data`,
       0,
     ));
@@ -694,7 +694,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
       value: `ARR $${a.arr.toLocaleString()}`,
     })),
     steps,
-    model:          "gemini-2.0-flash",
+    model:          process.env.AI_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-mini",
     totalLatencyMs: Date.now() - t0,
   };
 }

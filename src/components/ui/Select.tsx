@@ -60,7 +60,7 @@ const SelectContent = ({ className, children, position = "popper", ...props }: R
 );
 
 const SelectLabel = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>) => (
-  <SelectPrimitive.Label className={cn("px-2 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]", className)} {...props} />
+  <SelectPrimitive.Label className={cn("px-2 py-1.5 text-[10px] font-semibold text-[var(--text-muted)]", className)} {...props} />
 );
 
 const SelectItem = ({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>) => (
