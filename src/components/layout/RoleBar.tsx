@@ -1,6 +1,8 @@
 "use client";
 
-import { CircleCheck } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { CircleCheck, PanelsTopLeft, Sparkles } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 import type { Role } from "@/types";
 
@@ -12,6 +14,7 @@ const roleOptions: Array<{ label: string; value: Role; description: string }> = 
 
 export function RoleBar() {
   const { role, setRole } = useRole();
+  const pathname = usePathname();
   const isReadOnlyRole = role === "EXECUTIVE" || role === "ADMIN" || role === "MANAGER";
 
   return (
@@ -43,12 +46,39 @@ export function RoleBar() {
           })}
         </div>
 
-        {isReadOnlyRole ? (
-          <div className="hidden h-8 w-fit items-center gap-2 rounded-full border border-[#E2D8CC] bg-[#FFF9EF]/72 px-3 text-[12px] font-semibold text-[#6F6254] sm:inline-flex">
-            <CircleCheck className="h-3.5 w-3.5 text-[#5A8F73]" />
-            Read-only view
+        <div className="flex items-center gap-2">
+          <div className="hidden items-center rounded-full border border-[#E2D8CC] bg-[#FFF9EF]/72 p-1 sm:inline-flex">
+            <Link
+              href="/portfolio"
+              className={`inline-flex h-8 items-center gap-2 rounded-full px-3 text-[12px] font-semibold transition-all ${
+                pathname?.startsWith("/poc")
+                  ? "text-[#6F6254] hover:bg-[#F3EADD] hover:text-[#28362F]"
+                  : "bg-[#28362F] text-[#FFF9EF] shadow-[0_10px_22px_-16px_rgba(40,54,47,0.85)]"
+              }`}
+            >
+              <PanelsTopLeft className="h-3.5 w-3.5" />
+              Portfolio
+            </Link>
+            <Link
+              href="/poc"
+              className={`inline-flex h-8 items-center gap-2 rounded-full px-3 text-[12px] font-semibold transition-all ${
+                pathname?.startsWith("/poc")
+                  ? "bg-[#28362F] text-[#FFF9EF] shadow-[0_10px_22px_-16px_rgba(40,54,47,0.85)]"
+                  : "text-[#6F6254] hover:bg-[#F3EADD] hover:text-[#28362F]"
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              POC
+            </Link>
           </div>
-        ) : null}
+
+          {isReadOnlyRole ? (
+            <div className="hidden h-8 w-fit items-center gap-2 rounded-full border border-[#E2D8CC] bg-[#FFF9EF]/72 px-3 text-[12px] font-semibold text-[#6F6254] lg:inline-flex">
+              <CircleCheck className="h-3.5 w-3.5 text-[#5A8F73]" />
+              Read-only view
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

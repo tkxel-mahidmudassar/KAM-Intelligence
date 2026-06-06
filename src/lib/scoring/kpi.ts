@@ -89,8 +89,8 @@ export const KPI_RATIONALE: Record<KpiScoreKey, { label: string; rationale: stri
 };
 
 const KPI_WEIGHT: Record<KpiScoreKey, number> = {
-  csat: 20,
-  relationship: 15,
+  relationship: 20,
+  csat: 15,
   risk: 15,
   contractHealth: 15,
   projectHealth: 10,

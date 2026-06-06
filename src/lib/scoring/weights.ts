@@ -1,7 +1,7 @@
 // Shared score weight constants — used by settings API and score route
 export const DEFAULT_WEIGHTS = {
-  csat:           20,
-  relationship:   15,
+  relationship:   20,
+  csat:           15,
   risk:           15,
   contractHealth: 15,
   projectHealth:  10,

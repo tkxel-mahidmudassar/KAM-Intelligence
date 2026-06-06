@@ -289,7 +289,7 @@ const kpiOverviewRows: KpiOverviewRow[] = [
   {
     id: "csat",
     name: "CSAT Score",
-    weight: "20%",
+    weight: "15%",
     rationale: "Direct client satisfaction signal.",
     score: 91,
     trend: "up",
@@ -335,7 +335,7 @@ const kpiOverviewRows: KpiOverviewRow[] = [
   {
     id: "project-health",
     name: "Project Health Score",
-    weight: "15%",
+    weight: "10%",
     rationale: "Delivery is Tkxel's core product.",
     score: 73,
     trend: "down",
@@ -385,8 +385,8 @@ const kpiOverviewRows: KpiOverviewRow[] = [
   {
     id: "resource-health",
     name: "Resource Health Score",
-    weight: "0% placeholder",
-    rationale: "Parameters confirmed but excluded until Worksphere integration is live in v2.",
+    weight: "10%",
+    rationale: "Continuity, staffing, dependency, and skill coverage are material account health inputs.",
     score: 80,
     trend: "flat",
     subParameters: [
