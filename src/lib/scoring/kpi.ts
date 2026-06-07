@@ -46,14 +46,14 @@ export interface KpiCalculationResult {
 
 export const KPI_RATIONALE: Record<KpiScoreKey, { label: string; rationale: string; formula: string; fallback?: string }> = {
   csat: {
-    label: "CSAT Score",
-    rationale: "Direct client satisfaction and most important relationship-quality signal.",
-    formula: "50% CSAT/client feedback KPI + 50% stakeholder touchpoint sentiment",
+    label: "Customer Success",
+    rationale: "Customer satisfaction, confidence, trust, and perceived value from Tkxel's services.",
+    formula: "20% customer feedback + 20% confidence + 20% delivery satisfaction + 20% communication satisfaction + 20% issue resolution",
   },
   relationship: {
-    label: "Relationship Score",
-    rationale: "Depth and breadth of stakeholder penetration and executive access.",
-    formula: "25% stakeholder depth + 25% stakeholder breadth + 25% meeting cadence + 25% executive access",
+    label: "Relationship Health",
+    rationale: "Relationship strength, depth, frequency, quality, and stakeholder penetration.",
+    formula: "20% executive engagement + 20% stakeholder coverage + 20% relationship penetration + 20% champion strength + 20% engagement cadence",
   },
   risk: {
     label: "Risk Score",
@@ -61,25 +61,25 @@ export const KPI_RATIONALE: Record<KpiScoreKey, { label: string; rationale: stri
     formula: "25% delivery risk + 25% commercial risk + 25% relationship risk + 25% market risk",
   },
   contractHealth: {
-    label: "Contract Health Score",
-    rationale: "Renewal risk, contractual protection, and commercial foundation.",
-    formula: "33% renewal risk + 33% contractual protection + 33% commercial foundation",
+    label: "Contract Health",
+    rationale: "Commercial protection, defensibility, contract stability, and long-term sustainability.",
+    formula: "20% duration + 20% notice protection + 20% renewability + 20% price uplift protection + 20% termination protection",
   },
   projectHealth: {
-    label: "Project Health Score",
-    rationale: "Delivery execution quality and backlog/velocity health.",
-    formula: "33% delivery execution quality + 33% backlog health + 33% velocity health",
+    label: "Project Health",
+    rationale: "Delivery performance, future work visibility, execution stability, and customer delivery confidence.",
+    formula: "20% delivery performance + 20% backlog readiness + 20% roadmap visibility + 20% escalation status + 20% client confidence",
   },
   resourceHealth: {
-    label: "Resource Health Score",
-    rationale: "Team stability, fit, turnover, and bench risk; mocked in MVP, live Worksphere later.",
-    formula: "25% team stability + 25% team fit + 25% turnover risk + 25% bench risk",
-    fallback: "MVP uses deterministic per-account mock for each sub-component until live Worksphere resource data exists.",
+    label: "Resource Health",
+    rationale: "Resource dependency, team continuity, succession readiness, and delivery resilience.",
+    formula: "20% dependency risk + 20% critical coverage + 20% team stability + 20% skill alignment + 20% backup readiness",
+    fallback: "Use Worksphere/resource data when available; otherwise require user confirmation before scoring.",
   },
   financial: {
-    label: "Financial Score",
-    rationale: "Payment timeliness, outstanding invoices, and revenue trend.",
-    formula: "33% payment timeliness + 33% outstanding invoices + 33% revenue trend",
+    label: "Financial Health",
+    rationale: "Payment behavior, revenue trends, billing accuracy, and client financial stability.",
+    formula: "20% payment timeliness + 20% outstanding exposure + 20% client financial stability + 20% revenue trend + 20% contract/billing alignment",
   },
   whitespace: {
     label: "Whitespace Analysis",
@@ -89,8 +89,8 @@ export const KPI_RATIONALE: Record<KpiScoreKey, { label: string; rationale: stri
 };
 
 const KPI_WEIGHT: Record<KpiScoreKey, number> = {
-  csat: 20,
-  relationship: 15,
+  csat: 15,
+  relationship: 20,
   risk: 15,
   contractHealth: 15,
   projectHealth: 10,

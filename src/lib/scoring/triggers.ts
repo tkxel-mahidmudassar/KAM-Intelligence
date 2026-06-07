@@ -6,7 +6,7 @@
  *   • Creates new Signal records when a KPI falls below a threshold
  *   • Escalates WARNING → CRITICAL when a score deteriorates further
  *   • Resolves existing signals when the KPI recovers above all thresholds
- *   • Creates an UPSELL_OPPORTUNITY INFO signal when whitespace + csat are high
+ *   • Creates an UPSELL_OPPORTUNITY INFO signal when whitespace + customer success are high
  *
  * All operations are idempotent — duplicate signals are never created.
  */
@@ -55,8 +55,8 @@ const RULES: TriggerRule[] = [
     signalType:         "NPS_DECLINE",
     criticalThreshold:  40,
     warningThreshold:   62,
-    titleFn: (s) => `Customer satisfaction at risk (CSAT ${s}/100)`,
-    descFn:  (s) => `CSAT dimension scored ${s}/100 — client feedback or stakeholder sentiment is below benchmark. Proactive outreach is recommended to prevent churn.`,
+    titleFn: (s) => `Customer success at risk (${s}/100)`,
+    descFn:  (s) => `Customer Success scored ${s}/100 — customer feedback, confidence, delivery satisfaction, communication satisfaction, or issue resolution is below benchmark.`,
   },
   {
     kpiKey:             "risk",
@@ -95,16 +95,16 @@ const RULES: TriggerRule[] = [
     signalType:         "RELATIONSHIP_CHANGE",
     criticalThreshold:  null,
     warningThreshold:   50,
-    titleFn: (s) => `Stakeholder relationship needs attention (${s}/100)`,
-    descFn:  (s) => `Relationship dimension scored ${s}/100. Consider increasing exec coverage and stakeholder touchpoint frequency.`,
+    titleFn: (s) => `Relationship health needs attention (${s}/100)`,
+    descFn:  (s) => `Relationship Health scored ${s}/100. Review executive engagement, stakeholder coverage, relationship penetration, champion strength, and engagement cadence.`,
   },
   {
     kpiKey:             "resourceHealth",
     signalType:         "ENGAGEMENT_LOW",
     criticalThreshold:  null,
     warningThreshold:   50,
-    titleFn: (s) => `Platform engagement below benchmark (${s}/100)`,
-    descFn:  (s) => `Resource health scored ${s}/100. Active user adoption or licence utilisation is below target.`,
+    titleFn: (s) => `Resource health below benchmark (${s}/100)`,
+    descFn:  (s) => `Resource Health scored ${s}/100. Review dependency risk, critical coverage, team stability, skill alignment, and backup readiness.`,
   },
 ];
 

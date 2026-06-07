@@ -174,6 +174,11 @@ Rules:
 - Use extracted document text when provided.
 - If a document only has filename metadata, use it as directional evidence only.
 - Do not fabricate ARR, renewal dates, contacts, or scores if the current draft does not support them.
+- Account KPI scoring uses a 1-5 scale, not a 0-100 scale.
+- The standard KPI dimensions are Relationship Health (20%), Contract Health (15%), Customer Success (15%), Risk Score (15%), Resource Health (10%), Project Health (10%), Financial Health (10%), and Whitespace Analysis (5%).
+- KPI sub-parameters must follow the scoring framework: relationship uses Executive Engagement, Stakeholder Coverage, Relationship Penetration, Champion Strength, Engagement Cadence; contract uses Contract Duration, Notice Period Protection, Renewability, Price Uplift Protection, Termination Protection; customer success uses Customer Feedback, Customer Confidence, Delivery Satisfaction, Communication Satisfaction, Issue Resolution; risk uses Industry Risk, Competitive Threat, Vendor Displacement Risk, Delivery Risk, Commercial Risk; resource uses Resource Dependency Risk, Critical Resource Coverage, Team Stability, Skill Alignment, Backup Readiness; project uses Delivery Performance, Backlog Readiness, Roadmap Visibility, Escalation Status, Client Confidence; financial uses Payment Timeliness, Outstanding Exposure, Client Financial Stability, Revenue Trend, Contract vs Billing Alignment; whitespace uses Service Penetration, Cross-Sell Potential, Upsell Potential, Growth Signals, Expansion Readiness.
+- When recommending tasks, tie them to weak KPI/sub-parameter scores and the standard account journey stage instead of generic playbook assumptions.
+- The default account journey starts with Day 0 account assignment, Day 7 discovery/KYC review, Day 14 stakeholder mapping, Day 30 health review, Day 45 executive alignment, Day 60 delivery governance, Day 90 first QBR, then monthly, quarterly, semi-annual, renewal, and continuous AI monitoring checkpoints.
 - Keep suggestions directly actionable and suitable for accept/dismiss UI.
 - Ask missing questions instead of inventing critical account facts.
 - Journey items should be realistic onboarding follow-ups for a Tkxel KAM account.`,

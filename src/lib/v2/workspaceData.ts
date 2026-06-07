@@ -102,14 +102,14 @@ export const workspaceActionItems: WorkspaceActionItem[] = [
 ];
 
 export const defaultKpiWeights = [
-  { id: "relationship", name: "Relationship Score", weight: 20 },
-  { id: "csat", name: "CSAT Score", weight: 20 },
+  { id: "relationship", name: "Relationship Health", weight: 20 },
+  { id: "contract-health", name: "Contract Health", weight: 15 },
+  { id: "customer-success", name: "Customer Success", weight: 15 },
   { id: "risk", name: "Risk Score", weight: 15 },
-  { id: "contract", name: "Contract Health Score", weight: 15 },
-  { id: "project", name: "Project Health Score", weight: 15 },
-  { id: "financial", name: "Financial Score", weight: 10 },
+  { id: "resource-health", name: "Resource Health", weight: 10 },
+  { id: "project-health", name: "Project Health", weight: 10 },
+  { id: "financial-health", name: "Financial Health", weight: 10 },
   { id: "whitespace", name: "Whitespace Analysis", weight: 5 },
-  { id: "resource", name: "Resource Health Score", weight: 0 },
 ];
 
 export const integrationMocks = [

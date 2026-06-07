@@ -53,16 +53,48 @@ The modal has three tabs:
 The Overview tab now contains the first pass of the account score decision
 structure.
 
-It shows eight KPI rows:
+It shows eight KPI rows from the new AI Account Scoring Framework. KPI and
+sub-parameter scores use the framework's 1-5 scale inside the account
+workspace:
 
-- Relationship Score
-- CSAT Score
+- Relationship Health
+- Contract Health
+- Customer Success
 - Risk Score
-- Contract Health Score
-- Project Health Score
-- Financial Score
+- Resource Health
+- Project Health
+- Financial Health
 - Whitespace Analysis
-- Resource Health Score
+
+The default weights are:
+
+- Relationship Health: 20%
+- Contract Health: 15%
+- Customer Success: 15%
+- Risk Score: 15%
+- Resource Health: 10%
+- Project Health: 10%
+- Financial Health: 10%
+- Whitespace Analysis: 5%
+
+The sub-parameters are also sourced from the framework:
+
+- Relationship Health: Executive Engagement, Stakeholder Coverage,
+  Relationship Penetration, Champion Strength, Engagement Cadence
+- Contract Health: Contract Duration, Notice Period Protection, Renewability,
+  Price Uplift Protection, Termination Protection
+- Customer Success: Customer Feedback, Customer Confidence, Delivery
+  Satisfaction, Communication Satisfaction, Issue Resolution
+- Risk Score: Industry Risk, Competitive Threat, Vendor Displacement Risk,
+  Delivery Risk, Commercial Risk
+- Resource Health: Resource Dependency Risk, Critical Resource Coverage, Team
+  Stability, Skill Alignment, Backup Readiness
+- Project Health: Delivery Performance, Backlog Readiness, Roadmap Visibility,
+  Escalation Status, Client Confidence
+- Financial Health: Payment Timeliness, Outstanding Exposure, Client Financial
+  Stability, Revenue Trend, Contract vs Billing Alignment
+- Whitespace Analysis: Service Penetration, Cross-Sell Potential, Upsell
+  Potential, Growth Signals, Expansion Readiness
 
 The KPI rows are always sorted by score in ascending order, with the lowest
 score at the top and the highest score at the bottom.
@@ -129,6 +161,10 @@ records.
 
 Scores are editable at the sub-parameter level inside each KPI accordion. KPI
 aggregate scores are shown as read-only rollups in this prototype.
+
+Score overrides now use the framework's 1-5 scale. The legacy 0-100 portfolio
+health score is still used on account cards and top-level account summaries,
+but KPI/sub-parameter editing inside this modal is 1-5.
 
 The current behavior is role-aware:
 

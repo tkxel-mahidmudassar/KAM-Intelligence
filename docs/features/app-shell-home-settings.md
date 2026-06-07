@@ -43,6 +43,10 @@ The Settings page is the configuration surface for the V2 prototype.
 Built in:
 
 - Default KPI weights with sliders.
+- KPI weights follow the AI Account Scoring Framework: Relationship Health
+  20%, Contract Health 15%, Customer Success 15%, Risk Score 15%, Resource
+  Health 10%, Project Health 10%, Financial Health 10%, and Whitespace
+  Analysis 5%.
 - Weight total validation. Save/request is disabled unless weights equal 100%.
 - Weight save/request updates local UI state and fires a settings notification.
 - Associate invite and removal UI.

@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       conversation: Array.isArray(body.conversation)
         ? body.conversation
             .map((entry) => ({
-              role: entry?.role === "assistant" ? "assistant" : "user",
+              role: (entry?.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
               content: String(entry?.content || ""),
             }))
             .filter((entry) => entry.content)

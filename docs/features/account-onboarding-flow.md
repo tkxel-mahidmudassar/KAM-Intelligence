@@ -22,7 +22,26 @@ The portfolio `+ Account` button opens a V2 onboarding flow instead of creating 
 10. Accepting a parsed suggestion writes the proposed value into the draft account form.
 11. Dismissing a parsed suggestion opens a floating reason modal. The suggestion cannot be dismissed without a reason.
 12. Support document uploads happen inside the chat composer through the attachment control and trigger the V2 onboarding assistant to propose supported updates.
-13. The account journey is pre-populated with standard items and is editable before submission.
+13. The account journey is pre-populated from the Standard Account Journey
+    Template and is editable before submission.
+
+The default journey now includes:
+
+- Day 0 account assignment and sales handover
+- Day 7 discovery and KYC review
+- Day 14 stakeholder mapping and relationship planning
+- Day 30 initial account health review
+- Day 45 executive alignment review
+- Day 60 delivery governance review
+- Day 90 first QBR
+- Monthly account review
+- Quarterly QBR package
+- Semi-annual strategic review
+- T-180 renewal readiness
+- T-120 renewal planning
+- T-90 renewal execution
+- T-30 renewal finalization
+- Continuous AI monitoring and exception management
 
 ## KYC draft stage
 
@@ -77,6 +96,12 @@ The assistant route:
 - does not use old KYC or playbook agents
 - accepts source filenames, extracted document text, current draft fields, support-document metadata, journey items, role, and the user's assistant message
 - returns assistant replies, missing-information questions, profile suggestions, KYC section drafts, and suggested journey items
+- is instructed to use the new 1-5 account scoring framework and the eight KPI
+  dimensions: Relationship Health, Contract Health, Customer Success, Risk
+  Score, Resource Health, Project Health, Financial Health, and Whitespace
+  Analysis
+- is instructed to avoid fabricating KPI scores, ARR, renewal dates, contacts,
+  or other critical facts when source evidence is missing
 
 The document upload route:
 
@@ -99,6 +124,8 @@ The journey agent:
 - returns Meeting, QBR, and To-do items with due dates and recurrence
 - replaces the editable journey list with the generated/enhanced output
 - writes an assistant note after successful updates
+- uses the Standard Account Journey Template as the baseline before applying
+  account-specific evidence or user instructions
 
 ## Related surfaces
 

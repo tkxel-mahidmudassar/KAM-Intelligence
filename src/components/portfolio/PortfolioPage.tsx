@@ -305,190 +305,220 @@ interface PendingAccountCreationRequest {
 const kpiOverviewRows: KpiOverviewRow[] = [
   {
     id: "relationship",
-    name: "Relationship Score",
+    name: "Relationship Health",
     weight: "20%",
-    rationale: "Core to account longevity and growth.",
-    score: 86,
+    rationale: "Measures relationship strength and stakeholder penetration.",
+    score: 4,
     trend: "up",
     subParameters: [
-      { name: "Stakeholder depth", score: 88, rationale: "Measures how many meaningful contacts exist beyond one sponsor." },
-      { name: "Stakeholder breadth", score: 82, rationale: "Checks whether coverage spans business, product, finance, and delivery owners." },
-      { name: "Meeting cadence", score: 86, rationale: "Confirms the relationship has a reliable operating rhythm." },
-      { name: "Executive access", score: 90, rationale: "Validates whether senior sponsors are reachable when decisions or escalations matter." },
+      { name: "Executive Engagement", score: 4, rationale: "Monthly executive engagement is healthy; multiple executive touchpoints monthly is excellent." },
+      { name: "Stakeholder Coverage", score: 4, rationale: "Multi-department coverage is healthy; broad organizational coverage is excellent." },
+      { name: "Relationship Penetration", score: 4, rationale: "Multiple business units are covered; strong hierarchy-wide penetration is excellent." },
+      { name: "Champion Strength", score: 4, rationale: "Strong advocate is healthy; executive sponsor or champion is excellent." },
+      { name: "Engagement Cadence", score: 4, rationale: "Bi-weekly interaction is healthy; weekly structured engagement is excellent." },
     ],
   },
   {
-    id: "csat",
-    name: "CSAT Score",
-    weight: "20%",
-    rationale: "Direct client satisfaction signal.",
-    score: 91,
+    id: "contract-health",
+    name: "Contract Health",
+    weight: "15%",
+    rationale: "Measures commercial protection and contract stability.",
+    score: 4,
+    trend: "flat",
+    subParameters: [
+      { name: "Contract Duration", score: 4, rationale: "Two-year contracts are healthy; three-plus years are excellent." },
+      { name: "Notice Period Protection", score: 4, rationale: "Sixty-day notice is healthy; ninety-plus days is excellent." },
+      { name: "Renewability", score: 4, rationale: "Renewable agreements are healthy; auto-renewable agreements are excellent." },
+      { name: "Price Uplift Protection", score: 4, rationale: "Annual review is healthy; contractual uplift mechanism is excellent." },
+      { name: "Termination Protection", score: 4, rationale: "Strong protections are healthy; highly protected/non-terminable terms are excellent." },
+    ],
+  },
+  {
+    id: "customer-success",
+    name: "Customer Success",
+    weight: "15%",
+    rationale: "Measures customer satisfaction and confidence.",
+    score: 4,
     trend: "up",
     subParameters: [
-      { name: "Feedback quality", score: 92, rationale: "Uses explicit client feedback where available instead of inferred sentiment alone." },
-      { name: "Issue sentiment", score: 88, rationale: "Looks at tone and severity of recent escalations, tickets, and relationship notes." },
-      { name: "Responsiveness", score: 94, rationale: "Measures whether Tkxel is responding quickly enough to client asks." },
-      { name: "Sponsor confidence", score: 90, rationale: "Captures whether the client sponsor is still confident in the engagement." },
+      { name: "Customer Feedback", score: 4, rationale: "Promoter-level feedback is healthy; strong promoter feedback is excellent." },
+      { name: "Customer Confidence", score: 4, rationale: "Good confidence is healthy; high confidence is excellent." },
+      { name: "Delivery Satisfaction", score: 4, rationale: "Satisfied delivery feedback is healthy; highly satisfied feedback is excellent." },
+      { name: "Communication Satisfaction", score: 4, rationale: "Good communication is healthy; excellent communication is excellent." },
+      { name: "Issue Resolution", score: 4, rationale: "Timely resolution is healthy; rapid proactive resolution is excellent." },
     ],
   },
   {
     id: "risk",
     name: "Risk Score",
     weight: "15%",
-    rationale: "Early warning, high consequence if missed.",
-    score: 64,
+    rationale: "Measures retention and business risks.",
+    score: 2,
     trend: "down",
     subParameters: [
       {
-        name: "Delivery risk",
-        score: 58,
-        rationale: "Flags missed commitments, slipped milestones, unresolved blockers, or quality concerns.",
+        name: "Industry Risk",
+        score: 3,
+        rationale: "Moderate concern requires monitoring; stable or growing market reduces account risk.",
         trend: "down",
         fallingWhy: {
-          summary: "Two delivery checkpoints slipped without a named mitigation owner, which matches the delivery-risk playbook pattern for confidence loss before renewal planning.",
-          sources: ["Delivery risk playbook", "Account journey history", "AI rules learning log"],
+          summary: "The account is exposed to moderate market uncertainty, so the playbook recommends confirming business continuity assumptions before renewal planning.",
+          sources: ["Risk scoring framework", "Account journey history", "AI rules learning log"],
         },
       },
       {
-        name: "Commercial risk",
-        score: 66,
-        rationale: "Looks for renewal, payment, scope, pricing, or procurement exposure.",
+        name: "Competitive Threat",
+        score: 3,
+        rationale: "Moderate competition requires monitoring; low or no significant threat is healthier.",
         trend: "down",
         fallingWhy: {
-          summary: "The account is carrying renewal exposure while commercial next steps are not attached to a confirmed buyer path.",
-          sources: ["Contract health playbook", "Renewal history", "AI rules learning log"],
+          summary: "Competitive pressure has not been ruled out, so the system should prompt for competitor exposure before assuming the account is secure.",
+          sources: ["Risk scoring framework", "Account journey history", "AI rules learning log"],
         },
       },
       {
-        name: "Relationship risk",
-        score: 62,
-        rationale: "Detects sponsor churn, weak access, low engagement, or unresolved dissatisfaction.",
+        name: "Vendor Displacement Risk",
+        score: 2,
+        rationale: "Strong displacement signals are weak; no displacement signal is excellent.",
         trend: "down",
         fallingWhy: {
-          summary: "Recent account history shows reduced sponsor coverage, so the model is treating relationship risk as a blocker to fast issue resolution.",
-          sources: ["Relationship playbook", "Stakeholder history", "AI rules learning log"],
+          summary: "There are unresolved signs that Tkxel could be displaced, so the corrective task should validate executive sponsorship and active value proof.",
+          sources: ["Risk scoring framework", "Account journey history", "AI rules learning log"],
         },
       },
-      { name: "External risk", score: 70, rationale: "Accounts for client market pressure, funding changes, layoffs, or strategic shifts.", trend: "flat" },
+      {
+        name: "Delivery Risk",
+        score: 2,
+        rationale: "High delivery concerns are weak; no delivery concerns is excellent.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Delivery risk is below target because the current journey does not yet show a named mitigation owner for recent blockers.",
+          sources: ["Risk scoring framework", "Account journey history", "AI rules learning log"],
+        },
+      },
+      {
+        name: "Commercial Risk",
+        score: 2,
+        rationale: "Major commercial concern is weak; commercially secure is excellent.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Commercial risk remains weak until renewal likelihood, budget owner, and scope protection are explicitly confirmed.",
+          sources: ["Risk scoring framework", "Contract history", "AI rules learning log"],
+        },
+      },
     ],
-    why: "Risk exposure is above the preferred band for the account journey stage.",
-    task: "Review risk signals and confirm a mitigation owner.",
+    why: "Retention and business risk dimensions are below the healthy threshold.",
+    task: "Confirm the risk owner, mitigation path, and renewal exposure for the weak risk dimensions.",
     taskType: "To-do",
     dueInDays: 3,
   },
   {
-    id: "contract-health",
-    name: "Contract Health Score",
-    weight: "15%",
-    rationale: "Commercial foundation of the engagement.",
-    score: 88,
-    trend: "flat",
-    subParameters: [
-      { name: "Renewal readiness", score: 90, rationale: "Checks whether renewal timeline, owner, and next commercial step are clear." },
-      { name: "Scope coverage", score: 86, rationale: "Verifies that active work is covered by current agreements and SOWs." },
-      { name: "Commercial protection", score: 88, rationale: "Looks at payment terms, rate structure, and contractual risk exposure." },
-      { name: "Change control", score: 87, rationale: "Confirms scope changes are being captured and approved rather than absorbed informally." },
-    ],
-  },
-  {
-    id: "project-health",
-    name: "Project Health Score",
-    weight: "15%",
-    rationale: "Delivery is Tkxel's core product.",
-    score: 73,
+    id: "resource-health",
+    name: "Resource Health",
+    weight: "10%",
+    rationale: "Measures dependency and continuity risks.",
+    score: 3,
     trend: "down",
     subParameters: [
       {
-        name: "Milestone health",
-        score: 72,
-        rationale: "Measures whether delivery commitments are landing on time.",
+        name: "Resource Dependency Risk",
+        score: 2,
+        rationale: "High dependency is weak; no dependency risk is excellent.",
         trend: "down",
         fallingWhy: {
-          summary: "Milestone confidence is weakening because the last delivery checkpoint did not close with owner/date clarity.",
-          sources: ["Project health playbook", "Account journey history", "AI rules learning log"],
+          summary: "Resource health is soft because a critical dependency has not been covered by a named backup.",
+          sources: ["Resource health scoring framework", "Account resource history", "AI rules learning log"],
         },
       },
-      {
-        name: "Sprint progress",
-        score: 70,
-        rationale: "Tracks current sprint execution, velocity, and unresolved carry-over.",
-        trend: "down",
-        fallingWhy: {
-          summary: "Sprint progress is falling because unresolved carry-over is accumulating faster than the current sprint cadence is clearing it.",
-          sources: ["Project health playbook", "Delivery notes history", "AI rules learning log"],
-        },
-      },
-      { name: "Quality signal", score: 76, rationale: "Looks for defect trends, rework, QA concerns, and client acceptance friction." },
-      {
-        name: "Blocker resolution",
-        score: 74,
-        rationale: "Checks whether delivery blockers have clear owners and decision paths.",
-        trend: "down",
-        fallingWhy: {
-          summary: "Blocker resolution is soft because escalation notes show blockers moving across meetings without a confirmed decision path.",
-          sources: ["Project health playbook", "Meeting history", "AI rules learning log"],
-        },
-      },
+      { name: "Critical Resource Coverage", score: 3, rationale: "Adequate coverage is moderate; fully staffed is excellent." },
+      { name: "Team Stability", score: 3, rationale: "Moderate stability requires monitoring; highly stable team is excellent." },
+      { name: "Skill Alignment", score: 4, rationale: "Good fit is healthy; perfect fit is excellent." },
+      { name: "Backup Readiness", score: 2, rationale: "Limited backup is weak; full succession coverage is excellent.", trend: "down" },
     ],
-    why: "Delivery confidence has softened against the current account journey checkpoint.",
-    task: "Schedule a delivery health review with the pod lead.",
+    why: "Resource dependency and backup readiness are below the target band.",
+    task: "Create a backup coverage plan for critical resources and confirm succession ownership.",
+    taskType: "To-do",
+    dueInDays: 7,
+  },
+  {
+    id: "project-health",
+    name: "Project Health",
+    weight: "10%",
+    rationale: "Measures delivery confidence and execution stability.",
+    score: 3,
+    trend: "down",
+    subParameters: [
+      {
+        name: "Delivery Performance",
+        score: 3,
+        rationale: "Minor delays are moderate; ahead of schedule is excellent.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Delivery performance is moderate because recent checkpoints do not yet show stable on-track execution.",
+          sources: ["Project health scoring framework", "Account journey history", "AI rules learning log"],
+        },
+      },
+      { name: "Backlog Readiness", score: 3, rationale: "Two months of backlog is moderate; six-plus months visibility is excellent." },
+      { name: "Roadmap Visibility", score: 3, rationale: "Partial roadmap is moderate; long-term roadmap agreement is excellent." },
+      {
+        name: "Escalation Status",
+        score: 3,
+        rationale: "Occasional escalations are moderate; no escalations is excellent.",
+        trend: "down",
+        fallingWhy: {
+          summary: "Escalation status is not healthy because recent account history still contains unresolved escalation signals.",
+          sources: ["Project health scoring framework", "Meeting history", "AI rules learning log"],
+        },
+      },
+      { name: "Client Confidence", score: 3, rationale: "Neutral confidence is moderate; strong confidence is excellent." },
+    ],
+    why: "Delivery confidence and roadmap visibility require monitoring.",
+    task: "Run a delivery governance review covering backlog, roadmap, escalations, and client confidence.",
     taskType: "Meeting",
     dueInDays: 5,
   },
   {
-    id: "financial",
-    name: "Financial Score",
+    id: "financial-health",
+    name: "Financial Health",
     weight: "10%",
-    rationale: "Lagging indicator, important but reactive.",
-    score: 82,
-    trend: "up",
+    rationale: "Measures commercial and financial performance.",
+    score: 4,
+    trend: "flat",
     subParameters: [
-      { name: "Invoice hygiene", score: 85, rationale: "Checks whether invoices are clean, sent on time, and not disputed." },
-      { name: "Payment timeliness", score: 80, rationale: "Measures whether payments are arriving within expected terms." },
-      { name: "Revenue trend", score: 84, rationale: "Looks at whether account revenue is expanding, stable, or contracting." },
-      { name: "Commercial leakage", score: 78, rationale: "Flags unbilled work, discount pressure, or scope absorbed without approval." },
+      { name: "Payment Timeliness", score: 4, rationale: "Minor delays are healthy; always on-time payment is excellent." },
+      { name: "Outstanding Exposure", score: 4, rationale: "Low exposure is healthy; no exposure is excellent." },
+      { name: "Client Financial Stability", score: 4, rationale: "Stable client financials are healthy; strong financial position is excellent." },
+      { name: "Revenue Trend", score: 4, rationale: "Growing revenue is healthy; strong growth is excellent." },
+      { name: "Contract vs Billing Alignment", score: 4, rationale: "Mostly aligned billing is healthy; fully aligned is excellent." },
     ],
   },
   {
     id: "whitespace",
     name: "Whitespace Analysis",
     weight: "5%",
-    rationale: "Growth signal, not a health signal.",
-    score: 69,
+    rationale: "Measures growth and expansion opportunities.",
+    score: 3,
     trend: "up",
     subParameters: [
-      { name: "Expansion fit", score: 72, rationale: "Checks whether Tkxel has a credible service fit for adjacent client needs." },
+      { name: "Service Penetration", score: 3, rationale: "Some opportunities are moderate; significant untapped services is excellent." },
+      { name: "Cross-Sell Potential", score: 3, rationale: "Moderate cross-sell potential requires active validation." },
+      { name: "Upsell Potential", score: 3, rationale: "Moderate upsell potential requires active validation." },
       {
-        name: "Buyer appetite",
-        score: 64,
-        rationale: "Looks for sponsor interest, budget intent, and openness to a new conversation.",
+        name: "Growth Signals",
+        score: 3,
+        rationale: "Moderate signals should be validated; active expansion indicators are excellent.",
         trend: "down",
         fallingWhy: {
-          summary: "Buyer appetite is being pulled down because expansion interest has not been converted into a dated sponsor conversation.",
-          sources: ["Whitespace playbook", "Opportunity history", "AI rules learning log"],
+          summary: "Growth signals have not yet been converted into an active expansion motion with sponsor, timing, and value hypothesis.",
+          sources: ["Whitespace scoring framework", "Opportunity history", "AI rules learning log"],
         },
       },
-      { name: "Timing", score: 70, rationale: "Assesses whether the account journey is at the right moment for expansion." },
-      { name: "Competitive position", score: 68, rationale: "Considers whether Tkxel is well positioned against internal or external alternatives." },
+      { name: "Expansion Readiness", score: 3, rationale: "Moderate readiness needs planning; highly ready accounts can move straight into expansion." },
     ],
-    why: "Expansion whitespace exists but has not been converted into an active account motion.",
-    task: "Create a whitespace validation task with the commercial sponsor.",
+    why: "Growth opportunity exists but needs sponsor validation and timing clarity.",
+    task: "Create an expansion validation checkpoint with the commercial sponsor.",
     taskType: "QBR",
     dueInDays: 10,
-  },
-  {
-    id: "resource-health",
-    name: "Resource Health Score",
-    weight: "0% placeholder",
-    rationale: "Parameters confirmed but excluded until Worksphere integration is live in v2.",
-    score: 80,
-    trend: "flat",
-    subParameters: [
-      { name: "Team stability", score: 82, rationale: "Tracks whether the delivery team has avoidable churn or continuity risk." },
-      { name: "Role fit", score: 80, rationale: "Checks whether assigned resources match the skills the engagement requires." },
-      { name: "Capacity coverage", score: 78, rationale: "Looks for over-allocation, under-allocation, or gaps in critical roles." },
-      { name: "Continuity risk", score: 81, rationale: "Flags dependency on a single person or fragile knowledge transfer." },
-    ],
   },
 ];
 
@@ -621,13 +651,13 @@ const upcomingJourneyItems: JourneyItem[] = [
 const documentTypes: DocumentTypeConfig[] = [
   {
     type: "Meeting minutes",
-    extracts: "Relationship signals, CSAT sentiment, risk flags, whitespace intent signals, strategic direction clues",
-    affects: "Relationship Score, CSAT, Risk Score, Whitespace Analysis, KYC Brief sections 4 and 8",
+    extracts: "Executive engagement, customer confidence, issue resolution, risk flags, whitespace intent signals, strategic direction clues",
+    affects: "Relationship Health, Customer Success, Risk Score, Whitespace Analysis, KYC Brief sections 4 and 8",
   },
   {
     type: "Contract document",
     extracts: "Auto-renewal clause, price hike clauses, non-terminable clauses, contract duration",
-    affects: "Contract Health Score, KYC Brief section 3",
+    affects: "Contract Health, KYC Brief section 3",
   },
   {
     type: "Statement of Work (SOW)",
@@ -642,7 +672,7 @@ const documentTypes: DocumentTypeConfig[] = [
   {
     type: "Project documentation",
     extracts: "Delivery history, tech stack, team composition, milestones",
-    affects: "Engagement History, Project Health Score",
+    affects: "Engagement History, Project Health, Resource Health",
   },
   {
     type: "Previous KYC brief",
@@ -652,7 +682,7 @@ const documentTypes: DocumentTypeConfig[] = [
   {
     type: "Project status report",
     extracts: "Delivery quality narrative, blockers, velocity commentary",
-    affects: "Project Health Score",
+    affects: "Project Health, Risk Score",
   },
 ];
 
@@ -676,7 +706,7 @@ const seededAccountDocuments: UploadedAccountDocument[] = [
     uploadedAt: "Jun 5",
     uploadedAtMs: new Date("2026-06-05T14:00:00").getTime(),
     status: "Pending review",
-    affected: "Relationship Score, Risk Score",
+    affected: "Relationship Health, Risk Score",
     url: documentPreviewUrl("Executive Sponsor Sync Notes.docx", "Meeting minutes"),
   },
 ];
@@ -701,9 +731,9 @@ const seededDocumentProposals: DocumentSignalProposal[] = [
   {
     id: "proposal-score",
     sourceDocument: "Executive Sponsor Sync Notes.docx",
-    field: "Relationship Score",
-    currentValue: "86",
-    proposedValue: "89",
+    field: "Relationship Health",
+    currentValue: "4",
+    proposedValue: "5",
     status: "Needs review",
   },
 ];
@@ -844,12 +874,21 @@ const pendingAccountCreationRequests: PendingAccountCreationRequest[] = [
 ];
 
 const standardOnboardingJourney: OnboardingJourneyDraftItem[] = [
-  { id: "journey-source-review", type: "To-do", title: "Confirm source file assumptions", dueDate: "2026-06-12", recurrence: "Once" },
-  { id: "journey-kickoff", type: "Meeting", title: "Executive kickoff", dueDate: "2026-06-18", recurrence: "Once" },
-  { id: "journey-stakeholder-map", type: "To-do", title: "Validate stakeholder map", dueDate: "2026-06-25", recurrence: "Monthly" },
-  { id: "journey-delivery-check", type: "Meeting", title: "30-day delivery health check", dueDate: "2026-07-05", recurrence: "Monthly" },
-  { id: "journey-first-qbr", type: "QBR", title: "First QBR", dueDate: "2026-08-10", recurrence: "Quarterly" },
-  { id: "journey-renewal-readiness", type: "To-do", title: "Renewal readiness review", dueDate: "2026-12-15", recurrence: "Once" },
+  { id: "journey-day-0-assignment", type: "To-do", title: "Account assignment and sales handover", dueDate: "2026-06-07", recurrence: "Day 0" },
+  { id: "journey-day-7-discovery", type: "To-do", title: "Discovery and KYC review", dueDate: "2026-06-14", recurrence: "Day 7" },
+  { id: "journey-day-14-stakeholders", type: "Meeting", title: "Stakeholder mapping and relationship planning", dueDate: "2026-06-21", recurrence: "Day 14" },
+  { id: "journey-day-30-health", type: "To-do", title: "Initial account health review", dueDate: "2026-07-07", recurrence: "Day 30" },
+  { id: "journey-day-45-exec", type: "Meeting", title: "Executive alignment review", dueDate: "2026-07-22", recurrence: "Day 45" },
+  { id: "journey-day-60-delivery", type: "Meeting", title: "Delivery governance review", dueDate: "2026-08-06", recurrence: "Day 60" },
+  { id: "journey-day-90-qbr", type: "QBR", title: "First quarterly business review", dueDate: "2026-09-05", recurrence: "Day 90" },
+  { id: "journey-monthly-review", type: "To-do", title: "Monthly account review", dueDate: "2026-10-05", recurrence: "Every 30 days" },
+  { id: "journey-quarterly-qbr", type: "QBR", title: "Quarterly business review package", dueDate: "2026-12-05", recurrence: "Every 90 days" },
+  { id: "journey-semiannual-strategy", type: "Meeting", title: "Semi-annual strategic review", dueDate: "2027-03-05", recurrence: "Every 180 days" },
+  { id: "journey-renewal-t180", type: "To-do", title: "Renewal readiness assessment", dueDate: "2026-09-16", recurrence: "T-180 days" },
+  { id: "journey-renewal-t120", type: "Meeting", title: "Renewal planning and budget validation", dueDate: "2026-11-15", recurrence: "T-120 days" },
+  { id: "journey-renewal-t90", type: "Meeting", title: "Renewal execution and proposal submission", dueDate: "2026-12-15", recurrence: "T-90 days" },
+  { id: "journey-renewal-t30", type: "To-do", title: "Renewal finalization and account plan update", dueDate: "2027-02-14", recurrence: "T-30 days" },
+  { id: "journey-ai-monitoring", type: "To-do", title: "AI monitoring and exception management", dueDate: "2026-06-07", recurrence: "Continuous" },
 ];
 
 const kycDraftSections: KycDraftSection[] = [
@@ -1040,16 +1079,22 @@ function TrendSpark({ trend }: { trend: KpiTrend }) {
 }
 
 function KpiScorePill({ score }: { score: number }) {
-  const tone = score >= 80 ? "text-[#238B57] bg-[#EAF6EF] border-[#BFE4CE]" : score >= 60 ? "text-[#B97813] bg-[#FFF4DF] border-[#EAC77B]" : "text-[#B33D32] bg-[#FDEBE8] border-[#F0BBB4]";
+  const tone = score >= 4 ? "text-[#238B57] bg-[#EAF6EF] border-[#BFE4CE]" : score >= 3 ? "text-[#B97813] bg-[#FFF4DF] border-[#EAC77B]" : "text-[#B33D32] bg-[#FDEBE8] border-[#F0BBB4]";
 
   return (
     <span className={`inline-flex h-7 min-w-12 items-center justify-center rounded-full border px-2 text-[12px] font-black ${tone}`}>
-      {score}
+      {score}/5
     </span>
   );
 }
 
-function clampScore(value: string) {
+function clampKpiScore(value: string) {
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return 1;
+  return Math.max(1, Math.min(5, Math.round(parsed)));
+}
+
+function clampPercent(value: string) {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return 0;
   return Math.max(0, Math.min(100, Math.round(parsed)));
@@ -1148,8 +1193,8 @@ function ScoreOverrideEditor({
         <span className="text-[12px] font-bold text-[#6F6254]">Score</span>
         <input
           type="number"
-          min={0}
-          max={100}
+          min={1}
+          max={5}
           value={draft.score}
           onChange={(event) => onDraftChange(targetId, "score", event.target.value)}
           className="mt-1 h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/75 px-3 text-[14px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/40"
@@ -1184,7 +1229,7 @@ function ScoreOverrideEditor({
       <>
         {header(
           `Edit ${targetName}`,
-          overrideRequest ? `Current request is ${overrideRequest.status.toLowerCase()} for ${overrideRequest.requestedScore}/100.` : "Submit a score change request for this sub-parameter.",
+          overrideRequest ? `Current request is ${overrideRequest.status.toLowerCase()} for ${overrideRequest.requestedScore}/5.` : "Submit a score change request for this sub-parameter.",
         )}
         {scoreForm({
           scoreLabel: `Requested override score for ${targetName}`,
@@ -1201,10 +1246,10 @@ function ScoreOverrideEditor({
   if (canOverrideDirectly) {
     return shell(
       <>
-        {header(`Edit ${targetName}`, scoreOverride ? `Applied: ${scoreOverride.score}/100. ${scoreOverride.reason}` : "Save a direct score override for this sub-parameter.")}
+        {header(`Edit ${targetName}`, scoreOverride ? `Applied: ${scoreOverride.score}/5. ${scoreOverride.reason}` : "Save a direct score override for this sub-parameter.")}
         {overrideRequest?.status === "Pending" ? (
           <div className="mx-4 mt-4 rounded-xl border border-[#DEC997] bg-[#FFF7E4] px-3 py-2 text-[12px] text-[#6F6254]">
-            <p className="font-bold text-[#25352E]">Associate request: {overrideRequest.requestedScore}/100</p>
+            <p className="font-bold text-[#25352E]">Associate request: {overrideRequest.requestedScore}/5</p>
             <p className="mt-1">{overrideRequest.reason}</p>
             <div className="mt-2 flex gap-2">
               <button type="button" onClick={() => onApproveRequest(targetId)} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
@@ -1277,7 +1322,7 @@ function OverviewActionCell({
   onConfirmDeny: (row: KpiOverviewRow) => void;
   onCancelDeny: (rowId: string) => void;
 }) {
-  const healthy = row.score >= 80;
+  const healthy = row.score >= 4;
   if (healthy) return <span className="text-[18px] font-black text-[#238B57]">✓</span>;
   if (isDenied) {
     return (
@@ -1373,7 +1418,7 @@ function KpiWeightSettingsModal({
   onDenyRequest: () => void;
 }) {
   const draftWeights = kpiOverviewRows.reduce<Record<string, number>>((weights, row) => {
-    weights[row.id] = clampScore(weightDrafts[row.id]?.weight ?? String(kpiWeights[row.id] ?? parseWeightValue(row.weight)));
+    weights[row.id] = clampPercent(weightDrafts[row.id]?.weight ?? String(kpiWeights[row.id] ?? parseWeightValue(row.weight)));
     return weights;
   }, {});
   const totalWeight = Object.values(draftWeights).reduce((sum, weight) => sum + weight, 0);
@@ -1438,7 +1483,7 @@ function KpiWeightSettingsModal({
               {kpiOverviewRows.map((row) => {
                 const currentWeight = kpiWeights[row.id] ?? parseWeightValue(row.weight);
                 const draft = weightDrafts[row.id] ?? { weight: String(currentWeight) };
-                const draftWeight = clampScore(draft.weight);
+                const draftWeight = clampPercent(draft.weight);
 
                 return (
                   <div key={row.id} className="rounded-2xl border border-[#E5DACD] bg-white/58 p-3">
@@ -1609,7 +1654,7 @@ function OverviewTab({
           {sortedKpiRows.map((row) => {
             const currentScore = row.score;
             const currentWeight = kpiWeights[row.id] ?? parseWeightValue(row.weight);
-            const healthy = currentScore >= 80;
+            const healthy = currentScore >= 4;
             const isExpanded = expandedRows.has(row.id) || Boolean(activeOverrideTargetId?.startsWith(`${row.id}:`));
             const hasProposedAction = Boolean(row.why || row.task);
             return (
@@ -1690,7 +1735,7 @@ function OverviewTab({
                               <KpiScorePill score={parameterScore} />
                             </span>
                           </div>
-                          {scoreOverrides[targetId] ? <p className="mt-1 text-[11px] font-bold text-[#6F6254]">Override applied from {parameter.score}/100</p> : null}
+                          {scoreOverrides[targetId] ? <p className="mt-1 text-[11px] font-bold text-[#6F6254]">Override applied from {parameter.score}/5</p> : null}
                           {parameter.trend === "down" && parameter.fallingWhy ? (
                             <div className="mt-2 rounded-xl border border-[#F0D1C9] bg-[#FFF8F5] px-2.5 py-2">
                               <p className="text-[11px] font-black text-[#B33D32]">Likely cause</p>
@@ -3146,7 +3191,7 @@ function AccountModal({
         if (subParameterKey(row.id, parameter.name) === targetId) return parameter.score;
       }
     }
-    return 0;
+    return 1;
   }
 
   function submitOverrideRequest(targetId: string) {
@@ -3157,7 +3202,7 @@ function AccountModal({
       ...requests,
       [targetId]: {
         targetId,
-        requestedScore: clampScore(draft.score),
+        requestedScore: clampKpiScore(draft.score),
         reason,
         status: "Pending",
       },
@@ -3173,7 +3218,7 @@ function AccountModal({
       ...overrides,
       [targetId]: {
         targetId,
-        score: clampScore(draft.score),
+        score: clampKpiScore(draft.score),
         reason,
       },
     }));
@@ -3219,7 +3264,7 @@ function AccountModal({
 
   function draftKpiWeights() {
     return kpiOverviewRows.reduce<Record<string, number>>((weights, row) => {
-      weights[row.id] = clampScore(weightDrafts[row.id]?.weight ?? String(kpiWeights[row.id] ?? defaultWeightForKpi(row.id)));
+      weights[row.id] = clampPercent(weightDrafts[row.id]?.weight ?? String(kpiWeights[row.id] ?? defaultWeightForKpi(row.id)));
       return weights;
     }, {});
   }

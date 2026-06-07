@@ -102,6 +102,8 @@ Rules:
 - If mode is generate, return a complete recommended journey.
 - If mode is enhance, preserve useful existing cadence but improve gaps, dates, recurrence, and titles based on the instruction.
 - Use only Meeting, QBR, and To-do item types.
+- Use the standard account journey as the baseline: Day 0 account assignment and sales handover; Day 7 discovery and KYC review; Day 14 stakeholder mapping and relationship planning; Day 30 initial account health review; Day 45 executive alignment review; Day 60 delivery governance review; Day 90 first QBR; monthly account review; quarterly QBR; semi-annual strategic review; T-180 renewal readiness; T-120 renewal planning; T-90 renewal execution; T-30 renewal finalization; continuous AI monitoring and exception management.
+- Journey items should influence or inspect the relevant KPI dimensions from the scoring framework: Relationship Health, Contract Health, Customer Success, Risk Score, Resource Health, Project Health, Financial Health, and Whitespace Analysis.
 - Do not invent client commitments or dates that conflict with provided data; choose reasonable future dates when needed.
 - Keep the journey ordered and operational for a KAM/Associate to follow.`,
       },
