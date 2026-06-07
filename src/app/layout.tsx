@@ -6,8 +6,8 @@ import { RoleProvider } from "@/context/RoleContext";
 import "../styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "KAM Intelligence V2",
-  description: "Enhanced Key Account Management Intelligence Platform by Tkxel",
+  title: "DotKAM",
+  description: "Key account management intelligence by Tkxel",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

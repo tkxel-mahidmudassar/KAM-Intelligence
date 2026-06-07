@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { FileText, Link2, Plus, Trash2, Upload, UserPlus } from "lucide-react";
-import { defaultKpiWeights, integrationMocks, workspaceAccounts } from "@/lib/v2/workspaceData";
+import { defaultKpiWeights, integrationMocks } from "@/lib/v2/workspaceData";
+import { portfolioAccounts } from "@/lib/v2/portfolioData";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 
@@ -19,8 +20,20 @@ export function SettingsPage() {
   const [weights, setWeights] = useState(defaultKpiWeights);
   const [associates, setAssociates] = useState(initialAssociates);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [status, setStatus] = useState("");
+  const [customRules, setCustomRules] = useState<string[]>([]);
+  const [ruleDraft, setRuleDraft] = useState("");
+  const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
+  const [integrationStatuses, setIntegrationStatuses] = useState<Record<string, "connected" | "needs setup">>(
+    Object.fromEntries(integrationMocks.map((name, index) => [name, index < 2 ? "connected" : "needs setup"])),
+  );
   const [allocations, setAllocations] = useState<Record<string, string>>(
-    Object.fromEntries(workspaceAccounts.slice(0, 8).map((account, index) => [account.id, initialAssociates[index % initialAssociates.length]])),
+    Object.fromEntries(
+      portfolioAccounts.map((account, index) => [
+        account.id,
+        initialAssociates.includes(account.associateOwner) ? account.associateOwner : initialAssociates[index % initialAssociates.length],
+      ]),
+    ),
   );
   const [playbooks, setPlaybooks] = useState<Record<string, string>>({});
 
@@ -37,20 +50,76 @@ export function SettingsPage() {
     if (!name) return;
     setAssociates((current) => [...current, name]);
     setInviteEmail("");
+    setStatus(`${name} has been added to the associate list.`);
+    fireNotification({
+      id: `associate-invited-${name}`,
+      title: "Associate invited",
+      detail: `${name} can now be assigned accounts.`,
+      href: "/settings",
+      source: "settings",
+      severity: "info",
+    });
+  }
+
+  function saveWeights() {
+    if (!canSaveWeights) return;
+    setStatus(role === "ASSOCIATE" ? "KPI weight changes have been sent to the KAM for approval." : "Default KPI weights have been saved.");
+    fireNotification({
+      id: `kpi-weights-${Date.now()}`,
+      title: role === "ASSOCIATE" ? "KPI weight request submitted" : "KPI weights saved",
+      detail: `The current KPI weight total is ${totalWeight}%.`,
+      href: "/settings",
+      source: "settings",
+      severity: "info",
+    });
+  }
+
+  function updateAllocation(accountId: string, associate: string) {
+    const account = portfolioAccounts.find((item) => item.id === accountId);
+    setAllocations((current) => ({ ...current, [accountId]: associate }));
+    setStatus(`${account?.name ?? "Account"} is now ${associate ? `allocated to ${associate}` : "unallocated"}.`);
+  }
+
+  function removeAssociate(associate: string) {
+    setAssociates((current) => current.filter((item) => item !== associate));
+    setAllocations((current) => Object.fromEntries(Object.entries(current).map(([accountId, owner]) => [accountId, owner === associate ? "" : owner])));
+    setStatus(`${associate} has been removed and their accounts are now unallocated.`);
+  }
+
+  function addRule() {
+    const trimmed = ruleDraft.trim();
+    if (!trimmed) return;
+    setCustomRules((current) => [trimmed, ...current]);
+    setRuleDraft("");
+    setRuleEditorOpen(false);
+    setStatus("AI rule added to the learning playbook.");
+  }
+
+  function toggleIntegration(name: string) {
+    setIntegrationStatuses((current) => {
+      const nextStatus = current[name] === "connected" ? "needs setup" : "connected";
+      setStatus(`${name} marked as ${nextStatus}.`);
+      return { ...current, [name]: nextStatus };
+    });
   }
 
   return (
     <main className="min-h-screen px-5 py-5">
       <section className="mx-auto max-w-[1500px] space-y-5">
         <div className="rounded-[34px] border border-[#E4D5C4] bg-[#FFF8ED] p-5 shadow-[0_24px_70px_-56px_rgba(32,38,32,0.6)]">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <h1 className="text-[clamp(42px,6vw,78px)] font-black leading-none tracking-[-0.06em] text-[#1F2722]">Settings</h1>
-            <div className="rounded-2xl border border-[#D9C8B4] bg-[#FFFCF6] px-4 py-3 text-right">
-              <p className="text-[13px] font-bold text-[#75685A]">Signed in</p>
-              <p className="text-lg font-black text-[#25352E]">{userName || "Sarah Chen"}</p>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <h1 className="text-[clamp(42px,6vw,78px)] font-black leading-none tracking-[-0.06em] text-[#1F2722]">Settings</h1>
+              <div className="rounded-2xl border border-[#D9C8B4] bg-[#FFFCF6] px-4 py-3 text-right">
+                <p className="text-[13px] font-bold text-[#75685A]">Signed in</p>
+                <p className="text-lg font-black text-[#25352E]">{userName || "Sarah Chen"}</p>
+              </div>
             </div>
+            {status ? (
+              <div className="mt-4 rounded-2xl border border-[#CFE2D3] bg-[#F3FAF1] px-4 py-3 text-[13px] font-black text-[#245D3A]">
+                {status}
+              </div>
+            ) : null}
           </div>
-        </div>
 
         <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-3xl border border-[#E1D3C2] bg-[#FFFCF6] p-4">
@@ -82,6 +151,7 @@ export function SettingsPage() {
               <button
                 type="button"
                 disabled={!canSaveWeights}
+                onClick={saveWeights}
                 className="rounded-full bg-[#25352E] px-5 py-3 text-[13px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
               >
                 {actionLabel}
@@ -106,12 +176,18 @@ export function SettingsPage() {
               <h3 className="text-[16px] font-black text-[#25352E]">Integrations</h3>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {integrationMocks.map((name) => (
-                  <div key={name} className="flex items-center justify-between rounded-2xl border border-[#E1D3C2] bg-[#FFFCF6] px-3 py-2">
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => toggleIntegration(name)}
+                    className="flex items-center justify-between rounded-2xl border border-[#E1D3C2] bg-[#FFFCF6] px-3 py-2 text-left transition hover:border-[#25352E]/45"
+                  >
                     <span className="text-[13px] font-black text-[#25352E]">{name}</span>
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#F2E8D8] text-[#6E5F4F]">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-black ${integrationStatuses[name] === "connected" ? "bg-[#EDF8EE] text-[#1F6C42]" : "bg-[#F2E8D8] text-[#6E5F4F]"}`}>
                       <Link2 className="h-3.5 w-3.5" />
+                      {integrationStatuses[name]}
                     </span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -141,18 +217,17 @@ export function SettingsPage() {
                 <div key={associate} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
                   <div className="flex items-center justify-between">
                     <p className="text-[15px] font-black text-[#25352E]">{associate}</p>
-                    <button type="button" onClick={() => setAssociates((current) => current.filter((item) => item !== associate))} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#A04436]">
+                    <button type="button" onClick={() => removeAssociate(associate)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#A04436]">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {workspaceAccounts
+                    {portfolioAccounts
                       .filter((account) => allocations[account.id] === associate)
-                      .slice(0, 4)
                       .map((account) => (
                         <div key={account.id} className="flex items-center justify-between rounded-xl border border-[#E1D3C2] bg-[#FFFCF6] px-3 py-2">
                           <span className="text-[12px] font-black text-[#25352E]">{account.name}</span>
-                          <button type="button" onClick={() => setAllocations((current) => ({ ...current, [account.id]: "" }))} className="text-[11px] font-black text-[#8A7563]">
+                          <button type="button" onClick={() => updateAllocation(account.id, "")} className="text-[11px] font-black text-[#8A7563]">
                             Unallocate
                           </button>
                         </div>
@@ -164,8 +239,8 @@ export function SettingsPage() {
 
             <div className="mt-4 rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
               <h3 className="text-[16px] font-black text-[#25352E]">Account allocation</h3>
-              <div className="mt-3 grid gap-2">
-                {workspaceAccounts.slice(0, 8).map((account) => (
+              <div className="mt-3 max-h-[430px] space-y-2 overflow-y-auto pr-1">
+                {portfolioAccounts.map((account) => (
                   <div key={account.id} className="grid gap-2 rounded-xl border border-[#E1D3C2] bg-[#FFFCF6] px-3 py-2 sm:grid-cols-[1fr_210px] sm:items-center">
                     <div>
                       <p className="text-[13px] font-black text-[#25352E]">{account.name}</p>
@@ -173,7 +248,7 @@ export function SettingsPage() {
                     </div>
                     <select
                       value={allocations[account.id] || ""}
-                      onChange={(event) => setAllocations((current) => ({ ...current, [account.id]: event.target.value }))}
+                      onChange={(event) => updateAllocation(account.id, event.target.value)}
                       className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFF8ED] px-3 text-[13px] font-black text-[#25352E] outline-none"
                     >
                       <option value="">Unallocated</option>
@@ -231,15 +306,34 @@ export function SettingsPage() {
             <h2 className="text-xl font-black text-[#25352E]">AI rules playbook</h2>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {ruleLog.map((rule) => (
+            {[...customRules, ...ruleLog].map((rule) => (
               <div key={rule} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3 text-[13px] font-bold leading-relaxed text-[#4E443B]">
                 {rule}
               </div>
             ))}
-            <button type="button" className="inline-flex min-h-24 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#CDBDAA] bg-[#FFFCF6] text-[13px] font-black text-[#6F6254]">
-              <Plus className="h-4 w-4" />
-              Add rule
-            </button>
+            {ruleEditorOpen ? (
+              <div className="rounded-2xl border border-[#CDBDAA] bg-[#FFFCF6] p-3">
+                <textarea
+                  value={ruleDraft}
+                  onChange={(event) => setRuleDraft(event.target.value)}
+                  placeholder="Add a learning rule from a dismissal, denial, or correction..."
+                  className="min-h-24 w-full resize-none rounded-xl border border-[#E1D3C2] bg-[#FFF8ED] p-3 text-[13px] font-bold text-[#25352E] outline-none"
+                />
+                <div className="mt-3 flex justify-end gap-2">
+                  <button type="button" onClick={() => setRuleEditorOpen(false)} className="rounded-full border border-[#D9C8B4] px-4 py-2 text-[12px] font-black text-[#6F6254]">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={addRule} disabled={!ruleDraft.trim()} className="rounded-full bg-[#25352E] px-4 py-2 text-[12px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]">
+                    Save rule
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setRuleEditorOpen(true)} className="inline-flex min-h-24 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#CDBDAA] bg-[#FFFCF6] text-[13px] font-black text-[#6F6254]">
+                <Plus className="h-4 w-4" />
+                Add rule
+              </button>
+            )}
           </div>
         </section>
       </section>

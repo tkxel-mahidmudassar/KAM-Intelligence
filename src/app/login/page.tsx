@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
 import type { Role } from "@/types";
 
+const demoAccounts: Array<{ label: string; email: string; name: string; role: Role }> = [
+  { label: "Associate", email: "associate.aisha@tkxel.com", name: "Aisha Khan", role: "ASSOCIATE" },
+  { label: "KAM", email: "sarah.chen@tkxel.com", name: "Sarah Chen", role: "KAM" },
+  { label: "C-Level", email: "exec.lead@tkxel.com", name: "Executive Lead", role: "EXECUTIVE" },
+];
+
 function inferRole(email: string): Role {
   const normalized = email.toLowerCase();
   if (normalized.includes("associate")) return "ASSOCIATE";
@@ -18,6 +24,7 @@ export default function LoginPage() {
   const { setUser } = useRole();
   const [email, setEmail] = useState("sarah.chen@tkxel.com");
   const [password, setPassword] = useState("");
+  const [demoSigningIn, setDemoSigningIn] = useState(false);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,15 +37,26 @@ export default function LoginPage() {
     router.push("/home");
   }
 
+  function signInDemo(account: (typeof demoAccounts)[number]) {
+    setDemoSigningIn(true);
+    setUser(`demo-${account.role.toLowerCase()}`, account.name, account.email, account.role);
+    router.push("/home");
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F3F1EC] px-5 py-8 text-[#1F2722]">
       <section className="grid w-full max-w-5xl overflow-hidden rounded-[36px] border border-[#E1D3C2] bg-[#FFF9EF] shadow-[0_28px_90px_-56px_rgba(31,39,34,0.72)] lg:grid-cols-[1fr_0.85fr]">
         <div className="bg-[radial-gradient(circle_at_20%_20%,rgba(236,194,128,0.28),transparent_32%),radial-gradient(circle_at_90%_10%,rgba(165,197,177,0.35),transparent_34%),#FFF3E0] p-8">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#25352E] text-[15px] font-black text-[#FFF9EF]">K</div>
-          <h1 className="mt-8 text-[clamp(44px,7vw,82px)] font-black leading-none tracking-[-0.07em]">KAM Intelligence</h1>
+          <img src="/tkxel-logo.svg" alt="Tkxel" className="h-12 w-12 rounded-2xl object-contain shadow-[0_18px_36px_-24px_rgba(7,85,233,0.86)]" />
+          <h1 className="mt-8 text-[clamp(54px,8vw,96px)] font-black leading-none tracking-[-0.08em]">DotKAM</h1>
         </div>
         <form onSubmit={submit} className="p-6 sm:p-8">
           <h2 className="text-3xl font-black tracking-[-0.04em] text-[#25352E]">Sign in</h2>
+          {demoSigningIn ? (
+            <div className="mt-5 rounded-2xl border border-[#CFE2D3] bg-[#F3FAF1] px-4 py-3 text-[13px] font-black text-[#245D3A]">
+              Signing in...
+            </div>
+          ) : null}
           <label className="mt-6 block">
             <span className="text-[13px] font-black text-[#6F6254]">Email</span>
             <input
@@ -67,6 +85,22 @@ export default function LoginPage() {
           <button type="submit" className="mt-6 h-12 w-full rounded-full bg-[#25352E] text-[14px] font-black text-[#FFF9EF]">
             Sign in
           </button>
+          <div className="mt-6">
+            <p className="text-[13px] font-black text-[#6F6254]">Demo account types</p>
+            <div className="mt-3 grid gap-2">
+              {demoAccounts.map((account) => (
+                <button
+                  key={account.role}
+                  type="button"
+                  onClick={() => signInDemo(account)}
+                  className="flex items-center justify-between rounded-2xl border border-[#D9C8B4] bg-[#FFFCF6] px-4 py-3 text-left transition hover:border-[#25352E] hover:bg-[#F6EFE4]"
+                >
+                  <span className="text-[14px] font-black text-[#25352E]">{account.label}</span>
+                  <span className="text-[12px] font-bold text-[#75685A]">{account.email}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </form>
       </section>
     </main>

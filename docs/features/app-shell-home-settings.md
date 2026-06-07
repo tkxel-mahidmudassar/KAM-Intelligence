@@ -44,11 +44,13 @@ Built in:
 
 - Default KPI weights with sliders.
 - Weight total validation. Save/request is disabled unless weights equal 100%.
+- Weight save/request updates local UI state and fires a settings notification.
 - Associate invite and removal UI.
-- Account allocation and unallocation controls.
+- Account allocation and unallocation controls across the full V2 portfolio account list.
+- Account allocation list is scrollable inside the settings card.
 - Playbook upload controls per KPI.
-- AI rules playbook display for learned denial/dismissal behavior.
-- Mock integrations: Salesforce, Gmail, Jira, Worksphere, Finance Invoice Tracking, LLM, and AI Note Taker.
+- AI rules playbook display and local add-rule flow for learned denial/dismissal behavior.
+- Mock integrations: Salesforce, Gmail, Jira, Worksphere, Finance Invoice Tracking, LLM, and AI Note Taker. Integration pills can be toggled locally between connected and needs setup.
 - My profile card using the current active user context.
 
 Current persistence:
@@ -63,6 +65,8 @@ The prototype includes basic auth screens.
 Built in:
 
 - Login page with email and password fields.
+- Login branding uses DotKAM with the Tkxel logo.
+- Demo account type shortcuts for Associate, KAM, and C-Level set the active demo user and route into Home.
 - Login sets the active demo user in role context and routes to Home.
 - Forgot password flow collects an email and shows non-revealing success copy.
 
