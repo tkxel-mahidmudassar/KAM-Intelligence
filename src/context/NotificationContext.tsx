@@ -38,11 +38,10 @@ interface NotificationContextValue {
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 const LS_NOTIFICATIONS = "kam_v2_notifications";
 
-function portfolioHrefForAccountName(accountName: string, tab: "overview" | "profile" | "documents" = "overview", focus?: string) {
+function portfolioHrefForAccountName(accountName: string, _tab: "overview" | "profile" | "documents" = "overview", focus?: string) {
   const account = portfolioAccounts.find((item) => item.name.toLowerCase() === accountName.toLowerCase());
   const params = new URLSearchParams();
-  if (account) params.set("account", account.id);
-  params.set("tab", tab);
+  if (account) params.set("target", account.id);
   if (focus) params.set("focus", focus);
   return account ? `/portfolio?${params.toString()}` : "/portfolio";
 }
@@ -78,7 +77,7 @@ function baselineNotifications(): AppNotification[] {
       id: `critical-account-${account.id}`,
       title: `${account.name} is critical`,
       detail: `Score ${account.healthScore}/100. Review the weakest KPI and recovery task.`,
-      href: `/portfolio?account=${account.id}&tab=overview`,
+      href: `/portfolio?target=${account.id}&focus=score-monitor`,
       source: "score-monitor",
       severity: "warning",
       createdAt: "Today",
@@ -91,7 +90,7 @@ function baselineNotifications(): AppNotification[] {
       id: `renewal-risk-${account.id}`,
       title: `${account.name} renewal risk needs attention`,
       detail: `${account.renewalDays} days to renewal with score ${account.healthScore}/100.`,
-      href: `/portfolio?account=${account.id}&tab=overview`,
+      href: `/portfolio?target=${account.id}&focus=renewal-monitor`,
       source: "renewal-monitor",
       severity: "warning",
       createdAt: "Today",

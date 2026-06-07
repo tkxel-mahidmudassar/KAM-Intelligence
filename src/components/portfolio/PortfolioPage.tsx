@@ -8,8 +8,11 @@ import { CalendarDays, Check, FileText, Mail, Pencil, Phone, Plus, Search, Setti
 import { Button } from "@/components/ui/Button";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
+import { readCachedApiAccounts, upsertCachedApiAccount, writeCachedApiAccounts, type CachedApiAccount } from "@/lib/v2/accountCache";
 import { associatePortfolio, portfolioAccounts, type PortfolioAccount, type PortfolioHealth } from "@/lib/v2/portfolioData";
 import type { Role } from "@/types";
+
+const demoAccountIds = new Set([...portfolioAccounts, ...associatePortfolio].map((account) => account.id));
 
 const healthLabel: Record<PortfolioHealth, string> = {
   HEALTHY: "Healthy",
@@ -317,10 +320,56 @@ interface PendingAccountCreationRequest {
   id: string;
   submittedBy: string;
   submittedAt: string;
+  creatorRole?: Role;
   status?: "Draft" | "Submitted to KAM";
   associateReason: string;
   draft: AccountDraft;
   sourceFiles: string[];
+  kycSections?: KycDraftSection[];
+  journey?: OnboardingJourneyDraftItem[];
+}
+
+interface AccountRuntimeMetadata {
+  accountId?: string;
+  accountName: string;
+  primaryContact?: string;
+  sourceFiles?: string[];
+  kycSections?: KycDraftSection[];
+  journey?: OnboardingJourneyDraftItem[];
+}
+
+const LS_ACCOUNT_RUNTIME_METADATA = "kam_v2_account_runtime_metadata";
+
+function accountRuntimeMetadataKeys(account: Pick<PortfolioAccount, "id" | "name">) {
+  return [account.id, `name:${account.name.trim().toLowerCase()}`];
+}
+
+function readAccountRuntimeMetadata() {
+  if (typeof window === "undefined") return {};
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LS_ACCOUNT_RUNTIME_METADATA) ?? "{}") as Record<string, AccountRuntimeMetadata>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getAccountRuntimeMetadata(account: Pick<PortfolioAccount, "id" | "name">) {
+  const metadata = readAccountRuntimeMetadata();
+  return accountRuntimeMetadataKeys(account).map((key) => metadata[key]).find(Boolean);
+}
+
+function saveAccountRuntimeMetadata(account: Pick<PortfolioAccount, "id" | "name">, metadata: AccountRuntimeMetadata) {
+  if (typeof window === "undefined") return;
+  try {
+    const allMetadata = readAccountRuntimeMetadata();
+    accountRuntimeMetadataKeys(account).forEach((key) => {
+      allMetadata[key] = { ...metadata, accountId: account.id, accountName: account.name };
+    });
+    window.localStorage.setItem(LS_ACCOUNT_RUNTIME_METADATA, JSON.stringify(allMetadata));
+  } catch {
+    // No-op for restricted browser storage.
+  }
 }
 
 const baseKpiOverviewRows: KpiOverviewRow[] = [
@@ -1446,6 +1495,10 @@ function healthScoreFromAccount(account: Record<string, unknown>, health: Portfo
 function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): PortfolioAccount {
   const health = String(account.health ?? "HEALTHY") as PortfolioHealth;
   const kam = account.kam as { name?: string } | undefined;
+  const metadata = getAccountRuntimeMetadata({
+    id: String(account.id),
+    name: String(account.name ?? "New account"),
+  });
   return {
     id: String(account.id),
     name: String(account.name ?? "New account"),
@@ -1459,12 +1512,20 @@ function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): Port
     renewalDays: daysUntil(account.contractEnd as string | null | undefined),
     kamOwner: kam?.name ?? "KAM not set",
     associateOwner: kam?.name ?? "Account owner not set",
-    contactName: "Primary contact not set",
+    contactName: metadata?.primaryContact || "Primary contact not set",
     logoUrl: typeof account.logoUrl === "string" ? account.logoUrl : undefined,
     deliveryModel: String(account.segment ?? "Delivery model not set"),
     currentWork: "Account setup in progress",
     relationshipSignal: "Review latest account documents",
   };
+}
+
+function mapApiAccountsToCreatedPortfolioAccounts(accounts: Array<Record<string, unknown>>) {
+  const seededNames = new Set(portfolioAccounts.map((account) => account.name.toLowerCase()));
+  return accounts
+    .filter((account) => !String(account.id ?? "").startsWith("acc-"))
+    .map(mapApiAccountToPortfolioAccount)
+    .filter((account) => !seededNames.has(account.name.toLowerCase()));
 }
 
 const taskTypeTone: Record<TaskType, string> = {
@@ -3000,8 +3061,21 @@ function UploadDocumentDialog({
 
 function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount; onAccountUpdate: (account: PortfolioAccount) => void }) {
   const { role } = useRole();
-  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedAccountDocument[]>(seededAccountDocuments);
-  const [signalProposals, setSignalProposals] = useState<DocumentSignalProposal[]>(seededDocumentProposals);
+  const isDemoAccount = demoAccountIds.has(account.id);
+  const accountMetadata = getAccountRuntimeMetadata(account);
+  const metadataDocuments = (accountMetadata?.sourceFiles ?? []).map((fileName, index): UploadedAccountDocument => ({
+    id: `source-doc-${account.id}-${index}`,
+    name: fileName,
+    type: "Account source",
+    uploadedBy: account.associateOwner || "Associate",
+    uploadedAt: "Account setup",
+    uploadedAtMs: Date.now() - index,
+    status: "Processed",
+    affected: "Account profile and KYC",
+    url: documentPreviewUrl(fileName, "Account source"),
+  }));
+  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedAccountDocument[]>(() => isDemoAccount ? seededAccountDocuments : metadataDocuments);
+  const [signalProposals, setSignalProposals] = useState<DocumentSignalProposal[]>(() => isDemoAccount ? seededDocumentProposals : []);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [documentUploading, setDocumentUploading] = useState(false);
   const [documentUploadError, setDocumentUploadError] = useState("");
@@ -3027,6 +3101,28 @@ function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount;
   const canReviewProposals = role === "ASSOCIATE" || role === "KAM";
   const proposalUnderReview = proposalResolutionDraft ? signalProposals.find((proposal) => proposal.id === proposalResolutionDraft.proposalId) : undefined;
   const recentDocuments = [...uploadedDocuments].sort((a, b) => b.uploadedAtMs - a.uploadedAtMs);
+
+  useEffect(() => {
+    const nextIsDemoAccount = demoAccountIds.has(account.id);
+    const nextMetadata = getAccountRuntimeMetadata(account);
+    const nextMetadataDocuments = (nextMetadata?.sourceFiles ?? []).map((fileName, index): UploadedAccountDocument => ({
+      id: `source-doc-${account.id}-${index}`,
+      name: fileName,
+      type: "Account source",
+      uploadedBy: account.associateOwner || "Associate",
+      uploadedAt: "Account setup",
+      uploadedAtMs: Date.now() - index,
+      status: "Processed",
+      affected: "Account profile and KYC",
+      url: documentPreviewUrl(fileName, "Account source"),
+    }));
+    setUploadedDocuments(nextIsDemoAccount ? seededAccountDocuments : nextMetadataDocuments);
+    setSignalProposals(nextIsDemoAccount ? seededDocumentProposals : []);
+    setProposalResolutionDraft(null);
+    setDocumentUploadError("");
+    setQbrDraftReady(false);
+    setQbrDeckUrl("");
+  }, [account.id]);
 
   function apiDocumentType(type: string) {
     const normalized = type.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
@@ -3297,8 +3393,13 @@ function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount;
         </button>
       </div>
       <section className="rounded-3xl border border-[#E5DACD] bg-white/58 p-4">
-        <div className="grid gap-2">
-          {recentDocuments.map((document) => {
+        {recentDocuments.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#D8CAB9] bg-[#FFF9EF]/70 p-4 text-[13px] font-bold text-[#7D6E5F]">
+            No account documents have been uploaded yet.
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            {recentDocuments.map((document) => {
             const documentProposals = signalProposals.filter((proposal) => proposal.sourceDocument === document.name);
             const reviewStatus = documentReviewStatus(documentProposals);
 
@@ -3362,8 +3463,9 @@ function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount;
                 </div>
               </article>
             );
-          })}
-        </div>
+            })}
+          </div>
+        )}
       </section>
 
       {qbrDraftReady ? (
@@ -3421,6 +3523,32 @@ function ProfileTab({
 }) {
   const { role } = useRole();
   const canEditProfile = role !== "EXECUTIVE";
+  const isDemoAccount = demoAccountIds.has(account.id);
+  const accountMetadata = getAccountRuntimeMetadata(account);
+  const primaryContactName = accountMetadata?.primaryContact || account.contactName;
+  const accountDerivedContacts: AccountContact[] = !isDemoAccount && primaryContactName && primaryContactName !== "Primary contact not set"
+    ? [{
+        id: `derived-contact-${account.id}`,
+        name: primaryContactName,
+        designation: "Primary contact",
+        location: account.country && account.country !== "Country not set" ? account.country : "Location not set",
+        timeZone: "Time zone not set",
+        email: "Email not set",
+        mobile: "Mobile not set",
+        hierarchyRank: 1,
+      }]
+    : [];
+  const baseContacts = isDemoAccount ? accountContacts : accountDerivedContacts;
+  const baseResources = isDemoAccount ? tkxelResources : [];
+  const metadataJourneyItems: JourneyItem[] = (accountMetadata?.journey ?? []).map((item) => ({
+    id: `metadata-${item.id}`,
+    title: item.title,
+    type: item.type,
+    date: item.dueDate,
+    detail: item.recurrence,
+  }));
+  const baseUpcomingJourneyItems = isDemoAccount ? upcomingJourneyItems : metadataJourneyItems;
+  const baseCompletedJourneyItems = isDemoAccount ? completedJourneyItems : [];
   const [profileEditing, setProfileEditing] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
@@ -3470,10 +3598,10 @@ function ProfileTab({
     date: "",
     detail: "",
   });
-  const sortedContacts = [...accountContacts, ...customContacts]
+  const sortedContacts = [...baseContacts, ...customContacts]
     .filter((contact) => !deletedContactIds.has(contact.id))
     .sort((a, b) => a.hierarchyRank - b.hierarchyRank);
-  const visibleResources = [...tkxelResources, ...customResources].filter((resource) => !deletedResourceIds.has(resource.id));
+  const visibleResources = [...baseResources, ...customResources].filter((resource) => !deletedResourceIds.has(resource.id));
   const queuedJourneyItems: JourneyItem[] = activeTasks.map((task) => ({
     id: task.id,
     title: task.task,
@@ -3481,14 +3609,14 @@ function ProfileTab({
     date: task.dueDate,
     detail: `Queued from ${task.kpiName}.`,
   }));
-  const visibleUpcomingItems = [...upcomingJourneyItems, ...customJourneyItems, ...queuedJourneyItems]
+  const visibleUpcomingItems = [...baseUpcomingJourneyItems, ...customJourneyItems, ...queuedJourneyItems]
     .filter((item) => resolvedJourneyItems[item.id]?.action !== "Dismiss")
     .sort((a, b) => journeyDateSortValue(a.date) - journeyDateSortValue(b.date));
   const visibleCompletedItems = [
     ...Object.entries(resolvedJourneyItems)
       .filter(([, resolution]) => resolution.action === "Done")
       .map(([itemId, resolution]) => {
-        const item = [...upcomingJourneyItems, ...customJourneyItems, ...queuedJourneyItems].find((candidate) => candidate.id === itemId);
+        const item = [...baseUpcomingJourneyItems, ...customJourneyItems, ...queuedJourneyItems].find((candidate) => candidate.id === itemId);
         return item
           ? {
               id: `${item.id}-done`,
@@ -3500,10 +3628,10 @@ function ProfileTab({
           : null;
       })
       .filter((item): item is JourneyItem => Boolean(item)),
-    ...completedJourneyItems,
+    ...baseCompletedJourneyItems,
   ];
   const resolutionItem = journeyResolutionDraft
-    ? [...upcomingJourneyItems, ...customJourneyItems, ...queuedJourneyItems].find((item) => item.id === journeyResolutionDraft.taskId)
+    ? [...baseUpcomingJourneyItems, ...customJourneyItems, ...queuedJourneyItems].find((item) => item.id === journeyResolutionDraft.taskId)
     : undefined;
 
   useEffect(() => {
@@ -3521,6 +3649,15 @@ function ProfileTab({
     });
     setProfileEditing(false);
     setProfileError("");
+    setCustomContacts([]);
+    setCustomResources([]);
+    setCustomJourneyItems([]);
+    setDeletedContactIds(new Set());
+    setDeletedResourceIds(new Set());
+    setContactDeletionRequests(new Set());
+    setResourceDeletionRequests(new Set());
+    setResolvedJourneyItems({});
+    setJourneyResolutionDraft(null);
   }, [account]);
 
   function updateProfileDraft(field: keyof AccountProfileDraft, value: string) {
@@ -3566,11 +3703,13 @@ function ProfileTab({
           website: profileDraft.website.trim() || undefined,
           country: profileDraft.country.trim(),
           region: profileDraft.region.trim(),
+          kamOwnerName: profileDraft.kamOwner.trim() || undefined,
           contractEnd: profileDraft.contractEnd || undefined,
         }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Profile update failed");
+      upsertCachedApiAccount(role, payload.data as CachedApiAccount);
       const updated = mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>);
       onAccountUpdate({
         ...localUpdatedAccount,
@@ -3641,7 +3780,7 @@ function ProfileTab({
         timeZone: contactDraft.timeZone.trim() || "Time zone not set",
         email: contactDraft.email.trim(),
         mobile: contactDraft.mobile.trim() || "Mobile not set",
-        hierarchyRank: Number(contactDraft.hierarchyRank) || accountContacts.length + contacts.length + 1,
+        hierarchyRank: Number(contactDraft.hierarchyRank) || baseContacts.length + contacts.length + 1,
       },
     ]);
     setContactDraft({
@@ -3794,6 +3933,14 @@ function ProfileTab({
               <input value={profileDraft.region} onChange={(event) => updateProfileDraft("region", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
             </label>
             <label>
+              <FieldLabel>KAM owner</FieldLabel>
+              <input value={profileDraft.kamOwner} onChange={(event) => updateProfileDraft("kamOwner", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
+              <FieldLabel>Associate owner</FieldLabel>
+              <input value={profileDraft.associateOwner} onChange={(event) => updateProfileDraft("associateOwner", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
               <FieldLabel>Contract end</FieldLabel>
               <input type="date" value={profileDraft.contractEnd} onChange={(event) => updateProfileDraft("contractEnd", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
             </label>
@@ -3812,7 +3959,7 @@ function ProfileTab({
             <SummaryItem label="Segment" value={account.segment ?? account.deliveryModel} />
             <SummaryItem label="ARR" value={money(account.arr)} />
             <SummaryItem label="Location" value={`${account.country} - ${account.region}`} />
-            <SummaryItem label="Owner" value={account.associateOwner} />
+            <SummaryItem label="KAM owner" value={account.kamOwner} />
           </div>
         )}
       </section>
@@ -3833,6 +3980,11 @@ function ProfileTab({
           {sortedContacts.map((contact) => (
             <ContactCard key={contact.id} contact={contact} deletionRequested={contactDeletionRequests.has(contact.id)} role={role} onDelete={handleContactDelete} />
           ))}
+          {sortedContacts.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[#D8CAB9] bg-[#FFF9EF]/70 p-4 text-[13px] font-bold text-[#7D6E5F] md:col-span-2">
+              No contacts identified yet. Add contacts or upload account documents for review.
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -3852,6 +4004,11 @@ function ProfileTab({
           {visibleResources.map((resource) => (
             <TkxelResourceCard key={resource.id} resource={resource} deletionRequested={resourceDeletionRequests.has(resource.id)} role={role} onDelete={handleResourceDelete} />
           ))}
+          {visibleResources.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[#D8CAB9] bg-[#FFF9EF]/70 p-4 text-[13px] font-bold text-[#7D6E5F] md:col-span-2">
+              No Tkxel resources assigned yet.
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -3893,6 +4050,11 @@ function ProfileTab({
                 </article>
               );
             })}
+            {visibleUpcomingItems.length === 0 ? (
+              <div className="w-80 rounded-2xl border border-dashed border-[#D8CAB9] bg-[#FFF9EF]/70 p-4 text-[13px] font-bold text-[#7D6E5F]">
+                No journey items have been created yet.
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -4553,31 +4715,57 @@ function PendingAccountCreationDialog({
   open,
   request,
   onOpenChange,
+  onUpdateRequest,
+  onDeleteRequest,
+  onApproveRequest,
+  role,
 }: {
   open: boolean;
   request: PendingAccountCreationRequest | null;
   onOpenChange: (open: boolean) => void;
+  onUpdateRequest: (request: PendingAccountCreationRequest) => void;
+  onDeleteRequest: (requestId: string) => void;
+  onApproveRequest: (request: PendingAccountCreationRequest) => Promise<void>;
+  role: Role;
 }) {
   const [draft, setDraft] = useState<AccountDraft>(request?.draft ?? emptyAccountDraft);
   const [decisionReason, setDecisionReason] = useState("");
   const [status, setStatus] = useState<"Pending" | "Edits saved" | "Approved" | "Denied">("Pending");
   const [sourceFiles, setSourceFiles] = useState<string[]>(request?.sourceFiles ?? []);
+  const [editableKycSections, setEditableKycSections] = useState<KycDraftSection[]>(request?.kycSections ?? kycDraftSections);
+  const [editableJourney, setEditableJourney] = useState<OnboardingJourneyDraftItem[]>(request?.journey ?? standardOnboardingJourney);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalError, setApprovalError] = useState("");
   const [assistantMessage, setAssistantMessage] = useState("");
   const [assistantDocumentDraft, setAssistantDocumentDraft] = useState<OnboardingDocumentDraft>({
     type: documentTypes[0].type,
     fileName: "",
     fileUrl: "",
   });
+  const [activeStep, setActiveStep] = useState<AccountOnboardingStep>("profile");
+  const [assistantCollapsed, setAssistantCollapsed] = useState(false);
   const [assistantNotes, setAssistantNotes] = useState<string[]>([
     "I can help the KAM review this account draft, update fields, inspect sources, and refine KYC or journey items before approval.",
   ]);
+  const setupTabs: Array<{ id: AccountOnboardingStep; label: string }> = [
+    { id: "profile", label: "Profile" },
+    { id: "kyc", label: "KYC draft" },
+    { id: "journey", label: "Journey" },
+    { id: "review", label: "Review" },
+  ];
+  const canSubmitToKam = role === "ASSOCIATE" && request?.status !== "Submitted to KAM";
+  const canApproveRequest = role === "KAM";
 
   useEffect(() => {
     if (!request) return;
     setDraft(request.draft);
     setSourceFiles(request.sourceFiles);
+    setEditableKycSections(request.kycSections ?? kycDraftSections);
+    setEditableJourney(request.journey ?? standardOnboardingJourney);
     setStatus("Pending");
     setDecisionReason("");
+    setApprovalError("");
+    setApprovalLoading(false);
   }, [request]);
 
   if (!request) return null;
@@ -4587,15 +4775,65 @@ function PendingAccountCreationDialog({
     setStatus("Pending");
   }
 
-  function approve() {
-    setStatus("Approved");
-    setDecisionReason("");
+  async function approve() {
+    if (!request || approvalLoading) return;
+    setApprovalLoading(true);
+    setApprovalError("");
+    try {
+      await onApproveRequest({
+        ...request,
+        status: "Submitted to KAM",
+        draft,
+        sourceFiles,
+        kycSections: editableKycSections,
+        journey: editableJourney,
+      });
+      setStatus("Approved");
+      setDecisionReason("");
+    } catch (error) {
+      setApprovalError(error instanceof Error ? error.message : "Account approval failed");
+    } finally {
+      setApprovalLoading(false);
+    }
   }
 
   function deny() {
     if (!decisionReason.trim()) return;
     setStatus("Denied");
     setDecisionReason("");
+  }
+
+  function saveEdits() {
+    if (!request) return;
+    onUpdateRequest({
+      ...request,
+      draft,
+      sourceFiles,
+      kycSections: editableKycSections,
+      journey: editableJourney,
+    });
+    setStatus("Edits saved");
+  }
+
+  function deleteDraft() {
+    if (!request) return;
+    onDeleteRequest(request.id);
+  }
+
+  function submitToKam() {
+    if (!request) return;
+    const nextRequest: PendingAccountCreationRequest = {
+      ...request,
+      status: "Submitted to KAM",
+      associateReason: "Submitted from the Associate draft workspace for KAM review.",
+      draft,
+      sourceFiles,
+      kycSections: editableKycSections,
+      journey: editableJourney,
+    };
+    onUpdateRequest(nextRequest);
+    setAssistantNotes((notes) => [`Submitted ${nextRequest.draft.name} to KAM for review.`, ...notes]);
+    setStatus("Edits saved");
   }
 
   function sendAssistantMessage() {
@@ -4616,6 +4854,174 @@ function PendingAccountCreationDialog({
     }
   }
 
+  function renderActiveStep() {
+    if (activeStep === "profile") {
+      return (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <AccountDraftField label="Account name" value={draft.name} onChange={(value) => updateDraft({ ...draft, name: value })} />
+          <AccountDraftField label="Industry" value={draft.industry} onChange={(value) => updateDraft({ ...draft, industry: value })} />
+          <AccountDraftField label="Segment" value={draft.segment} onChange={(value) => updateDraft({ ...draft, segment: value })} />
+          <AccountDraftField label="ARR" value={draft.arr} onChange={(value) => updateDraft({ ...draft, arr: value })} />
+          <AccountDraftField label="Location" value={draft.location} onChange={(value) => updateDraft({ ...draft, location: value })} />
+          <AccountDraftField label="Contract renewal" value={draft.contractRenewal} onChange={(value) => updateDraft({ ...draft, contractRenewal: value })} />
+          <AccountDraftField label="KAM owner" value={draft.kamOwner} onChange={(value) => updateDraft({ ...draft, kamOwner: value })} />
+          <AccountDraftField label="Associate owner" value={draft.associateOwner} onChange={(value) => updateDraft({ ...draft, associateOwner: value })} />
+          <AccountDraftField label="Primary contact" value={draft.primaryContact} onChange={(value) => updateDraft({ ...draft, primaryContact: value })} />
+          <AccountDraftField label="Active risk" value={draft.activeRisk} onChange={(value) => updateDraft({ ...draft, activeRisk: value })} />
+          <AccountDraftField label="Open opportunity" value={draft.openOpportunity} onChange={(value) => updateDraft({ ...draft, openOpportunity: value })} />
+          <AccountDraftField label="Next touchpoint" value={draft.nextTouchpoint} onChange={(value) => updateDraft({ ...draft, nextTouchpoint: value })} />
+        </div>
+      );
+    }
+
+    if (activeStep === "kyc") {
+      return (
+        <div>
+          <h3 className="text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">KYC draft</h3>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {editableKycSections.map((section) => (
+              <article key={section.id} className="rounded-2xl border border-[#E5DACD] bg-[#FFF9EF]/68 p-3">
+                <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
+                  <label className="space-y-1">
+                    <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#8A7A69]">Section</span>
+                    <input
+                      value={section.title}
+                      onChange={(event) => setEditableKycSections((sections) => sections.map((item) => item.id === section.id ? { ...item, title: event.target.value } : item))}
+                      className="h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/70 px-3 text-[13px] font-black text-[#25352E] outline-none focus:border-[#25352E]/45"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#8A7A69]">Status</span>
+                    <select
+                      value={section.status}
+                      onChange={(event) => setEditableKycSections((sections) => sections.map((item) => item.id === section.id ? { ...item, status: event.target.value as KycDraftSection["status"] } : item))}
+                      className="h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/70 px-3 text-[12px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/45"
+                    >
+                      <option value="Ready">Ready</option>
+                      <option value="Needs input">Needs input</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="mt-2 block space-y-1">
+                  <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#8A7A69]">Source</span>
+                  <input
+                    value={section.source}
+                    onChange={(event) => setEditableKycSections((sections) => sections.map((item) => item.id === section.id ? { ...item, source: event.target.value } : item))}
+                    className="h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/70 px-3 text-[12px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/45"
+                  />
+                </label>
+                <label className="mt-2 block space-y-1">
+                  <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#8A7A69]">Draft copy</span>
+                  <textarea
+                    value={section.draft}
+                    onChange={(event) => setEditableKycSections((sections) => sections.map((item) => item.id === section.id ? { ...item, draft: event.target.value } : item))}
+                    className="min-h-24 w-full rounded-xl border border-[#E1D7CA] bg-white/70 p-3 text-[12px] font-bold leading-relaxed text-[#25352E] outline-none focus:border-[#25352E]/45"
+                  />
+                </label>
+              </article>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeStep === "journey") {
+      return (
+        <div>
+          <h3 className="text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Account journey</h3>
+          <div className="mt-3 grid gap-2">
+            {editableJourney.map((item) => (
+              <div key={item.id} className="grid gap-2 rounded-2xl border border-[#E5DACD] bg-[#FFF9EF]/68 p-3 md:grid-cols-[130px_minmax(0,1fr)_150px_140px]">
+                <select
+                  value={item.type}
+                  onChange={(event) => setEditableJourney((journey) => journey.map((journeyItem) => journeyItem.id === item.id ? { ...journeyItem, type: event.target.value as TaskType } : journeyItem))}
+                  className="h-10 rounded-xl border border-[#E1D7CA] bg-white/70 px-3 text-[12px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/45"
+                >
+                  {Object.keys(taskTypeTone).map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+                <input
+                  value={item.title}
+                  onChange={(event) => setEditableJourney((journey) => journey.map((journeyItem) => journeyItem.id === item.id ? { ...journeyItem, title: event.target.value } : journeyItem))}
+                  className="h-10 min-w-0 rounded-xl border border-[#E1D7CA] bg-white/70 px-3 text-[13px] font-black text-[#25352E] outline-none focus:border-[#25352E]/45"
+                />
+                <input
+                  type="date"
+                  value={item.dueDate}
+                  onChange={(event) => setEditableJourney((journey) => journey.map((journeyItem) => journeyItem.id === item.id ? { ...journeyItem, dueDate: event.target.value } : journeyItem))}
+                  className="h-10 rounded-xl border border-[#E1D7CA] bg-white/70 px-3 text-[12px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/45"
+                />
+                <input
+                  value={item.recurrence}
+                  onChange={(event) => setEditableJourney((journey) => journey.map((journeyItem) => journeyItem.id === item.id ? { ...journeyItem, recurrence: event.target.value } : journeyItem))}
+                  className="h-10 rounded-xl border border-[#E1D7CA] bg-white/70 px-3 text-[12px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/45"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="rounded-3xl border border-[#E5DACD] bg-white/58 p-4">
+          <FieldLabel>Associate reason</FieldLabel>
+          <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#25352E]">{request?.associateReason ?? "No review reason provided."}</p>
+          <div className="mt-4">
+            <FieldLabel>Source files</FieldLabel>
+            <div className="mt-2 space-y-2">
+              {sourceFiles.length > 0 ? sourceFiles.map((fileName) => (
+                <button
+                  key={fileName}
+                  type="button"
+                  onClick={() => openExternalTab(documentPreviewUrl(fileName, "Account creation source"))}
+                  className="block w-full truncate rounded-xl border border-[#E5DACD] bg-[#FFF9EF]/70 px-3 py-2 text-left text-[12px] font-bold text-[#25352E] transition-colors hover:bg-white"
+                >
+                  {fileName}
+                </button>
+              )) : (
+                <p className="rounded-xl border border-[#E5DACD] bg-[#FFF9EF]/70 px-3 py-2 text-[12px] font-bold text-[#7D6E5F]">No source files attached.</p>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="rounded-3xl border border-[#E5DACD] bg-white/58 p-4">
+          <FieldLabel>KAM decision notes</FieldLabel>
+          <textarea
+            value={decisionReason}
+            onChange={(event) => setDecisionReason(event.target.value)}
+            placeholder="Required when denying this request"
+            className="mt-3 min-h-24 w-full rounded-xl border border-[#E1D7CA] bg-[#FFF9EF]/80 p-3 text-[13px] text-[#25352E] outline-none placeholder:text-[#A69A8B] focus:border-[#25352E]/45"
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={saveEdits} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-2 text-[12px] font-bold text-[#6F6254]">
+              Save edits
+            </button>
+            {canApproveRequest ? (
+              <>
+                <button type="button" onClick={approve} disabled={approvalLoading} className="rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-50">
+                  {approvalLoading ? "Approving..." : "Approve"}
+                </button>
+                <button type="button" onClick={deny} disabled={!decisionReason.trim() || approvalLoading} className="rounded-full border border-[#E2B7AF] bg-[#FFF0ED] px-3 py-2 text-[12px] font-bold text-[#B33D32] disabled:cursor-not-allowed disabled:opacity-45">
+                  Deny
+                </button>
+              </>
+            ) : null}
+            <button type="button" onClick={deleteDraft} className="rounded-full border border-[#E2B7AF] bg-white/70 px-3 py-2 text-[12px] font-bold text-[#B33D32]">
+              {request?.status === "Submitted to KAM" ? "Delete request" : "Delete draft"}
+            </button>
+          </div>
+          {approvalError ? (
+            <p className="mt-3 rounded-xl border border-[#F0C6BE] bg-[#FFF0ED] px-3 py-2 text-[12px] font-bold text-[#B33D32]">{approvalError}</p>
+          ) : null}
+          <p className="mt-3 text-[12px] font-black text-[#25352E]">Status: {status}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Dialog.Root modal={false} open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -4624,24 +5030,158 @@ function PendingAccountCreationDialog({
           onInteractOutside={(event) => event.preventDefault()}
           onPointerDownOutside={(event) => event.preventDefault()}
           onFocusOutside={(event) => event.preventDefault()}
-          className="fixed left-[4vw] top-1/2 z-[100] flex max-h-[88vh] w-[min(1040px,68vw)] -translate-y-1/2 flex-col overflow-hidden rounded-[1.75rem] border border-[#D8CAB9] bg-[#FBF7EF] shadow-[0_34px_110px_-56px_rgba(43,32,19,0.78)] focus:outline-none"
+          className="fixed inset-4 z-[100] flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[1.75rem] border border-[#D8CAB9] bg-[#FBF7EF] shadow-[0_34px_110px_-56px_rgba(43,32,19,0.78)] focus:outline-none"
         >
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E5DACD] bg-[#F7F1E7] px-5 py-4">
             <div>
               <Dialog.Title className="text-[26px] font-black tracking-[-0.06em] text-[#1F2722]">Review account creation</Dialog.Title>
               <p className="mt-1 text-[13px] font-bold text-[#6F6254]">{request.submittedBy} - {request.submittedAt} - {request.status ?? "Draft"}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#6F6254] hover:text-[#25352E]"
-              aria-label="Close account creation review"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={deleteDraft}
+                className="rounded-full border border-[#E2B7AF] bg-white/70 px-3 py-2 text-[12px] font-bold text-[#B33D32] hover:bg-[#FFF0ED]"
+              >
+                {request.status === "Submitted to KAM" ? "Delete request" : "Delete draft"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#6F6254] hover:text-[#25352E]"
+                aria-label="Close account creation review"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className={`grid min-h-0 flex-1 gap-4 overflow-hidden p-4 ${assistantCollapsed ? "lg:grid-cols-[1fr_auto]" : "lg:grid-cols-[minmax(0,1fr)_390px]"}`}>
+            <div className="flex min-h-0 min-w-0 flex-col">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {setupTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveStep(tab.id)}
+                    className={`rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${
+                      activeStep === tab.id ? "bg-[#25352E] text-[#FFF9EF]" : "border border-[#D8CAB9] bg-white/64 text-[#6F6254] hover:text-[#25352E]"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <section className="min-h-0 flex-1 overflow-y-auto rounded-3xl border border-[#E5DACD] bg-white/50 p-4">
+                {renderActiveStep()}
+              </section>
+            </div>
+
+            {assistantCollapsed ? (
+              <button
+                type="button"
+                onClick={() => setAssistantCollapsed(false)}
+                className="hidden h-full w-12 items-center justify-center rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] text-[#25352E] shadow-[0_18px_46px_-34px_rgba(55,43,28,0.58)] lg:flex"
+                aria-label="Expand setup assistant"
+              >
+                <Sparkles className="h-4 w-4" />
+              </button>
+            ) : (
+              <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-[#D8CAB9] bg-[#FFF9EF] shadow-[0_18px_46px_-34px_rgba(55,43,28,0.58)]">
+                <div className="relative overflow-hidden border-b border-[#E5DACD] bg-[#F7F1E7] px-4 py-4">
+                  <div className="relative z-10 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="relative h-10 w-10 shrink-0 rounded-2xl bg-[#25352E]">
+                        <span className="absolute left-2 top-2 h-4 w-4 rounded-full bg-[#FFF9EF]" />
+                        <span className="absolute bottom-2 right-2 h-3.5 w-3.5 rounded-full bg-[#E8BE86]" />
+                        <span className="absolute left-3.5 top-3.5 h-3.5 w-3.5 rounded-full bg-[#A7C7B4]" />
+                      </div>
+                      <div className="min-w-0">
+                        <h2 className="truncate text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Setup assistant</h2>
+                        <p className="text-[12px] font-bold text-[#7D6E5F]">KAM review</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAssistantCollapsed(true)}
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#6F6254] hover:text-[#25352E]"
+                      aria-label="Collapse setup assistant"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                  {assistantNotes.map((note, index) => (
+                    <p key={`${note}-${index}`} className="rounded-2xl border border-[#E5DACD] bg-white/70 px-3 py-2 text-[13px] font-bold leading-relaxed text-[#25352E]">
+                      {note}
+                    </p>
+                  ))}
+                </div>
+                <div className="border-t border-[#E5DACD] bg-[#FFF9EF]/95 p-3">
+                  {assistantDocumentDraft.fileName ? (
+                    <div className="mb-2 flex items-center gap-2 rounded-xl border border-[#E5DACD] bg-white/70 px-3 py-2">
+                      <FileText className="h-4 w-4 shrink-0 text-[#7D6E5F]" />
+                      <p className="min-w-0 flex-1 truncate text-[12px] font-black text-[#25352E]">{assistantDocumentDraft.fileName}</p>
+                      <button type="button" onClick={() => setAssistantDocumentDraft({ ...assistantDocumentDraft, fileName: "", fileUrl: "" })} className="text-[#9B9084] hover:text-[#25352E]" aria-label="Remove attached review document">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="rounded-2xl border border-[#D8CAB9] bg-white/75 p-2">
+                    <textarea
+                      value={assistantMessage}
+                      onChange={(event) => setAssistantMessage(event.target.value)}
+                      placeholder="Message setup assistant..."
+                      className="max-h-32 min-h-12 w-full resize-none bg-transparent px-2 py-1 text-[13px] font-bold text-[#25352E] outline-none placeholder:text-[#A69A8B]"
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-[#D8CAB9] bg-[#FFF9EF] text-[#6F6254] hover:text-[#25352E]" aria-label="Attach review document">
+                          <Plus className="h-4 w-4" />
+                          <input
+                            type="file"
+                            accept=".pdf,.docx,.txt"
+                            className="sr-only"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) setAssistantDocumentDraft({ ...assistantDocumentDraft, fileName: file.name, fileUrl: URL.createObjectURL(file) });
+                            }}
+                          />
+                        </label>
+                        <select value={assistantDocumentDraft.type} onChange={(event) => setAssistantDocumentDraft({ ...assistantDocumentDraft, type: event.target.value })} className="h-9 max-w-[170px] rounded-full border border-[#D8CAB9] bg-[#FFF9EF] px-3 text-[11px] font-bold text-[#25352E] outline-none">
+                          {documentTypes.map((documentType) => (
+                            <option key={documentType.type} value={documentType.type}>{documentType.type}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={sendAssistantMessage}
+                        disabled={!assistantMessage.trim() && !assistantDocumentDraft.fileName}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
+                        aria-label="Send review assistant message"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  {canSubmitToKam ? (
+                    <button
+                      type="button"
+                      onClick={submitToKam}
+                      className="mt-3 w-full rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF]"
+                    >
+                      Submit to KAM
+                    </button>
+                  ) : null}
+                </div>
+              </aside>
+            )}
+          </div>
+
+          <div className="hidden">
             <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
               <section className="space-y-4">
                 <div className="rounded-3xl border border-[#E5DACD] bg-white/50 p-4">
@@ -4736,7 +5276,7 @@ function PendingAccountCreationDialog({
             </div>
           </div>
         </Dialog.Content>
-        <div className="pointer-events-auto fixed bottom-8 right-8 z-[105] flex h-[min(660px,calc(100vh-5rem))] w-[min(420px,26vw)] min-w-[360px] flex-col overflow-hidden rounded-[1.75rem] border border-[#D8CAB9] bg-[#FFF9EF] shadow-[0_32px_110px_-42px_rgba(31,39,34,0.72)]">
+        <div className="hidden pointer-events-auto fixed bottom-8 right-8 z-[105] h-[min(660px,calc(100vh-5rem))] w-[min(420px,26vw)] min-w-[360px] flex-col overflow-hidden rounded-[1.75rem] border border-[#D8CAB9] bg-[#FFF9EF] shadow-[0_32px_110px_-42px_rgba(31,39,34,0.72)]">
           <div className="relative overflow-hidden border-b border-[#E5DACD] bg-[#F7F1E7] px-4 py-4">
             <div className="relative z-10 flex items-center gap-3">
               <div className="relative h-10 w-10 rounded-2xl bg-[#25352E]">
@@ -4896,6 +5436,7 @@ function AccountOnboardingWorkspace({
   const [activeStep, setActiveStep] = useState<AccountOnboardingStep>("profile");
   const [acceptedKycSections, setAcceptedKycSections] = useState<Set<string>>(() => new Set());
   const [dismissedKycSections, setDismissedKycSections] = useState<Set<string>>(() => new Set());
+  const [assistantCollapsed, setAssistantCollapsed] = useState(false);
   const steps = onboardingSteps(sourceFileNames.length, draft, suggestions, documents, journey);
   const dismissedSuggestion = dismissalDraft ? suggestions.find((suggestion) => suggestion.id === dismissalDraft.suggestionId) : undefined;
   const isKam = role === "KAM";
@@ -5145,25 +5686,190 @@ function AccountOnboardingWorkspace({
             </button>
           </div>
 
-          <div className="relative min-h-0 flex-1 overflow-hidden p-4">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {setupTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveStep(tab.id)}
-                  className={`rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${
-                    activeStep === tab.id ? "bg-[#25352E] text-[#FFF9EF]" : "border border-[#D8CAB9] bg-white/64 text-[#6F6254] hover:text-[#25352E]"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+          <div className={`grid min-h-0 flex-1 gap-4 overflow-hidden p-4 ${assistantCollapsed ? "lg:grid-cols-[1fr_auto]" : "lg:grid-cols-[minmax(0,1fr)_390px]"}`}>
+            <div className="flex min-h-0 min-w-0 flex-col">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {setupTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveStep(tab.id)}
+                    className={`rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${
+                      activeStep === tab.id ? "bg-[#25352E] text-[#FFF9EF]" : "border border-[#D8CAB9] bg-white/64 text-[#6F6254] hover:text-[#25352E]"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <section className="min-h-0 flex-1 overflow-y-auto rounded-3xl border border-[#E5DACD] bg-white/50 p-4">
+                {renderActiveStep()}
+              </section>
             </div>
 
-            <section className="absolute bottom-4 left-4 right-4 top-[4.25rem] overflow-y-auto rounded-3xl border border-[#E5DACD] bg-white/50 p-4">
-              {renderActiveStep()}
-            </section>
+            {assistantCollapsed ? (
+              <button
+                type="button"
+                onClick={() => setAssistantCollapsed(false)}
+                className="hidden h-full w-12 items-center justify-center rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] text-[#25352E] shadow-[0_18px_46px_-34px_rgba(55,43,28,0.58)] lg:flex"
+                aria-label="Expand setup assistant"
+              >
+                <Sparkles className="h-4 w-4" />
+              </button>
+            ) : (
+              <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-[#D8CAB9] bg-[#FFF9EF] shadow-[0_18px_46px_-34px_rgba(55,43,28,0.58)]">
+                <div className="relative overflow-hidden border-b border-[#E5DACD] bg-[#F7F1E7] px-4 py-4">
+                  <div className="pointer-events-none absolute right-[-4rem] top-[-5rem] h-36 w-36 rounded-full bg-[#A7C7B4]/45 blur-2xl" />
+                  <div className="relative z-10 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="relative h-10 w-10 shrink-0 rounded-2xl bg-[#25352E]">
+                        <span className="absolute left-2 top-2 h-4 w-4 rounded-full bg-[#FFF9EF]" />
+                        <span className="absolute bottom-2 right-2 h-3.5 w-3.5 rounded-full bg-[#E8BE86]" />
+                        <span className="absolute left-3.5 top-3.5 h-3.5 w-3.5 rounded-full bg-[#A7C7B4]" />
+                      </div>
+                      <div className="min-w-0">
+                        <h2 className="truncate text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Setup assistant</h2>
+                        <p className="text-[12px] font-bold text-[#7D6E5F]">New account setup</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAssistantCollapsed(true)}
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#6F6254] hover:text-[#25352E]"
+                      aria-label="Collapse setup assistant"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                  <div className="flex justify-start">
+                    <p className="max-w-[88%] rounded-2xl border border-[#E5DACD] bg-white/70 px-3 py-2 text-[13px] font-bold leading-relaxed text-[#25352E]">
+                      I can review uploaded files, suggest field changes, update the draft, and prepare KYC sections. Send instructions or attach more documents below.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#E5DACD] bg-white/58 p-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      {steps.map((step) => (
+                        <span key={step.label} className={`rounded-full border px-2 py-1 text-[10px] font-bold ${
+                          step.status === "Done" ? "border-[#BFE4CE] bg-[#EAF6EF] text-[#238B57]" : step.status === "Active" ? "border-[#DEC997] bg-[#FFF7E4] text-[#8A5C16]" : "border-[#E1D7CA] bg-white text-[#8A7A69]"
+                        }`}>
+                          {step.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {pendingSuggestions.map((suggestion) => (
+                    <div key={suggestion.id} className="rounded-2xl border border-[#E5DACD] bg-white/70 p-3">
+                      <p className="text-[12px] font-bold text-[#7D6E5F]">{suggestion.label}</p>
+                      <p className="mt-1 text-[13px] font-black text-[#25352E]">{suggestion.proposedValue}</p>
+                      <p className="mt-1 text-[11px] font-bold text-[#8A7A69]">Source: {suggestion.source}</p>
+                      <div className="mt-3 flex gap-2">
+                        <button type="button" onClick={() => onAcceptSuggestion(suggestion)} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
+                          Accept
+                        </button>
+                        <button type="button" onClick={() => onStartDismissSuggestion(suggestion.id)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#6F6254]">
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {assistantLoading ? (
+                    <div className="rounded-2xl border border-[#DEC997] bg-[#FFF7E4] px-3 py-2 text-[13px] font-bold text-[#8A5C16]">
+                      Thinking through the account setup...
+                    </div>
+                  ) : null}
+
+                  {assistantError ? (
+                    <div className="rounded-2xl border border-[#F0C6BE] bg-[#FFF0ED] px-3 py-2 text-[13px] font-bold text-[#B33D32]">
+                      {assistantError}
+                    </div>
+                  ) : null}
+
+                  {assistantMessages.map((message, index) => (
+                    <div key={`${message}-${index}`} className="rounded-2xl border border-[#E5DACD] bg-white/70 px-3 py-2 text-[13px] font-bold leading-relaxed text-[#25352E]">
+                      {message}
+                    </div>
+                  ))}
+
+                  {documents.map((document) => (
+                    <div key={document.id} className="rounded-2xl border border-[#E5DACD] bg-[#FFF9EF]/70 p-3">
+                      <p className="truncate text-[12px] font-black text-[#25352E]">{document.fileName}</p>
+                      <p className="mt-1 text-[11px] font-bold text-[#8A7A69]">{document.type} - {document.uploadedAt}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-[#E5DACD] bg-[#FFF9EF]/95 p-3">
+                  {documentDraft.fileName ? (
+                    <div className="mb-2 flex items-center gap-2 rounded-xl border border-[#E5DACD] bg-white/70 px-3 py-2">
+                      <FileText className="h-4 w-4 shrink-0 text-[#7D6E5F]" />
+                      <p className="min-w-0 flex-1 truncate text-[12px] font-black text-[#25352E]">{documentDraft.fileName}</p>
+                      <button type="button" onClick={() => onDocumentDraftChange({ ...documentDraft, fileName: "", fileUrl: "", file: undefined })} className="text-[#9B9084] hover:text-[#25352E]" aria-label="Remove attached setup document">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="rounded-2xl border border-[#D8CAB9] bg-white/75 p-2">
+                    <textarea
+                      value={prompt}
+                      onChange={(event) => onPromptChange(event.target.value)}
+                      placeholder="Message setup assistant..."
+                      className="max-h-32 min-h-12 w-full resize-none bg-transparent px-2 py-1 text-[13px] font-bold text-[#25352E] outline-none placeholder:text-[#A69A8B]"
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-[#D8CAB9] bg-[#FFF9EF] text-[#6F6254] hover:text-[#25352E]" aria-label="Attach setup document">
+                          <Plus className="h-4 w-4" />
+                          <input
+                            type="file"
+                            accept=".pdf,.docx,.txt"
+                            className="sr-only"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) onDocumentDraftChange({ ...documentDraft, fileName: file.name, fileUrl: URL.createObjectURL(file), file });
+                            }}
+                          />
+                        </label>
+                        <select value={documentDraft.type} onChange={(event) => onDocumentDraftChange({ ...documentDraft, type: event.target.value })} className="h-9 max-w-[170px] rounded-full border border-[#D8CAB9] bg-[#FFF9EF] px-3 text-[11px] font-bold text-[#25352E] outline-none">
+                          {documentTypes.map((documentType) => (
+                            <option key={documentType.type} value={documentType.type}>{documentType.type}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (documentDraft.fileName) {
+                            onAddDocument();
+                            return;
+                          }
+                          onApplyPrompt();
+                        }}
+                        disabled={!prompt.trim() && !documentDraft.fileName}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
+                        aria-label="Send setup assistant message"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={onSaveDraft} className="flex-1 rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-2 text-[12px] font-bold text-[#6F6254]">
+                      Save draft
+                    </button>
+                    <button type="button" onClick={onFinalizeAccount} className="flex-1 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF]">
+                      {isKam ? "Create account" : "Submit to KAM"}
+                    </button>
+                  </div>
+                </div>
+              </aside>
+            )}
           </div>
           <SuggestionDismissalDialog
             open={Boolean(dismissalDraft)}
@@ -5177,7 +5883,7 @@ function AccountOnboardingWorkspace({
             onCancel={onCancelDismissSuggestion}
           />
         </Dialog.Content>
-        <div className="pointer-events-auto fixed bottom-8 right-8 z-[95] flex h-[min(660px,calc(100vh-5rem))] w-[min(420px,92vw)] flex-col overflow-hidden rounded-[1.75rem] border border-[#D8CAB9] bg-[#FFF9EF] shadow-[0_32px_110px_-42px_rgba(31,39,34,0.72)]">
+        <div className="hidden pointer-events-auto fixed bottom-8 right-8 z-[95] h-[min(660px,calc(100vh-5rem))] w-[min(420px,92vw)] flex-col overflow-hidden rounded-[1.75rem] border border-[#D8CAB9] bg-[#FFF9EF] shadow-[0_32px_110px_-42px_rgba(31,39,34,0.72)]">
           <div className="relative overflow-hidden border-b border-[#E5DACD] bg-[#F7F1E7] px-4 py-4">
             <div className="pointer-events-none absolute right-[-4rem] top-[-5rem] h-36 w-36 rounded-full bg-[#A7C7B4]/45 blur-2xl" />
             <div className="relative z-10 flex items-center gap-3">
@@ -5514,8 +6220,10 @@ export function PortfolioPage() {
   const [selectedAccount, setSelectedAccount] = useState<PortfolioAccount | null>(null);
   const [selectedAccountTab, setSelectedAccountTab] = useState<AccountWorkspaceTab>("overview");
   const [createdAccounts, setCreatedAccounts] = useState<PortfolioAccount[]>([]);
+  const [persistedAccountsLoaded, setPersistedAccountsLoaded] = useState(false);
   const [accountOverrides, setAccountOverrides] = useState<Record<string, PortfolioAccount>>({});
   const [accountCreationRequests, setAccountCreationRequests] = useState<PendingAccountCreationRequest[]>([]);
+  const [accountCreationRequestsLoaded, setAccountCreationRequestsLoaded] = useState(false);
   const [selectedAccountCreationRequestId, setSelectedAccountCreationRequestId] = useState<string | null>(null);
   const [pendingAccountReviewOpen, setPendingAccountReviewOpen] = useState(() => searchParams.get("focus") === "pending-account-draft");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -5564,14 +6272,16 @@ export function PortfolioPage() {
 
   const totalArr = visibleAccounts.reduce((sum, account) => sum + account.arr, 0);
   const upcomingRenewals = visibleAccounts.filter((account) => account.renewalDays <= 90).length;
+  const accountHydrationPending = role !== "ASSOCIATE" && !persistedAccountsLoaded;
   const sourceFileNames = sourceDocuments.map((document) => document.fileName);
   const routeFocus = searchParams.get("focus");
-  const routeAccount = searchParams.get("account");
-  const routeTab = searchParams.get("tab");
+  const visibleAccountCreationRequests = role === "ASSOCIATE"
+    ? accountCreationRequests.filter((request) => request.creatorRole === "ASSOCIATE" || request.submittedBy === "Aisha Khan" || request.id.endsWith("-associate"))
+    : accountCreationRequests;
   const pendingReviewDialogOpen = pendingAccountReviewOpen || routeFocus === "pending-account-draft";
   const selectedAccountCreationRequest =
-    accountCreationRequests.find((request) => request.id === selectedAccountCreationRequestId) ??
-    accountCreationRequests[0] ??
+    visibleAccountCreationRequests.find((request) => request.id === selectedAccountCreationRequestId) ??
+    visibleAccountCreationRequests[0] ??
     null;
 
   function updatePortfolioAccount(updatedAccount: PortfolioAccount) {
@@ -5587,6 +6297,7 @@ export function PortfolioPage() {
       id: `pending-${draftName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account"}-${role.toLowerCase()}`,
       submittedBy: role === "ASSOCIATE" ? "Aisha Khan" : accountDraft.kamOwner.trim() || "Sarah Chen",
       submittedAt: "Today",
+      creatorRole: role,
       status,
       associateReason: status === "Draft"
         ? "Draft saved from the account onboarding workspace."
@@ -5596,6 +6307,8 @@ export function PortfolioPage() {
         ...accountDraft,
         name: draftName,
       },
+      kycSections: onboardingKycSections,
+      journey: onboardingJourney,
     };
   }
 
@@ -5607,6 +6320,79 @@ export function PortfolioPage() {
     setSelectedAccountCreationRequestId(request.id);
   }
 
+  function updateAccountCreationRequest(request: PendingAccountCreationRequest) {
+    setAccountCreationRequests((requests) => requests.map((item) => item.id === request.id ? request : item));
+    setSelectedAccountCreationRequestId(request.id);
+  }
+
+  function deleteAccountCreationRequest(requestId: string) {
+    setAccountCreationRequests((requests) => requests.filter((item) => item.id !== requestId));
+    setSelectedAccountCreationRequestId((selectedId) => selectedId === requestId ? null : selectedId);
+    setPendingAccountReviewOpen(false);
+    if (routeFocus === "pending-account-draft") router.push("/portfolio");
+  }
+
+  async function approveAccountCreationRequest(request: PendingAccountCreationRequest) {
+    let nextAccount = createPortfolioAccountFromDraft(request.draft);
+    const renewalDate = new Date(request.draft.contractRenewal);
+    const contractEnd = Number.isNaN(renewalDate.getTime())
+      ? new Date(Date.now() + nextAccount.renewalDays * 24 * 60 * 60 * 1000)
+      : renewalDate;
+    const response = await fetch("/api/accounts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-role": "KAM",
+      },
+      body: JSON.stringify({
+        name: nextAccount.name,
+        industry: nextAccount.industry,
+        segment: request.draft.segment.trim() || nextAccount.deliveryModel,
+        region: nextAccount.region,
+        country: nextAccount.country,
+        arr: nextAccount.arr,
+        kamOwnerName: request.draft.kamOwner.trim() || nextAccount.kamOwner,
+        contractEnd: contractEnd.toISOString(),
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "Account approval failed");
+    }
+    upsertCachedApiAccount("KAM", payload.data as CachedApiAccount);
+
+    nextAccount = {
+      ...nextAccount,
+      ...mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>),
+      contactName: nextAccount.contactName,
+      currentWork: nextAccount.currentWork,
+      relationshipSignal: nextAccount.relationshipSignal,
+    };
+    saveAccountRuntimeMetadata(nextAccount, {
+      accountId: nextAccount.id,
+      accountName: nextAccount.name,
+      primaryContact: request.draft.primaryContact.trim() || nextAccount.contactName,
+      sourceFiles: request.sourceFiles,
+      kycSections: request.kycSections ?? [],
+      journey: request.journey ?? [],
+    });
+    setCreatedAccounts((accounts) => [nextAccount, ...accounts.filter((account) => account.id !== nextAccount.id)]);
+    setAccountCreationRequests((requests) => requests.filter((item) => item.id !== request.id));
+    setSelectedAccountCreationRequestId(null);
+    setPendingAccountReviewOpen(false);
+    setSelectedAccountTab("overview");
+    setSelectedAccount(nextAccount);
+    fireNotification({
+      id: `account-approved-${request.id}`,
+      title: `${nextAccount.name} account approved`,
+      detail: "The submitted account was created and added to the portfolio.",
+      href: `/portfolio?focus=account-created&target=${nextAccount.id}`,
+      source: "account-creation-approval",
+      severity: "success",
+    });
+    if (routeFocus === "pending-account-draft") router.push("/portfolio");
+  }
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(LS_ACCOUNT_CREATION_REQUESTS);
@@ -5614,16 +6400,19 @@ export function PortfolioPage() {
       setAccountCreationRequests(Array.isArray(parsed) ? parsed.filter((request) => request.id !== "pending-novagrid") : []);
     } catch {
       setAccountCreationRequests([]);
+    } finally {
+      setAccountCreationRequestsLoaded(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!accountCreationRequestsLoaded) return;
     try {
       localStorage.setItem(LS_ACCOUNT_CREATION_REQUESTS, JSON.stringify(accountCreationRequests));
     } catch {
       // No-op for restricted browser storage.
     }
-  }, [accountCreationRequests]);
+  }, [accountCreationRequests, accountCreationRequestsLoaded]);
 
   useEffect(() => {
     const pendingRequest = accountCreationRequests.find((request) => request.status === "Submitted to KAM");
@@ -5645,7 +6434,7 @@ export function PortfolioPage() {
         id: `score-drop-${watchedAccount.id}`,
         title: `${watchedAccount.name} risk score fell`,
         detail: `Score ${watchedAccount.healthScore}/100. Review the proposed mitigation task.`,
-        href: `/portfolio?account=${watchedAccount.id}&tab=overview&focus=risk-score`,
+        href: `/portfolio?focus=risk-score&target=${watchedAccount.id}`,
         source: "score-monitor",
         severity: "warning",
         createdAt: "Today",
@@ -5656,20 +6445,25 @@ export function PortfolioPage() {
   useEffect(() => {
     let cancelled = false;
     async function loadPersistedAccounts() {
+      const cachedAccounts = readCachedApiAccounts(role);
+      if (cachedAccounts) {
+        setCreatedAccounts(mapApiAccountsToCreatedPortfolioAccounts(cachedAccounts));
+        setPersistedAccountsLoaded(true);
+      } else {
+        setPersistedAccountsLoaded(false);
+      }
       try {
         const response = await fetch("/api/accounts", { headers: { "x-role": role } });
         const payload = await response.json();
         if (!response.ok) return;
-        const seededNames = new Set(portfolioAccounts.map((account) => account.name.toLowerCase()));
-        const accounts = Array.isArray(payload.data)
-          ? (payload.data as Array<Record<string, unknown>>)
-              .filter((account) => !String(account.id ?? "").startsWith("acc-"))
-              .map(mapApiAccountToPortfolioAccount)
-              .filter((account) => !seededNames.has(account.name.toLowerCase()))
-          : [];
+        const apiAccounts = Array.isArray(payload.data) ? payload.data as CachedApiAccount[] : [];
+        writeCachedApiAccounts(role, apiAccounts);
+        const accounts = mapApiAccountsToCreatedPortfolioAccounts(apiAccounts);
         if (!cancelled) setCreatedAccounts(accounts);
       } catch {
-        if (!cancelled) setCreatedAccounts((accounts) => accounts);
+        if (!cancelled && !cachedAccounts) setCreatedAccounts((accounts) => accounts);
+      } finally {
+        if (!cancelled) setPersistedAccountsLoaded(true);
       }
     }
     void loadPersistedAccounts();
@@ -5684,18 +6478,7 @@ export function PortfolioPage() {
       setPendingAccountReviewOpen(true);
       return;
     }
-
-    if (!routeAccount) return;
-
-    const account = [...createdAccounts, ...portfolioAccounts, ...associatePortfolio].find((item) => (
-      item.id === routeAccount || item.name.toLowerCase().replace(/\s+/g, "-") === routeAccount.replace(/^acc-/, "")
-    ));
-    if (!account) return;
-
-    const tab: AccountWorkspaceTab = routeTab === "documents" || routeTab === "profile" ? routeTab : "overview";
-    setSelectedAccountTab(tab);
-    setSelectedAccount(account);
-  }, [createdAccounts, routeAccount, routeFocus, routeTab]);
+  }, [routeFocus]);
 
   useEffect(() => {
     function openFromNotification(event: Event) {
@@ -5709,14 +6492,13 @@ export function PortfolioPage() {
         return;
       }
 
-      const accountTarget = target.searchParams.get("account");
+      const accountTarget = target.searchParams.get("target") ?? target.searchParams.get("account");
       if (!accountTarget) return;
       const account = [...createdAccounts, ...portfolioAccounts, ...associatePortfolio].find((item) => (
         item.id === accountTarget || item.name.toLowerCase().replace(/\s+/g, "-") === accountTarget.replace(/^acc-/, "")
       ));
       if (!account) return;
-      const requestedTab = target.searchParams.get("tab");
-      setSelectedAccountTab(requestedTab === "documents" || requestedTab === "profile" ? requestedTab : "overview");
+      setSelectedAccountTab("overview");
       setSelectedAccount(account);
     }
 
@@ -5889,15 +6671,30 @@ export function PortfolioPage() {
         ]);
       }
       if (Array.isArray(payload.kycSections) && payload.kycSections.length > 0) {
-        setOnboardingKycSections(
-          payload.kycSections.map((section: Partial<KycDraftSection>, index: number) => ({
-            id: `agent-kyc-${Date.now()}-${index}`,
-            title: section.title ?? "KYC section",
-            source: section.source ?? "V2 setup assistant",
-            status: section.status === "Ready" ? "Ready" : "Needs input",
-            draft: section.draft ?? "",
-          })),
-        );
+        const timestamp = Date.now();
+        const incomingSections: KycDraftSection[] = payload.kycSections.map((section: Partial<KycDraftSection>, index: number) => ({
+          id: `agent-kyc-${timestamp}-${index}`,
+          title: section.title ?? "KYC section",
+          source: section.source ?? "V2 setup assistant",
+          status: section.status === "Ready" ? "Ready" : "Needs input",
+          draft: section.draft ?? "",
+        }));
+        setOnboardingKycSections((sections) => {
+          const nextSections = [...sections];
+          incomingSections.forEach((incomingSection) => {
+            const matchIndex = nextSections.findIndex((section) => section.title.trim().toLowerCase() === incomingSection.title.trim().toLowerCase());
+            if (matchIndex >= 0) {
+              nextSections[matchIndex] = {
+                ...nextSections[matchIndex],
+                ...incomingSection,
+                id: nextSections[matchIndex].id,
+              };
+              return;
+            }
+            nextSections.push(incomingSection);
+          });
+          return nextSections;
+        });
       }
       if (Array.isArray(payload.journeyItems) && payload.journeyItems.length > 0) {
         setOnboardingJourney((items) => [
@@ -6109,26 +6906,26 @@ export function PortfolioPage() {
     setPendingAccountReviewOpen(true);
   }
 
-  function createPortfolioAccountFromDraft(): PortfolioAccount {
-    const arr = parseArrValue(accountDraft.arr);
-    const name = accountDraft.name.trim() || "New account";
+  function createPortfolioAccountFromDraft(draftInput: AccountDraft = accountDraft): PortfolioAccount {
+    const arr = parseArrValue(draftInput.arr);
+    const name = draftInput.name.trim() || "New account";
     const [countryPart, regionPart] = accountDraft.location.split("·").map((part) => part.trim());
     return {
       id: `v2-acct-created-${Date.now()}`,
       name,
-      industry: accountDraft.industry.trim() || "Industry not set",
+      industry: draftInput.industry.trim() || "Industry not set",
       region: regionPart || "Region not set",
-      country: countryPart || accountDraft.location.trim() || "Country not set",
+      country: draftInput.location.trim() || countryPart || "Country not set",
       arr,
       health: "HEALTHY",
       healthScore: 80,
       renewalDays: 180,
-      kamOwner: accountDraft.kamOwner.trim() || "Sarah Chen",
-      associateOwner: accountDraft.associateOwner.trim() || "Aisha Khan",
-      contactName: accountDraft.primaryContact.trim() || "Primary contact not set",
-      deliveryModel: accountDraft.segment.trim() || "Delivery model not set",
-      currentWork: accountDraft.openOpportunity.trim() || "Account setup in progress",
-      relationshipSignal: accountDraft.nextTouchpoint.trim() || "Next touchpoint not set",
+      kamOwner: draftInput.kamOwner.trim() || "Sarah Chen",
+      associateOwner: draftInput.associateOwner.trim() || "Aisha Khan",
+      contactName: draftInput.primaryContact.trim() || "Primary contact not set",
+      deliveryModel: draftInput.segment.trim() || "Delivery model not set",
+      currentWork: draftInput.openOpportunity.trim() || "Account setup in progress",
+      relationshipSignal: draftInput.nextTouchpoint.trim() || "Next touchpoint not set",
     };
   }
 
@@ -6149,11 +6946,13 @@ export function PortfolioPage() {
             region: nextAccount.region,
             country: nextAccount.country,
             arr: nextAccount.arr,
+            kamOwnerName: accountDraft.kamOwner.trim() || nextAccount.kamOwner,
             contractEnd: new Date(Date.now() + nextAccount.renewalDays * 24 * 60 * 60 * 1000).toISOString(),
           }),
         });
         const payload = await response.json();
         if (response.ok) {
+          upsertCachedApiAccount(role, payload.data as CachedApiAccount);
           nextAccount = {
             ...nextAccount,
             ...mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>),
@@ -6161,17 +6960,33 @@ export function PortfolioPage() {
             currentWork: nextAccount.currentWork,
             relationshipSignal: nextAccount.relationshipSignal,
           };
+          saveAccountRuntimeMetadata(nextAccount, {
+            accountId: nextAccount.id,
+            accountName: nextAccount.name,
+            primaryContact: accountDraft.primaryContact.trim() || nextAccount.contactName,
+            sourceFiles: [...sourceDocuments, ...onboardingDocuments].map((document) => document.fileName),
+            kycSections: onboardingKycSections,
+            journey: onboardingJourney,
+          });
         }
       } catch {
         // Keep the in-session account available if persistence is temporarily unavailable.
       }
+      saveAccountRuntimeMetadata(nextAccount, {
+        accountId: nextAccount.id,
+        accountName: nextAccount.name,
+        primaryContact: accountDraft.primaryContact.trim() || nextAccount.contactName,
+        sourceFiles: [...sourceDocuments, ...onboardingDocuments].map((document) => document.fileName),
+        kycSections: onboardingKycSections,
+        journey: onboardingJourney,
+      });
       setCreatedAccounts((accounts) => [nextAccount, ...accounts]);
       setOnboardingAssistantMessages((messages) => [`Created account: ${nextAccount.name}.`, ...messages]);
       fireNotification({
         id: `account-created-${nextAccount.id}`,
         title: `${nextAccount.name} account created`,
         detail: "The new account is now available in the portfolio.",
-        href: `/portfolio?account=${nextAccount.id}&tab=overview`,
+        href: `/portfolio?focus=account-created&target=${nextAccount.id}`,
         source: "account-onboarding",
         severity: "success",
       });
@@ -6220,28 +7035,28 @@ export function PortfolioPage() {
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-[#DED1C1] bg-[#FFF9EF]/58 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
                 <p className="text-[13px] font-bold text-[#8A7A69]">Accounts</p>
-                <p className="mt-2 text-3xl font-black text-[#25352E]">{visibleAccounts.length}</p>
+                <p className="mt-2 text-3xl font-black text-[#25352E]">{accountHydrationPending ? "..." : visibleAccounts.length}</p>
               </div>
               <div className="rounded-2xl border border-[#DED1C1] bg-[#FFF9EF]/58 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
                 <p className="text-[13px] font-bold text-[#8A7A69]">ARR</p>
-                <p className="mt-2 text-3xl font-black text-[#25352E]">{money(totalArr)}</p>
+                <p className="mt-2 text-3xl font-black text-[#25352E]">{accountHydrationPending ? "..." : money(totalArr)}</p>
               </div>
               <div className="rounded-2xl border border-[#DED1C1] bg-[#FFF9EF]/58 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
                 <p className="text-[13px] font-bold text-[#8A7A69]">Renewals &lt;90d</p>
-                <p className="mt-2 text-3xl font-black text-[#25352E]">{upcomingRenewals}</p>
+                <p className="mt-2 text-3xl font-black text-[#25352E]">{accountHydrationPending ? "..." : upcomingRenewals}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {role === "KAM" ? (
+        {role === "KAM" || role === "ASSOCIATE" ? (
           <section className="rounded-[1.5rem] border border-[#E5DACD] bg-[#FFF9EF]/78 p-4 shadow-[0_18px_46px_-34px_rgba(55,43,28,0.58)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Pending account creations</h2>
-              <span className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1 text-[12px] font-bold text-[#6F6254]">{accountCreationRequests.length} draft</span>
+              <span className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1 text-[12px] font-bold text-[#6F6254]">{visibleAccountCreationRequests.length} draft{visibleAccountCreationRequests.length === 1 ? "" : "s"}</span>
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {accountCreationRequests.map((request) => (
+              {visibleAccountCreationRequests.map((request) => (
                 <button
                   key={request.id}
                   type="button"
@@ -6275,7 +7090,7 @@ export function PortfolioPage() {
                 </button>
               ))}
             </div>
-            {accountCreationRequests.length === 0 ? (
+            {visibleAccountCreationRequests.length === 0 ? (
               <div className="mt-3 rounded-2xl border border-dashed border-[#D8CAB9] bg-white/50 p-4 text-[13px] font-bold text-[#7D6E5F]">
                 No account drafts or Associate submissions are waiting for review.
               </div>
@@ -6314,26 +7129,36 @@ export function PortfolioPage() {
           </div>
 
           <div className="max-h-[calc(min(760px,100vh-7rem)-5.25rem)] overflow-y-auto p-4">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {visibleAccounts.map((account) => (
-                <PortfolioCard
-                  key={account.id}
-                  account={account}
-                  readonly={isExecutive}
-                  onOpen={(nextAccount) => {
-                    setSelectedAccountTab("overview");
-                    setSelectedAccount(nextAccount);
-                  }}
-                />
-              ))}
-            </div>
+            {accountHydrationPending ? (
+              <div className="rounded-2xl border border-dashed border-[#D8CAB9] bg-white/50 p-6 text-[13px] font-bold text-[#7D6E5F]">
+                Loading portfolio accounts...
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {visibleAccounts.map((account) => (
+                  <PortfolioCard
+                    key={account.id}
+                    account={account}
+                    readonly={isExecutive}
+                    onOpen={(nextAccount) => {
+                      setSelectedAccountTab("overview");
+                      setSelectedAccount(nextAccount);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </section>
-      <CammiePanel role={role} accounts={visibleAccounts} activeAccount={selectedAccount} />
+      <CammiePanel role={role} accounts={accountHydrationPending ? [] : visibleAccounts} activeAccount={selectedAccount} />
       <PendingAccountCreationDialog
         open={pendingReviewDialogOpen}
         request={selectedAccountCreationRequest}
+        onUpdateRequest={updateAccountCreationRequest}
+        onDeleteRequest={deleteAccountCreationRequest}
+        onApproveRequest={approveAccountCreationRequest}
+        role={role}
         onOpenChange={(open) => {
           setPendingAccountReviewOpen(open);
           if (!open && routeFocus === "pending-account-draft") router.push("/portfolio");

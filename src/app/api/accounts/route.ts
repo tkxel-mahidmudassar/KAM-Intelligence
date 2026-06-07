@@ -4,6 +4,32 @@ import { getRoleFromRequest, getUserIdFromRequest, ok, created, badRequest, serv
 import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
 import { getJiraAdapter } from "@/lib/adapters/jira";
 
+async function resolveKamId(kamId?: string | null, kamOwnerName?: string | null) {
+  if (kamId) return kamId;
+
+  const ownerName = kamOwnerName?.trim();
+  if (ownerName) {
+    const matchedKam = await prisma.user.findFirst({
+      where: {
+        role: "KAM",
+        OR: [
+          { name: ownerName },
+          { email: ownerName },
+          { name: { contains: ownerName } },
+        ],
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (matchedKam) return matchedKam.id;
+  }
+
+  const fallbackKam = await prisma.user.findFirst({
+    where: { role: "KAM" },
+    orderBy: { createdAt: "asc" },
+  });
+  return fallbackKam?.id ?? null;
+}
+
 // GET /api/accounts
 export async function GET(req: NextRequest) {
   try {
@@ -48,9 +74,10 @@ export async function POST(req: NextRequest) {
     if (denied) return denied;
 
     const body = await req.json();
-    const { name, industry, segment, website, logoUrl, region, country, arr, kamId, contractStart, contractEnd } = body;
+    const { name, industry, segment, website, logoUrl, region, country, arr, kamId, kamOwnerName, contractStart, contractEnd } = body;
 
     if (!name) return badRequest("name is required");
+    const resolvedKamId = await resolveKamId(kamId, kamOwnerName);
 
     const account = await prisma.account.create({
       data: {
@@ -62,9 +89,12 @@ export async function POST(req: NextRequest) {
         region,
         country,
         arr: arr ?? 0,
-        kamId:         kamId         || null,
+        kamId:         resolvedKamId,
         contractStart: contractStart ? new Date(contractStart) : null,
         contractEnd:   contractEnd   ? new Date(contractEnd)   : null,
+      },
+      include: {
+        kam: { select: { id: true, name: true, email: true } },
       },
     });
 

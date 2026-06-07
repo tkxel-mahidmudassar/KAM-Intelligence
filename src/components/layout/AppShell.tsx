@@ -144,7 +144,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 setNotificationsOpen(false);
                                 markRead(item.id);
                                 window.dispatchEvent(new CustomEvent("kam:notification-selected", { detail: item }));
-                                router.push(item.href);
+                                const target = new URL(item.href, window.location.origin);
+                                router.push(target.pathname === "/portfolio" && (target.searchParams.has("target") || target.searchParams.has("account")) ? "/portfolio" : item.href);
                               }}
                               className="min-w-0 flex-1 text-left"
                             >

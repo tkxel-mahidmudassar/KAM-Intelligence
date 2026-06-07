@@ -1,12 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronDown, Clock, ListChecks, X } from "lucide-react";
-import { money, workspaceAccounts, workspaceActionItems, type WorkspaceActionItem, type WorkspaceHealth } from "@/lib/v2/workspaceData";
+import { useRole } from "@/context/RoleContext";
+import { readCachedApiAccounts, writeCachedApiAccounts, type CachedApiAccount } from "@/lib/v2/accountCache";
+import { associatePortfolio, portfolioAccounts, type PortfolioAccount, type PortfolioHealth } from "@/lib/v2/portfolioData";
+import { money, type WorkspaceAccount, type WorkspaceActionItem, type WorkspaceHealth } from "@/lib/v2/workspaceData";
 
 type CalendarView = "month" | "timeline";
 type ActionStatus = "done" | "dismissed";
+
+type ApiAccount = {
+  id: string;
+  name?: string | null;
+  industry?: string | null;
+  country?: string | null;
+  arr?: number | null;
+  health?: "HEALTHY" | "AT_RISK" | "CRITICAL" | string | null;
+  contractEnd?: string | null;
+  kam?: { name?: string | null } | null;
+  kamScores?: Array<{ overall?: number | null; computedAt?: string | null }>;
+  signals?: Array<{ id?: string; title?: string | null; description?: string | null; severity?: string | null; detectedAt?: string | null }>;
+  _count?: { actions?: number; documents?: number };
+};
 
 const healthLabels: Record<WorkspaceHealth, string> = {
   healthy: "Healthy accounts",
@@ -36,9 +53,145 @@ function isoDate(day: number) {
   return `2026-06-${String(day).padStart(2, "0")}`;
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDaysIso(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function displayDate(date: string) {
   const [, month, day] = date.split("-");
   return `${month === "06" ? "Jun" : month} ${Number(day)}`;
+}
+
+function accountHealth(value?: string | null): WorkspaceHealth {
+  if (value === "CRITICAL") return "critical";
+  if (value === "AT_RISK") return "at-risk";
+  return "healthy";
+}
+
+function portfolioHealth(value: PortfolioHealth): WorkspaceHealth {
+  if (value === "CRITICAL") return "critical";
+  if (value === "AT_RISK") return "at-risk";
+  return "healthy";
+}
+
+function daysUntil(dateValue?: string | null) {
+  if (!dateValue) return 180;
+  const time = new Date(dateValue).getTime();
+  if (Number.isNaN(time)) return 180;
+  return Math.max(0, Math.ceil((time - Date.now()) / (1000 * 60 * 60 * 24)));
+}
+
+function accountScore(account: ApiAccount, health: WorkspaceHealth) {
+  const latestScore = Number(account.kamScores?.[0]?.overall);
+  if (Number.isFinite(latestScore)) return Math.round(latestScore);
+  if (health === "critical") return 35;
+  if (health === "at-risk") return 58;
+  return 82;
+}
+
+function mapApiAccount(account: ApiAccount): WorkspaceAccount {
+  const health = accountHealth(account.health);
+  return {
+    id: String(account.id),
+    name: String(account.name ?? "Unnamed account"),
+    industry: String(account.industry ?? "Industry not set"),
+    country: String(account.country ?? "Country not set"),
+    arr: Number(account.arr ?? 0),
+    score: accountScore(account, health),
+    health,
+    renewalDays: daysUntil(account.contractEnd),
+    owner: account.kam?.name ?? "Owner not set",
+  };
+}
+
+function mapPortfolioAccount(account: PortfolioAccount): WorkspaceAccount {
+  return {
+    id: account.id,
+    name: account.name,
+    industry: account.industry,
+    country: account.country,
+    arr: account.arr,
+    score: account.healthScore,
+    health: portfolioHealth(account.health),
+    renewalDays: account.renewalDays,
+    owner: account.kamOwner,
+  };
+}
+
+function buildVisibleAccounts(role: string, apiAccounts: ApiAccount[]) {
+  const demoAccounts = (role === "ASSOCIATE" ? associatePortfolio : portfolioAccounts).map(mapPortfolioAccount);
+  const demoNames = new Set(demoAccounts.map((account) => account.name.toLowerCase()));
+  const persistedAccounts = apiAccounts
+    .filter((account) => !String(account.id ?? "").startsWith("acc-"))
+    .map(mapApiAccount)
+    .filter((account) => !demoNames.has(account.name.toLowerCase()));
+
+  return [...persistedAccounts, ...demoAccounts];
+}
+
+function applyHomeAccountsFromApi(
+  role: string,
+  apiAccounts: ApiAccount[],
+  setAccounts: (accounts: WorkspaceAccount[]) => void,
+  setItems: (items: WorkspaceActionItem[]) => void,
+) {
+  const mappedAccounts = buildVisibleAccounts(role, apiAccounts);
+  setAccounts(mappedAccounts);
+  setItems(buildAccountActions(mappedAccounts, apiAccounts));
+}
+
+function buildAccountActions(accounts: WorkspaceAccount[], apiAccounts: ApiAccount[]): WorkspaceActionItem[] {
+  const signalActions = apiAccounts.flatMap((account, index) => {
+    const signals = account.signals ?? [];
+    return signals.slice(0, 2).map((signal, signalIndex): WorkspaceActionItem => ({
+      id: `signal-${account.id}-${signal.id ?? signalIndex}`,
+      accountId: String(account.id),
+      accountName: String(account.name ?? "Unnamed account"),
+      title: signal.title || "Review account signal",
+      details: signal.description || "A live account signal needs review.",
+      type: signalIndex === 0 ? "To-do" : "Meeting",
+      date: addDaysIso(index + signalIndex + 1),
+      status: "pending",
+    }));
+  });
+
+  const renewalActions = accounts
+    .filter((account) => account.renewalDays < 90)
+    .slice(0, 6)
+    .map((account, index): WorkspaceActionItem => ({
+      id: `renewal-${account.id}`,
+      accountId: account.id,
+      accountName: account.name,
+      title: "Renewal readiness review",
+      details: `${account.renewalDays} days to renewal. Confirm stakeholders, risks, and commercial next steps.`,
+      type: "QBR",
+      date: addDaysIso(index + 1),
+      status: "pending",
+    }));
+
+  const healthActions = accounts
+    .filter((account) => account.health !== "healthy")
+    .slice(0, 6)
+    .map((account, index): WorkspaceActionItem => ({
+      id: `health-${account.id}`,
+      accountId: account.id,
+      accountName: account.name,
+      title: account.health === "critical" ? "Recovery plan review" : "Risk mitigation checkpoint",
+      details: `Current score is ${account.score}/100. Review the latest health drivers and confirm an owner.`,
+      type: account.health === "critical" ? "Meeting" : "To-do",
+      date: addDaysIso(index + 2),
+      status: "pending",
+    }));
+
+  const byId = new Map<string, WorkspaceActionItem>();
+  [...signalActions, ...renewalActions, ...healthActions].forEach((item) => byId.set(item.id, item));
+  return [...byId.values()].slice(0, 12);
 }
 
 function reasonPlaceholder(status: ActionStatus) {
@@ -47,12 +200,53 @@ function reasonPlaceholder(status: ActionStatus) {
 
 export function HomePage() {
   const router = useRouter();
+  const { role } = useRole();
   const [calendarView, setCalendarView] = useState<CalendarView>("timeline");
   const [expandedHealth, setExpandedHealth] = useState<WorkspaceHealth | "renewals" | null>(null);
-  const [selectedDate, setSelectedDate] = useState("2026-06-08");
-  const [items, setItems] = useState<WorkspaceActionItem[]>(workspaceActionItems);
+  const [selectedDate, setSelectedDate] = useState(todayIsoDate());
+  const [accounts, setAccounts] = useState<WorkspaceAccount[]>([]);
+  const [items, setItems] = useState<WorkspaceActionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [reasonTarget, setReasonTarget] = useState<{ id: string; status: ActionStatus } | null>(null);
   const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHomeData() {
+      const cachedAccounts = readCachedApiAccounts(role) as ApiAccount[] | null;
+      if (cachedAccounts) {
+        applyHomeAccountsFromApi(role, cachedAccounts, setAccounts, setItems);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+      setLoadError("");
+      try {
+        const response = await fetch("/api/accounts", { headers: { "x-role": role } });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Home data failed to load");
+        }
+        const apiAccounts = Array.isArray(payload.data) ? payload.data as ApiAccount[] : [];
+        writeCachedApiAccounts(role, apiAccounts as unknown as CachedApiAccount[]);
+        if (cancelled) return;
+        applyHomeAccountsFromApi(role, apiAccounts, setAccounts, setItems);
+      } catch (error) {
+        if (!cancelled && !cachedAccounts) {
+          setAccounts([]);
+          setItems([]);
+          setLoadError(error instanceof Error ? error.message : "Home data failed to load");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadHomeData();
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   const groupedByDate = useMemo(() => {
     return items.reduce<Record<string, WorkspaceActionItem[]>>((acc, item) => {
@@ -64,14 +258,19 @@ export function HomePage() {
 
   const healthStats = useMemo(() => {
     return (["healthy", "at-risk", "critical"] as WorkspaceHealth[]).map((health) => {
-      const accounts = workspaceAccounts.filter((account) => account.health === health);
-      const arr = accounts.reduce((sum, account) => sum + account.arr, 0);
-      return { health, accounts, arr };
+      const matchingAccounts = accounts.filter((account) => account.health === health);
+      const arr = matchingAccounts.reduce((sum, account) => sum + account.arr, 0);
+      return { health, accounts: matchingAccounts, arr };
     });
-  }, []);
+  }, [accounts]);
 
-  const renewalSoon = workspaceAccounts.filter((account) => account.renewalDays < 90);
+  const renewalSoon = accounts.filter((account) => account.renewalDays < 90);
   const selectedItems = groupedByDate[selectedDate] || [];
+  const timelineDates = useMemo(() => {
+    const dates = Object.keys(groupedByDate).sort();
+    if (dates.length > 0) return dates.slice(0, 3);
+    return [todayIsoDate(), addDaysIso(1), addDaysIso(2)];
+  }, [groupedByDate]);
 
   function submitReason() {
     if (!reasonTarget || !reason.trim()) return;
@@ -90,7 +289,7 @@ export function HomePage() {
   }
 
   function openAccount(accountId: string) {
-    router.push(`/portfolio?account=${accountId}&tab=overview`);
+    router.push(`/portfolio?focus=home-account&target=${accountId}`);
   }
 
   return (
@@ -103,9 +302,15 @@ export function HomePage() {
             </div>
             <div className="rounded-2xl border border-[#D9C8B4] bg-[#FFFCF6] px-4 py-3 text-right">
               <p className="text-[13px] font-bold text-[#75685A]">Open actions</p>
-              <p className="text-3xl font-black tracking-[-0.04em] text-[#1F2722]">{items.filter((item) => item.status === "pending").length}</p>
+              <p className="text-3xl font-black tracking-[-0.04em] text-[#1F2722]">{loading ? "..." : items.filter((item) => item.status === "pending").length}</p>
             </div>
           </div>
+
+          {loadError ? (
+            <div className="mt-4 rounded-2xl border border-[#EAB3A9] bg-[#FFF1EE] p-3 text-[13px] font-bold text-[#A63F33]">
+              {loadError}
+            </div>
+          ) : null}
 
           {expandedHealth ? (
             <button
@@ -122,7 +327,7 @@ export function HomePage() {
                 key={stat.health}
                 className={`relative min-h-36 overflow-visible rounded-3xl border text-left transition-all duration-200 hover:-translate-y-0.5 ${healthTone[stat.health]} ${
                   expandedHealth === stat.health ? "z-40 -translate-y-1 scale-[1.015] shadow-[0_30px_72px_-34px_rgba(31,39,34,0.56)]" : "z-0"
-                }`}
+                  }`}
               >
                 <button
                   type="button"
@@ -134,7 +339,7 @@ export function HomePage() {
                     <p className="text-[16px] font-black">{healthLabels[stat.health]}</p>
                     <ChevronDown className={`h-4 w-4 transition ${expandedHealth === stat.health ? "rotate-180" : ""}`} />
                   </div>
-                  <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{stat.accounts.length}</p>
+                  <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{loading ? "..." : stat.accounts.length}</p>
                 </button>
                 {expandedHealth === stat.health ? (
                   <div className="absolute inset-x-3 top-[5.75rem] rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.96)] p-3 shadow-[0_28px_68px_-34px_rgba(31,39,34,0.58)] [backdrop-filter:blur(16px)]">
@@ -172,7 +377,7 @@ export function HomePage() {
                   <p className="text-[16px] font-black">Renewals under 90d</p>
                   <ChevronDown className={`h-4 w-4 transition ${expandedHealth === "renewals" ? "rotate-180" : ""}`} />
                 </div>
-                <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{renewalSoon.length}</p>
+                <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{loading ? "..." : renewalSoon.length}</p>
               </button>
               {expandedHealth === "renewals" ? (
                 <div className="absolute inset-x-3 top-[5.75rem] space-y-2 rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.96)] p-3 shadow-[0_28px_68px_-34px_rgba(31,39,34,0.58)] [backdrop-filter:blur(16px)]">
@@ -255,7 +460,7 @@ export function HomePage() {
             <div className="relative mt-5 overflow-hidden rounded-[30px] border border-[#D9CCE2] bg-[radial-gradient(circle_at_10%_20%,rgba(255,255,255,0.78),transparent_28%),linear-gradient(135deg,#EFE6F7_0%,#E6D8F3_42%,#F8EFE2_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
               <div className="pointer-events-none absolute left-8 right-8 top-[5.8rem] hidden h-[3px] rounded-full bg-[#8F6AC8]/38 lg:block" />
               <div className="grid gap-5 lg:grid-cols-3">
-                {["2026-06-08", "2026-06-09", "2026-06-10"].map((date, index) => {
+                {timelineDates.map((date, index) => {
                   const dayItems = groupedByDate[date] || [];
                   const doneCount = dayItems.filter((item) => item.status === "done").length;
                   const pendingCount = dayItems.filter((item) => item.status === "pending").length;

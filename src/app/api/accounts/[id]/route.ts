@@ -10,6 +10,26 @@ import { getFinanceAdapter } from "@/lib/adapters/finance";
 
 type Params = { params: Promise<{ id: string }> };
 
+async function resolveKamId(kamId?: string | null, kamOwnerName?: string | null) {
+  if (kamId) return kamId;
+
+  const ownerName = kamOwnerName?.trim();
+  if (!ownerName) return undefined;
+
+  const matchedKam = await prisma.user.findFirst({
+    where: {
+      role: "KAM",
+      OR: [
+        { name: ownerName },
+        { email: ownerName },
+        { name: { contains: ownerName } },
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  return matchedKam?.id;
+}
+
 // GET /api/accounts/[id]
 export async function GET(req: NextRequest, { params }: Params) {
   try {
@@ -94,6 +114,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { id } = await params;
     const body = await req.json();
+    const resolvedKamId = await resolveKamId(body.kamId, body.kamOwnerName);
 
     const account = await prisma.account.update({
       where: { id },
@@ -107,9 +128,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         country:  body.country,
         arr:      body.arr,
         health:   body.health,
-        kamId:    body.kamId,
+        kamId:    resolvedKamId,
         contractStart: body.contractStart ? new Date(body.contractStart) : body.contractStart,
         contractEnd:   body.contractEnd   ? new Date(body.contractEnd)   : body.contractEnd,
+      },
+      include: {
+        kam: { select: { id: true, name: true, email: true } },
       },
     });
 
