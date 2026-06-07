@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
-import { ok, serverError, forbidden, badRequest, getRoleFromRequest } from "@/lib/api";
+import { ok, serverError, forbidden, badRequest, getUserIdFromRequest } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_WEIGHTS, WEIGHT_KEYS } from "@/lib/scoring/weights";
 import { logAudit } from "@/lib/audit";
+import type { Role } from "@/types";
 
 // Default notification preferences
 const DEFAULT_NOTIFICATION_PREFS = {
@@ -18,9 +19,26 @@ const DEFAULT_NOTIFICATION_PREFS = {
   },
 };
 
+async function getSettingsRole(req: NextRequest): Promise<Role | null> {
+  const userId = getUserIdFromRequest(req);
+  if (!userId) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+  return (user?.role ?? null) as Role | null;
+}
+
+function canAccessSettings(role: Role | null): role is "KAM" | "ADMIN" {
+  return role === "KAM" || role === "ADMIN";
+}
+
 // GET /api/settings — returns configurable app settings + score weights + notification prefs
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const role = await getSettingsRole(req);
+    if (!canAccessSettings(role)) return forbidden("Settings are available to KAM and Admin users only");
+
     let dbConnected = false;
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -72,8 +90,8 @@ export async function GET() {
 // PUT /api/settings — update score weights or notification prefs (MANAGER + EXECUTIVE only)
 export async function PUT(req: NextRequest) {
   try {
-    const role = getRoleFromRequest(req);
-    if (role === "KAM") return forbidden();
+    const role = await getSettingsRole(req);
+    if (!canAccessSettings(role)) return forbidden("Settings are available to KAM and Admin users only");
 
     const body = await req.json();
 

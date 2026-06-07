@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FileText, Link2, Plus, Trash2, Upload, UserPlus } from "lucide-react";
+import { FileText, Link2, Plus, ShieldAlert, Trash2, Upload, UserPlus } from "lucide-react";
 import { defaultKpiWeights, integrationMocks } from "@/lib/v2/workspaceData";
 import { portfolioAccounts } from "@/lib/v2/portfolioData";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 
-const initialAssociates = ["Aisha Khan", "Omar Farooq", "Nadia Raza"];
+const initialAssociates = ["Aisha Khan", "Omar Farooq"];
 const ruleLog = [
   "Do not suggest executive escalation if the user dismissed the same recommendation because the sponsor is already engaged.",
   "When project health drops from delivery cadence, prefer pod-level recovery tasks before commercial escalation.",
@@ -43,6 +43,26 @@ export function SettingsPage() {
   const connectedIntegrations = useMemo(() => Object.values(integrationStatuses).filter((status) => status === "connected").length, [integrationStatuses]);
   const canSaveWeights = totalWeight === 100;
   const actionLabel = role === "ASSOCIATE" ? "Request weight changes" : "Save weights";
+  const canAccessSettings = role === "KAM" || role === "ADMIN";
+
+  if (!canAccessSettings) {
+    return (
+      <main className="min-h-screen px-5 py-5">
+        <section className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-[1500px] items-center justify-center">
+          <div className="w-full max-w-xl rounded-[30px] border border-[#E4D5C4] bg-[#FFF9EF] p-6 text-center shadow-[0_24px_70px_-58px_rgba(32,38,32,0.58)]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#EAB3A9] bg-[#FFF1EE] text-[#A63F33]">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <p className="mt-4 text-sm font-black uppercase tracking-[0.18em] text-[#A63F33]">403 Access denied</p>
+            <h1 className="mt-2 text-3xl font-black tracking-[-0.05em] text-[#25352E]">Settings are restricted</h1>
+            <p className="mt-3 text-[14px] font-bold leading-relaxed text-[#75685A]">
+              Settings are available only to KAM and Admin users. Your current role is {role}.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   function updateWeight(id: string, value: number) {
     setWeights((current) => current.map((item) => (item.id === id ? { ...item, weight: value } : item)));

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, BriefcaseBusiness, Home, LogOut, Settings, UserRound, X } from "lucide-react";
-import { RoleBar } from "@/components/layout/RoleBar";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 
@@ -37,18 +36,26 @@ function formatNotificationTime(createdAtIso?: string, fallback?: string) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { userId, userName, userEmail, clearUser, hydrated } = useRole();
+  const { role, userId, userName, userEmail, clearUser, hydrated } = useRole();
   const { notifications, unreadCount, markRead, markAllRead, dismissNotification } = useNotifications();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const canAccessSettings = role === "KAM" || role === "ADMIN";
+  const hasLegacyDemoSession = Boolean(userId?.startsWith("demo-"));
 
   useEffect(() => {
     if (!hydrated || isAuthRoute(pathname) || userId) return;
     router.replace("/login");
   }, [hydrated, pathname, router, userId]);
 
+  useEffect(() => {
+    if (!hydrated || !hasLegacyDemoSession) return;
+    clearUser();
+    router.replace("/login");
+  }, [clearUser, hasLegacyDemoSession, hydrated, router]);
+
   if (isAuthRoute(pathname)) return <>{children}</>;
-  if (!hydrated || !userId) return null;
+  if (!hydrated || !userId || hasLegacyDemoSession) return null;
 
   function logout() {
     clearUser();
@@ -79,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="absolute inset-x-3 bottom-4">
+        {canAccessSettings ? <div className="absolute inset-x-3 bottom-4">
           <Link
             href="/settings"
             className={`group flex h-14 flex-col items-center justify-center rounded-2xl text-[11px] font-black transition-all ${
@@ -91,16 +98,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Settings className="h-4 w-4" />
             <span className="mt-1">Settings</span>
           </Link>
-        </div>
+        </div> : null}
       </aside>
 
       <div className="md:pl-[86px]">
         <header className="sticky top-0 z-40 border-b border-[#E8E1D7] bg-[rgba(250,247,241,0.86)] px-4 py-2 shadow-[0_10px_28px_-26px_rgba(46,36,23,0.42)] [backdrop-filter:blur(18px)]">
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <RoleBar compact />
-            </div>
+            <div className="min-w-0 flex-1" />
             <div className="flex items-center gap-2">
+              <div className="inline-flex h-9 items-center gap-2 rounded-full border border-[#E2D8CC] bg-[#FFF9EF]/74 px-3 text-[12px] font-black text-[#25352E] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#A7C7B4]" />
+                <span>{role === "EXECUTIVE" ? "C-Level" : role}</span>
+                {role === "EXECUTIVE" ? <span className="text-[#7D6E5F]">Read-only</span> : null}
+              </div>
               <div className="relative">
                 <button
                   type="button"
@@ -144,8 +154,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 setNotificationsOpen(false);
                                 markRead(item.id);
                                 window.dispatchEvent(new CustomEvent("kam:notification-selected", { detail: item }));
-                                const target = new URL(item.href, window.location.origin);
-                                router.push(target.pathname === "/portfolio" && (target.searchParams.has("target") || target.searchParams.has("account")) ? "/portfolio" : item.href);
+                                router.push(item.href);
                               }}
                               className="min-w-0 flex-1 text-left"
                             >

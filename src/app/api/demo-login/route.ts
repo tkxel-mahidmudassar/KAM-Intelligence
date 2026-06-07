@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import type { Role } from "@/types";
 
-const demoUsers: Record<Role, { id: string; name: string; email: string }> = {
-  ASSOCIATE: { id: "demo-associate", name: "Aisha Khan", email: "associate.aisha@tkxel.com" },
-  KAM: { id: "demo-kam", name: "Sarah Chen", email: "sarah.chen@tkxel.com" },
-  EXECUTIVE: { id: "demo-executive", name: "Executive Lead", email: "exec.lead@tkxel.com" },
-  MANAGER: { id: "demo-manager", name: "Sarah Chen", email: "sarah.chen@tkxel.com" },
-  ADMIN: { id: "demo-admin", name: "Sarah Chen", email: "sarah.chen@tkxel.com" },
-};
+const VALID_ROLES: Role[] = ["ASSOCIATE", "KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
 
 function normalizeRole(value: string | null): Role {
-  return value && value in demoUsers ? (value as Role) : "KAM";
+  return value && VALID_ROLES.includes(value as Role) ? (value as Role) : "KAM";
 }
 
-export function GET(req: NextRequest) {
-  const role = normalizeRole(req.nextUrl.searchParams.get("role"));
-  const demoUser = demoUsers[role];
+export async function GET(req: NextRequest) {
+  const requestedRole = normalizeRole(req.nextUrl.searchParams.get("role"));
   const redirectUrl = new URL("/home", req.url);
+  const loginUrl = new URL("/login", req.url);
+
+  const user = await prisma.user.findFirst({
+    where: { role: requestedRole as import("@prisma/client").Role },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true, email: true, role: true },
+  });
+
+  if (!user) return NextResponse.redirect(loginUrl);
+
   const response = NextResponse.redirect(redirectUrl);
   const cookieOptions = {
     path: "/",
@@ -24,10 +28,10 @@ export function GET(req: NextRequest) {
     maxAge: 60 * 60 * 24 * 30,
   };
 
-  response.cookies.set("kam_role", role, cookieOptions);
-  response.cookies.set("kam_user_id", demoUser.id, cookieOptions);
-  response.cookies.set("kam_user_name", demoUser.name, cookieOptions);
-  response.cookies.set("kam_user_email", demoUser.email, cookieOptions);
+  response.cookies.set("kam_role", user.role, cookieOptions);
+  response.cookies.set("kam_user_id", user.id, cookieOptions);
+  response.cookies.set("kam_user_name", user.name, cookieOptions);
+  response.cookies.set("kam_user_email", user.email, cookieOptions);
 
   return response;
 }

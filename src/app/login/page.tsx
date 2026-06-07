@@ -6,20 +6,13 @@ import { useRouter } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
 import type { Role } from "@/types";
 
-const demoPassword = "dotkam-demo";
-
-const demoAccounts: Array<{ label: string; email: string; name: string; role: Role }> = [
-  { label: "Associate", email: "associate.aisha@tkxel.com", name: "Aisha Khan", role: "ASSOCIATE" },
-  { label: "KAM", email: "sarah.chen@tkxel.com", name: "Sarah Chen", role: "KAM" },
-  { label: "C-Level", email: "exec.lead@tkxel.com", name: "Executive Lead", role: "EXECUTIVE" },
+const demoAccounts: Array<{ label: string; email: string; password: string; role: Role }> = [
+  { label: "Associate", email: "aisha.khan@tkxel.com", password: "aisha", role: "ASSOCIATE" },
+  { label: "KAM", email: "sarah.chen@tkxel.com", password: "sarah", role: "KAM" },
+  { label: "C-Level", email: "daniel.west@tkxel.com", password: "daniel", role: "EXECUTIVE" },
 ];
 
-function inferRole(email: string): Role {
-  const normalized = email.toLowerCase();
-  if (normalized.includes("associate")) return "ASSOCIATE";
-  if (normalized.includes("exec") || normalized.includes("ceo") || normalized.includes("cxo")) return "EXECUTIVE";
-  return "KAM";
-}
+type LoginUser = { id: string; name: string; email: string; role: Role };
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,25 +21,51 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [selectedDemoRole, setSelectedDemoRole] = useState<Role | null>(null);
   const [demoSigningIn, setDemoSigningIn] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const role = inferRole(email);
-    const name = email
-      .split("@")[0]
-      .replace(/[._-]+/g, " ")
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
-    setUser(`demo-${role.toLowerCase()}`, name || "Sarah Chen", email, role);
+  async function authenticate(nextEmail: string, nextPassword: string) {
+    setLoginError("");
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: nextEmail, password: nextPassword }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "Sign in failed");
+    }
+    const user = payload.data?.user as LoginUser | undefined;
+    if (!user?.id || !user.email || !user.role) {
+      throw new Error("Sign in failed because the user record was incomplete.");
+    }
+    setUser(user.id, user.name, user.email, user.role);
     router.push("/home");
   }
 
-  function signInDemo(account: (typeof demoAccounts)[number]) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSigningIn(true);
+    try {
+      await authenticate(email, password);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Sign in failed");
+    } finally {
+      setSigningIn(false);
+    }
+  }
+
+  async function signInDemo(account: (typeof demoAccounts)[number]) {
     setSelectedDemoRole(account.role);
     setEmail(account.email);
-    setPassword(demoPassword);
+    setPassword(account.password);
     setDemoSigningIn(true);
-    setUser(`demo-${account.role.toLowerCase()}`, account.name, account.email, account.role);
-    router.push("/home");
+    try {
+      await authenticate(account.email, account.password);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Sign in failed");
+      setDemoSigningIn(false);
+    }
   }
 
   return (
@@ -61,6 +80,11 @@ export default function LoginPage() {
           {demoSigningIn ? (
             <div className="mt-5 rounded-2xl border border-[#CFE2D3] bg-[#F3FAF1] px-4 py-3 text-[13px] font-black text-[#245D3A]">
               Signing in...
+            </div>
+          ) : null}
+          {loginError ? (
+            <div className="mt-5 rounded-2xl border border-[#EAB3A9] bg-[#FFF1EE] px-4 py-3 text-[13px] font-black text-[#A63F33]">
+              {loginError}
             </div>
           ) : null}
           <label className="mt-6 block">
@@ -88,17 +112,18 @@ export default function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <button type="submit" className="mt-6 h-12 w-full rounded-full bg-[#25352E] text-[14px] font-black text-[#FFF9EF]">
-            Sign in
+          <button type="submit" disabled={signingIn || demoSigningIn} className="mt-6 h-12 w-full rounded-full bg-[#25352E] text-[14px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]">
+            {signingIn ? "Signing in..." : "Sign in"}
           </button>
           <div className="mt-6">
             <p className="text-[13px] font-black text-[#6F6254]">Demo account types</p>
             <div className="mt-3 grid gap-2">
               {demoAccounts.map((account) => (
-                <Link
+                <button
                   key={account.role}
-                  href={`/api/demo-login?role=${account.role}`}
                   onClick={() => signInDemo(account)}
+                  type="button"
+                  disabled={demoSigningIn || signingIn}
                   className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${
                     selectedDemoRole === account.role
                       ? "border-[#25352E] bg-[#25352E] text-[#FFF9EF]"
@@ -107,7 +132,7 @@ export default function LoginPage() {
                 >
                   <span className={`text-[14px] font-black ${selectedDemoRole === account.role ? "text-[#FFF9EF]" : "text-[#25352E]"}`}>{account.label}</span>
                   <span className={`text-[12px] font-bold ${selectedDemoRole === account.role ? "text-[#F5EBDD]" : "text-[#75685A]"}`}>{account.email}</span>
-                </Link>
+                </button>
               ))}
             </div>
           </div>

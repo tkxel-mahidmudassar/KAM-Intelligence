@@ -28,8 +28,8 @@ export function ProfileSettingsPage() {
   const canChangePassword = currentPassword.trim().length > 0 && newPassword.length >= 8 && newPassword === confirmPassword;
 
   function saveProfile() {
-    if (!canSaveProfile) return;
-    setUser(userId || "demo-user", name.trim(), email.trim(), role);
+    if (!canSaveProfile || !userId) return;
+    setUser(userId, name.trim(), email.trim(), role);
     setStatus("Profile details saved.");
   }
 

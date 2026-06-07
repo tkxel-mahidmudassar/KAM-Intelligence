@@ -75,6 +75,7 @@ interface TaskResolutionDraft {
 }
 
 interface ScoreOverrideRequest {
+  id?: string;
   targetId: string;
   requestedScore: number;
   reason: string;
@@ -4288,7 +4289,8 @@ function AccountModal({
   onAccountUpdate: (account: PortfolioAccount) => void;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { role } = useRole();
+  const { role, userId } = useRole();
+  const { fireNotification } = useNotifications();
   const [activeTab, setActiveTab] = useState<AccountWorkspaceTab>(initialTab);
   const [activeTasks, setActiveTasks] = useState<ActiveTask[]>([]);
   const [pendingDenials, setPendingDenials] = useState<Record<string, string>>({});
@@ -4296,6 +4298,8 @@ function AccountModal({
   const [overrideDrafts, setOverrideDrafts] = useState<Record<string, { score: string; reason: string }>>({});
   const [overrideRequests, setOverrideRequests] = useState<Record<string, ScoreOverrideRequest>>({});
   const [scoreOverrides, setScoreOverrides] = useState<Record<string, ScoreOverride>>({});
+  const [scoreOverrideMessage, setScoreOverrideMessage] = useState("");
+  const [scoreOverrideError, setScoreOverrideError] = useState("");
   const [kpiWeights, setKpiWeights] = useState<Record<string, number>>({});
   const [weightDrafts, setWeightDrafts] = useState<Record<string, { weight: string }>>({});
   const [weightReason, setWeightReason] = useState("");
@@ -4306,16 +4310,81 @@ function AccountModal({
 
   const acceptedTaskIds = useMemo(() => new Set(activeTasks.map((task) => task.id)), [activeTasks]);
   const kpiRows = useMemo(() => buildAccountKpiRows(account), [account]);
+  const pendingOverrideRequests = useMemo(() => Object.values(overrideRequests).filter((request) => request.status === "Pending"), [overrideRequests]);
+  const overrideRequestLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    for (const row of kpiRows) {
+      for (const parameter of row.subParameters) {
+        labels[subParameterKey(row.id, parameter.name)] = `${row.name} - ${parameter.name}`;
+      }
+    }
+    return labels;
+  }, [kpiRows]);
   const isAssociate = role === "ASSOCIATE";
-  const canOverrideDirectly = role === "KAM";
+  const canOverrideDirectly = role === "KAM" || role === "ADMIN";
 
   useEffect(() => {
     if (open) {
       setActiveTab(initialTab);
       setKycRegenerationMessage("");
       setKycRegenerationError("");
+      setScoreOverrideMessage("");
+      setScoreOverrideError("");
     }
   }, [account?.id, initialTab, open]);
+
+  useEffect(() => {
+    if (!open || !account?.id) return;
+    const accountId = account.id;
+    let cancelled = false;
+
+    async function loadScoreOverrides() {
+      try {
+        const response = await fetch(`/api/score-overrides?accountId=${accountId}`, {
+          headers: { "x-role": role },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Score override requests could not be loaded");
+
+        const requests: Record<string, ScoreOverrideRequest> = {};
+        const overrides: Record<string, ScoreOverride> = {};
+        for (const item of (payload.data ?? []) as Array<Record<string, unknown>>) {
+          const targetId = String(item.kpiKey ?? "");
+          if (!targetId) continue;
+          const status = String(item.status ?? "PENDING");
+          const requestedScore = clampKpiScore(String(item.requestedValue ?? 1));
+          const reason = String(item.reason ?? "");
+          if (status === "PENDING") {
+            requests[targetId] = {
+              id: String(item.id ?? ""),
+              targetId,
+              requestedScore,
+              reason,
+              status: "Pending",
+            };
+          }
+          if (status === "APPROVED") {
+            overrides[targetId] = {
+              targetId,
+              score: clampKpiScore(String(item.approvedValue ?? item.requestedValue ?? 1)),
+              reason: `Approved request: ${reason}`,
+            };
+          }
+        }
+        if (!cancelled) {
+          setOverrideRequests(requests);
+          setScoreOverrides(overrides);
+        }
+      } catch (error) {
+        if (!cancelled) setScoreOverrideError(error instanceof Error ? error.message : "Score override requests could not be loaded");
+      }
+    }
+
+    void loadScoreOverrides();
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.id, open, role]);
 
   function acceptRecommendation(row: KpiOverviewRow) {
     if (!row.task || acceptedTaskIds.has(row.id)) return;
@@ -4382,19 +4451,60 @@ function AccountModal({
   }
 
   function submitOverrideRequest(targetId: string) {
+    void submitOverrideRequestAsync(targetId);
+  }
+
+  async function submitOverrideRequestAsync(targetId: string) {
+    if (!account?.id) return;
     const draft = overrideDrafts[targetId] ?? { score: String(defaultScoreForOverrideTarget(targetId)), reason: "" };
     const reason = draft.reason.trim();
     if (!reason) return;
-    setOverrideRequests((requests) => ({
-      ...requests,
-      [targetId]: {
-        targetId,
-        requestedScore: clampKpiScore(draft.score),
-        reason,
-        status: "Pending",
-      },
-    }));
-    setOverrideDrafts((drafts) => ({ ...drafts, [targetId]: { score: draft.score, reason: "" } }));
+    setScoreOverrideMessage("");
+    setScoreOverrideError("");
+
+    try {
+      const requestedScore = clampKpiScore(draft.score);
+      const response = await fetch("/api/score-overrides", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-role": role,
+        },
+        body: JSON.stringify({
+          accountId: account.id,
+          kpiKey: targetId,
+          requestedValue: requestedScore,
+          reason,
+          requestedById: userId,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Score change request could not be submitted");
+      const created = payload.data as Record<string, unknown>;
+
+      setOverrideRequests((requests) => ({
+        ...requests,
+        [targetId]: {
+          id: String(created.id ?? ""),
+          targetId,
+          requestedScore,
+          reason,
+          status: "Pending",
+        },
+      }));
+      setOverrideDrafts((drafts) => ({ ...drafts, [targetId]: { score: draft.score, reason: "" } }));
+      setScoreOverrideMessage("Score change request submitted to KAM for review.");
+      fireNotification({
+        id: `score-override-request-${created.id ?? `${account.id}-${targetId}`}`,
+        title: `${account.name} score change requested`,
+        detail: "An Associate submitted a score update for KAM review.",
+        href: `/portfolio?focus=score-override&target=${account.id}`,
+        source: "score-override",
+        severity: "warning",
+      });
+    } catch (error) {
+      setScoreOverrideError(error instanceof Error ? error.message : "Score change request could not be submitted");
+    }
   }
 
   function applyScoreOverride(targetId: string) {
@@ -4413,35 +4523,83 @@ function AccountModal({
   }
 
   function approveOverrideRequest(targetId: string) {
+    void approveOverrideRequestAsync(targetId);
+  }
+
+  async function approveOverrideRequestAsync(targetId: string) {
     const request = overrideRequests[targetId];
     if (!request) return;
-    setScoreOverrides((overrides) => ({
-      ...overrides,
-      [targetId]: {
-        targetId,
-        score: request.requestedScore,
-        reason: `Approved request: ${request.reason}`,
-      },
-    }));
-    setOverrideRequests((requests) => ({
-      ...requests,
-      [targetId]: {
-        ...request,
-        status: "Approved",
-      },
-    }));
+    setScoreOverrideMessage("");
+    setScoreOverrideError("");
+
+    try {
+      if (request.id) {
+        const response = await fetch(`/api/score-overrides/${request.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-role": role,
+          },
+          body: JSON.stringify({ action: "APPROVE", approvedById: userId }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Score request could not be approved");
+      }
+      setScoreOverrides((overrides) => ({
+        ...overrides,
+        [targetId]: {
+          targetId,
+          score: request.requestedScore,
+          reason: `Approved request: ${request.reason}`,
+        },
+      }));
+      setOverrideRequests((requests) => ({
+        ...requests,
+        [targetId]: {
+          ...request,
+          status: "Approved",
+        },
+      }));
+      setScoreOverrideMessage("Score change request approved.");
+    } catch (error) {
+      setScoreOverrideError(error instanceof Error ? error.message : "Score request could not be approved");
+    }
   }
 
   function denyOverrideRequest(targetId: string) {
+    void denyOverrideRequestAsync(targetId);
+  }
+
+  async function denyOverrideRequestAsync(targetId: string) {
     const request = overrideRequests[targetId];
     if (!request) return;
-    setOverrideRequests((requests) => ({
-      ...requests,
-      [targetId]: {
-        ...request,
-        status: "Denied",
-      },
-    }));
+    setScoreOverrideMessage("");
+    setScoreOverrideError("");
+
+    try {
+      if (request.id) {
+        const response = await fetch(`/api/score-overrides/${request.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-role": role,
+          },
+          body: JSON.stringify({ action: "DECLINE", approvedById: userId, declineReason: "Denied from account workspace." }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Score request could not be denied");
+      }
+      setOverrideRequests((requests) => ({
+        ...requests,
+        [targetId]: {
+          ...request,
+          status: "Denied",
+        },
+      }));
+      setScoreOverrideMessage("Score change request denied.");
+    } catch (error) {
+      setScoreOverrideError(error instanceof Error ? error.message : "Score request could not be denied");
+    }
   }
 
   function defaultWeightForKpi(rowId: string) {
@@ -4580,6 +4738,14 @@ function AccountModal({
               </div>
             ) : null}
 
+            {scoreOverrideMessage || scoreOverrideError ? (
+              <div className={`relative z-10 mt-3 rounded-2xl border p-3 text-[12px] font-bold ${
+                scoreOverrideError ? "border-[#E8B8B0] bg-[#FFF0ED] text-[#B33D32]" : "border-[#B7D8C3] bg-[#EEF8F1] text-[#23633E]"
+              }`}>
+                {scoreOverrideError || scoreOverrideMessage}
+              </div>
+            ) : null}
+
             <div className="relative z-10 mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               <SummaryItem label="Score" value={<span className={scoreTone[account.health]}>{account.healthScore}/100</span>} />
               <SummaryItem label="ARR" value={money(account.arr)} />
@@ -4604,6 +4770,14 @@ function AccountModal({
             </Tabs.List>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <Tabs.Content value="overview" className="focus:outline-none">
+                {canOverrideDirectly && pendingOverrideRequests.length > 0 ? (
+                  <PendingScoreOverrideReviewPanel
+                    requests={pendingOverrideRequests}
+                    labels={overrideRequestLabels}
+                    onApprove={approveOverrideRequest}
+                    onDeny={denyOverrideRequest}
+                  />
+                ) : null}
                 <OverviewTab
                   kpiRows={kpiRows}
                   activeTasks={activeTasks}
@@ -4648,6 +4822,66 @@ function AccountModal({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function PendingScoreOverrideReviewPanel({
+  requests,
+  labels,
+  onApprove,
+  onDeny,
+}: {
+  requests: ScoreOverrideRequest[];
+  labels: Record<string, string>;
+  onApprove: (targetId: string) => void;
+  onDeny: (targetId: string) => void;
+}) {
+  return (
+    <div className="mb-4 rounded-2xl border border-[#E8C27F] bg-[#FFF6E8] p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-black text-[#25352E]">Pending score change requests</p>
+          <p className="mt-1 text-[12px] font-semibold text-[#7D6E5F]">
+            Review Associate-submitted score updates before they affect the account view.
+          </p>
+        </div>
+        <span className="rounded-full border border-[#E8C27F] bg-white/70 px-2.5 py-1 text-[11px] font-black text-[#9A6413]">
+          {requests.length} pending
+        </span>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {requests.map((request) => (
+          <div key={request.targetId} className="rounded-xl border border-[#E9DED0] bg-white/70 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-black text-[#25352E]">{labels[request.targetId] ?? request.targetId}</p>
+                <p className="mt-1 text-[12px] font-semibold text-[#6F6254]">
+                  Requested score: <span className="font-black text-[#25352E]">{request.requestedScore}/5</span>
+                </p>
+                <p className="mt-1 text-[12px] font-semibold leading-snug text-[#7D6E5F]">{request.reason}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onDeny(request.targetId)}
+                  className="h-9 rounded-full border border-[#E1D7CA] bg-white px-4 text-[12px] font-black text-[#6F6254] transition-colors hover:border-[#D66A5B] hover:text-[#B33D32]"
+                >
+                  Deny
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onApprove(request.targetId)}
+                  className="h-9 rounded-full bg-[#25352E] px-4 text-[12px] font-black text-[#FFF9EF] transition-colors hover:bg-[#1B2922]"
+                >
+                  Approve
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
