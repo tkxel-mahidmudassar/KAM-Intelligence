@@ -5038,7 +5038,7 @@ export function PortfolioPage() {
   const [sourceUploadLoading, setSourceUploadLoading] = useState(false);
   const [sourceUploadError, setSourceUploadError] = useState("");
   const [accountDraft, setAccountDraft] = useState<AccountDraft>(emptyAccountDraft);
-  const [onboardingSuggestions, setOnboardingSuggestions] = useState<OnboardingSuggestion[]>(seededOnboardingSuggestions);
+  const [onboardingSuggestions, setOnboardingSuggestions] = useState<OnboardingSuggestion[]>([]);
   const [onboardingDocuments, setOnboardingDocuments] = useState<OnboardingDocument[]>([]);
   const [onboardingKycSections, setOnboardingKycSections] = useState<KycDraftSection[]>(kycDraftSections);
   const [generatedKycDocument, setGeneratedKycDocument] = useState<GeneratedKycDocument | null>(null);
@@ -5162,7 +5162,7 @@ export function PortfolioPage() {
     setSourceUploadLoading(false);
     setSourceUploadError("");
     setAccountDraft(emptyAccountDraft);
-    setOnboardingSuggestions(seededOnboardingSuggestions);
+    setOnboardingSuggestions([]);
     setOnboardingDocuments([]);
     setOnboardingKycSections(kycDraftSections);
     setGeneratedKycDocument(null);
@@ -5225,12 +5225,6 @@ export function PortfolioPage() {
       return;
     }
     setOnboardingStage("workspace");
-    setAccountDraft((draft) => ({
-      ...draft,
-      kamOwner: role === "KAM" ? "Sarah Chen" : "Assigned by KAM",
-      associateOwner: role === "ASSOCIATE" ? "Current associate" : "Aisha Khan",
-      nextTouchpoint: "Executive kickoff",
-    }));
     setSourceUploadLoading(false);
     void runOnboardingAssistant("Review the uploaded source files and propose the first account profile, KYC, and journey updates.", onboardingDocuments, uploadedSources);
   }

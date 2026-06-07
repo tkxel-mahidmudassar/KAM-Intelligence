@@ -13,6 +13,9 @@
 import type { LLMProvider, LLMRequest, LLMResponse } from "./provider.interface";
 import { logLLMCall } from "./logger";
 import type { AiProvider } from "@/types";
+import { ClaudeProvider } from "./providers/claude";
+import { GeminiProvider } from "./providers/gemini";
+import { OpenAIProvider } from "./providers/openai";
 
 export type { LLMProvider, LLMRequest, LLMResponse } from "./provider.interface";
 export type { LLMMessage } from "./provider.interface";
@@ -28,18 +31,15 @@ export function getProvider(): LLMProvider {
 
   switch (providerName) {
     case "openai": {
-      const { OpenAIProvider } = require("./providers/openai");
       _cached = new OpenAIProvider();
       break;
     }
     case "claude": {
-      const { ClaudeProvider } = require("./providers/claude");
       _cached = new ClaudeProvider();
       break;
     }
     case "gemini":
     default: {
-      const { GeminiProvider } = require("./providers/gemini");
       _cached = new GeminiProvider();
       break;
     }
