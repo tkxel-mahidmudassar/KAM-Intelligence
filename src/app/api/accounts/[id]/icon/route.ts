@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { badRequest, guard, notFound, ok, serverError, getRoleFromRequest } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
+import { findAccountForResponse } from "@/lib/accounts/accountApi";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -33,10 +34,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     await writeFile(join(uploadsDir, filename), Buffer.from(await file.arrayBuffer()));
 
     const logoUrl = `/uploads/account-icons/${filename}`;
-    const updated = await prisma.account.update({
+    await prisma.account.update({
       where: { id },
       data: { logoUrl },
-      select: { id: true, name: true, logoUrl: true },
     });
 
     await logAudit({
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       metadata: { role, fileName: file.name, fileSize: file.size, mimeType: file.type },
     });
 
-    return ok(updated);
+    return ok(await findAccountForResponse(id));
   } catch (err) {
     return serverError(err);
   }

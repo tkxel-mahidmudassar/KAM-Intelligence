@@ -123,6 +123,7 @@ model User {
   manager         User?          @relation("UserReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
   reports         User[]         @relation("UserReportsTo")
   managedAccounts Account[]      @relation("AccountKam")
+  associateAccounts Account[]    @relation("AccountAssociateOwner")
   actions         Action[]       @relation("ActionOwner")
   qbrSessions     QbrSession[]   @relation("QbrCreator")
   kycVersions     KycVersion[]   @relation("KycAuthor")
@@ -136,9 +137,13 @@ model User {
 
 model Account {
   id              String        @id @default(uuid())
+  sourceKey       String?       @unique
   name            String
   industry        String?
   segment         String?
+  deliveryModel   String?
+  currentWork     String?       @db.Text
+  relationshipSignal String?    @db.Text
   region          String?
   country         String?
   logoUrl         String?
@@ -149,11 +154,15 @@ model Account {
   health          AccountHealth @default(HEALTHY)
   healthUpdatedAt DateTime?
   kamId           String?
+  associateOwnerId String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   kam          User?            @relation("AccountKam", fields: [kamId], references: [id])
+  associateOwner User?          @relation("AccountAssociateOwner", fields: [associateOwnerId], references: [id], onDelete: SetNull)
   contacts     AccountContact[]
+  resources    AccountResource[]
+  journeyItems AccountJourneyItem[]
   kpiDimensions KpiDimension[]
   kamScores    KamScore[]
   actions      Action[]
@@ -185,6 +194,9 @@ model AccountContact {
   title     String?
   email     String?
   phone     String?
+  location  String?
+  timeZone  String?
+  hierarchyRank Int?
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -192,6 +204,41 @@ model AccountContact {
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@map("account_contacts")
+}
+
+model AccountResource {
+  id        String   @id @default(uuid())
+  accountId String
+  name      String
+  role      String?
+  pod       String?
+  location  String?
+  startDate String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("account_resources")
+}
+
+model AccountJourneyItem {
+  id          String   @id @default(uuid())
+  accountId   String
+  title       String
+  type        String
+  dateLabel   String?
+  detail      String?  @db.Text
+  status      String   @default("UPCOMING")
+  sortOrder   Int      @default(0)
+  completedAt DateTime?
+  dismissReason String? @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("account_journey_items")
 }
 
 // ─── KPI Dimensions ───────────────────────────────────────────────────────────

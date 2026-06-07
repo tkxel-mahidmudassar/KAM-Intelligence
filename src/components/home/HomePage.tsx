@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronDown, Clock, ListChecks, X } from "lucide-react";
-import { useRole } from "@/context/RoleContext";
-import { readCachedApiAccounts, writeCachedApiAccounts, type CachedApiAccount } from "@/lib/v2/accountCache";
-import { associatePortfolio, portfolioAccounts, type PortfolioAccount, type PortfolioHealth } from "@/lib/v2/portfolioData";
+import { useAccountCache } from "@/context/AccountCacheContext";
 import { money, type WorkspaceAccount, type WorkspaceActionItem, type WorkspaceHealth } from "@/lib/v2/workspaceData";
 
 type CalendarView = "month" | "timeline";
@@ -20,6 +18,7 @@ type ApiAccount = {
   health?: "HEALTHY" | "AT_RISK" | "CRITICAL" | string | null;
   contractEnd?: string | null;
   kam?: { name?: string | null } | null;
+  associateOwner?: { name?: string | null } | null;
   kamScores?: Array<{ overall?: number | null; computedAt?: string | null }>;
   signals?: Array<{ id?: string; title?: string | null; description?: string | null; severity?: string | null; detectedAt?: string | null }>;
   _count?: { actions?: number; documents?: number };
@@ -74,12 +73,6 @@ function accountHealth(value?: string | null): WorkspaceHealth {
   return "healthy";
 }
 
-function portfolioHealth(value: PortfolioHealth): WorkspaceHealth {
-  if (value === "CRITICAL") return "critical";
-  if (value === "AT_RISK") return "at-risk";
-  return "healthy";
-}
-
 function daysUntil(dateValue?: string | null) {
   if (!dateValue) return 180;
   const time = new Date(dateValue).getTime();
@@ -106,44 +99,8 @@ function mapApiAccount(account: ApiAccount): WorkspaceAccount {
     score: accountScore(account, health),
     health,
     renewalDays: daysUntil(account.contractEnd),
-    owner: account.kam?.name ?? "Owner not set",
+    owner: account.associateOwner?.name ?? account.kam?.name ?? "Owner not set",
   };
-}
-
-function mapPortfolioAccount(account: PortfolioAccount): WorkspaceAccount {
-  return {
-    id: account.id,
-    name: account.name,
-    industry: account.industry,
-    country: account.country,
-    arr: account.arr,
-    score: account.healthScore,
-    health: portfolioHealth(account.health),
-    renewalDays: account.renewalDays,
-    owner: account.kamOwner,
-  };
-}
-
-function buildVisibleAccounts(role: string, apiAccounts: ApiAccount[]) {
-  const demoAccounts = (role === "ASSOCIATE" ? associatePortfolio : portfolioAccounts).map(mapPortfolioAccount);
-  const demoNames = new Set(demoAccounts.map((account) => account.name.toLowerCase()));
-  const persistedAccounts = apiAccounts
-    .filter((account) => !String(account.id ?? "").startsWith("acc-"))
-    .map(mapApiAccount)
-    .filter((account) => !demoNames.has(account.name.toLowerCase()));
-
-  return [...persistedAccounts, ...demoAccounts];
-}
-
-function applyHomeAccountsFromApi(
-  role: string,
-  apiAccounts: ApiAccount[],
-  setAccounts: (accounts: WorkspaceAccount[]) => void,
-  setItems: (items: WorkspaceActionItem[]) => void,
-) {
-  const mappedAccounts = buildVisibleAccounts(role, apiAccounts);
-  setAccounts(mappedAccounts);
-  setItems(buildAccountActions(mappedAccounts, apiAccounts));
 }
 
 function buildAccountActions(accounts: WorkspaceAccount[], apiAccounts: ApiAccount[]): WorkspaceActionItem[] {
@@ -200,53 +157,19 @@ function reasonPlaceholder(status: ActionStatus) {
 
 export function HomePage() {
   const router = useRouter();
-  const { role } = useRole();
+  const { accounts: apiAccountRecords, loading, error: loadError } = useAccountCache();
   const [calendarView, setCalendarView] = useState<CalendarView>("timeline");
   const [expandedHealth, setExpandedHealth] = useState<WorkspaceHealth | "renewals" | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
-  const [accounts, setAccounts] = useState<WorkspaceAccount[]>([]);
   const [items, setItems] = useState<WorkspaceActionItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
   const [reasonTarget, setReasonTarget] = useState<{ id: string; status: ActionStatus } | null>(null);
   const [reason, setReason] = useState("");
+  const apiAccounts = useMemo(() => apiAccountRecords as ApiAccount[], [apiAccountRecords]);
+  const accounts = useMemo(() => apiAccounts.map(mapApiAccount), [apiAccounts]);
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadHomeData() {
-      const cachedAccounts = readCachedApiAccounts(role) as ApiAccount[] | null;
-      if (cachedAccounts) {
-        applyHomeAccountsFromApi(role, cachedAccounts, setAccounts, setItems);
-        setLoading(false);
-      } else {
-        setLoading(true);
-      }
-      setLoadError("");
-      try {
-        const response = await fetch("/api/accounts", { headers: { "x-role": role } });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error || "Home data failed to load");
-        }
-        const apiAccounts = Array.isArray(payload.data) ? payload.data as ApiAccount[] : [];
-        writeCachedApiAccounts(role, apiAccounts as unknown as CachedApiAccount[]);
-        if (cancelled) return;
-        applyHomeAccountsFromApi(role, apiAccounts, setAccounts, setItems);
-      } catch (error) {
-        if (!cancelled && !cachedAccounts) {
-          setAccounts([]);
-          setItems([]);
-          setLoadError(error instanceof Error ? error.message : "Home data failed to load");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    void loadHomeData();
-    return () => {
-      cancelled = true;
-    };
-  }, [role]);
+    setItems(buildAccountActions(accounts, apiAccounts));
+  }, [accounts, apiAccounts]);
 
   const groupedByDate = useMemo(() => {
     return items.reduce<Record<string, WorkspaceActionItem[]>>((acc, item) => {
@@ -343,12 +266,15 @@ export function HomePage() {
                 </button>
                 {expandedHealth === stat.health ? (
                   <div className="absolute inset-x-3 top-[5.75rem] rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.96)] p-3 shadow-[0_28px_68px_-34px_rgba(31,39,34,0.58)] [backdrop-filter:blur(16px)]">
-                    <div className="space-y-2">
-                      {stat.accounts.slice(0, 5).map((account) => (
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {stat.accounts.map((account) => (
                         <button
                           key={account.id}
                           type="button"
-                          onClick={() => openAccount(account.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openAccount(account.id);
+                          }}
                           className="flex w-full items-center justify-between rounded-2xl bg-white/72 px-3 py-2 text-[12px] font-bold transition hover:bg-[#25352E] hover:text-[#FFF9EF]"
                         >
                           <span>{account.name}</span>
@@ -380,12 +306,15 @@ export function HomePage() {
                 <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{loading ? "..." : renewalSoon.length}</p>
               </button>
               {expandedHealth === "renewals" ? (
-                <div className="absolute inset-x-3 top-[5.75rem] space-y-2 rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.96)] p-3 shadow-[0_28px_68px_-34px_rgba(31,39,34,0.58)] [backdrop-filter:blur(16px)]">
+                <div className="absolute inset-x-3 top-[5.75rem] max-h-72 space-y-2 overflow-y-auto rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.96)] p-3 pr-2 shadow-[0_28px_68px_-34px_rgba(31,39,34,0.58)] [backdrop-filter:blur(16px)]">
                   {renewalSoon.map((account) => (
                     <button
                       key={account.id}
                       type="button"
-                      onClick={() => openAccount(account.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openAccount(account.id);
+                      }}
                       className="flex w-full items-center justify-between rounded-2xl bg-[#F7F1E7] px-3 py-2 text-[12px] font-bold transition hover:bg-[#25352E] hover:text-[#FFF9EF]"
                     >
                       <span>{account.name}</span>

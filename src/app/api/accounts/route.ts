@@ -1,33 +1,12 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRoleFromRequest, getUserIdFromRequest, ok, created, badRequest, serverError, guard, kamWhere } from "@/lib/api";
+import { accountResponseInclude, resolveUserId } from "@/lib/accounts/accountApi";
 import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
 import { getJiraAdapter } from "@/lib/adapters/jira";
 
 async function resolveKamId(kamId?: string | null, kamOwnerName?: string | null) {
-  if (kamId) return kamId;
-
-  const ownerName = kamOwnerName?.trim();
-  if (ownerName) {
-    const matchedKam = await prisma.user.findFirst({
-      where: {
-        role: "KAM",
-        OR: [
-          { name: ownerName },
-          { email: ownerName },
-          { name: { contains: ownerName } },
-        ],
-      },
-      orderBy: { createdAt: "asc" },
-    });
-    if (matchedKam) return matchedKam.id;
-  }
-
-  const fallbackKam = await prisma.user.findFirst({
-    where: { role: "KAM" },
-    orderBy: { createdAt: "asc" },
-  });
-  return fallbackKam?.id ?? null;
+  return resolveUserId({ userId: kamId, userName: kamOwnerName, role: "KAM", fallbackRole: "KAM" });
 }
 
 // GET /api/accounts
@@ -44,16 +23,15 @@ export async function GET(req: NextRequest) {
       where: { role: "KAM" },
       orderBy: { createdAt: "asc" },
     }))?.id ?? "";
-    const where = kamWhere(role, kamUserId);
+    const associateUserId = headerUserId ?? (await prisma.user.findFirst({
+      where: { role: "ASSOCIATE" },
+      orderBy: { createdAt: "asc" },
+    }))?.id ?? "";
+    const where = role === "ASSOCIATE" ? { associateOwnerId: associateUserId } : kamWhere(role, kamUserId);
 
     const accounts = await prisma.account.findMany({
       where,
-      include: {
-        kam: { select: { id: true, name: true, email: true } },
-        kamScores: { orderBy: { computedAt: "desc" }, take: 8 },
-        signals: { where: { isResolved: false }, orderBy: { detectedAt: "desc" }, take: 3 },
-        _count: { select: { actions: true, documents: true } },
-      },
+      include: accountResponseInclude,
       orderBy: [
         { health: "asc" }, // CRITICAL first
         { arr: "desc" },
@@ -74,28 +52,58 @@ export async function POST(req: NextRequest) {
     if (denied) return denied;
 
     const body = await req.json();
-    const { name, industry, segment, website, logoUrl, region, country, arr, kamId, kamOwnerName, contractStart, contractEnd } = body;
+    const {
+      sourceKey,
+      name,
+      industry,
+      segment,
+      deliveryModel,
+      currentWork,
+      relationshipSignal,
+      website,
+      logoUrl,
+      region,
+      country,
+      arr,
+      kamId,
+      kamOwnerName,
+      associateOwnerId,
+      associateOwnerName,
+      contractStart,
+      contractEnd,
+      health,
+    } = body;
 
     if (!name) return badRequest("name is required");
     const resolvedKamId = await resolveKamId(kamId, kamOwnerName);
+    const resolvedAssociateOwnerId = await resolveUserId({
+      userId: associateOwnerId,
+      userName: associateOwnerName,
+      role: "ASSOCIATE",
+    });
 
     const account = await prisma.account.create({
       data: {
+        sourceKey,
         name,
         industry,
         segment,
+        deliveryModel,
+        currentWork,
+        relationshipSignal,
         website,
         logoUrl,
         region,
         country,
         arr: arr ?? 0,
+        health,
+        healthUpdatedAt: health ? new Date() : undefined,
         kamId:         resolvedKamId,
+        associateOwnerId: resolvedAssociateOwnerId,
         contractStart: contractStart ? new Date(contractStart) : null,
         contractEnd:   contractEnd   ? new Date(contractEnd)   : null,
       },
-      include: {
-        kam: { select: { id: true, name: true, email: true } },
-      },
+      include: accountResponseInclude,
     });
 
     return created(account);

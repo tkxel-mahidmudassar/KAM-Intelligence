@@ -18,6 +18,40 @@ export interface PortfolioAccount {
   deliveryModel: string;
   currentWork: string;
   relationshipSignal: string;
+  contacts?: Array<{
+    id: string;
+    name: string;
+    designation: string;
+    location: string;
+    timeZone: string;
+    email: string;
+    mobile: string;
+    hierarchyRank: number;
+  }>;
+  resources?: Array<{
+    id: string;
+    name: string;
+    role: string;
+    pod: string;
+    location: string;
+    startDate: string;
+  }>;
+  journeyItems?: Array<{
+    id: string;
+    title: string;
+    type: "Meeting" | "QBR" | "To-do";
+    date: string;
+    detail: string;
+    status: string;
+  }>;
+  documents?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    uploadedAt: string;
+    status: string;
+    url: string;
+  }>;
 }
 
 const kamOwner = "Sarah Chen";

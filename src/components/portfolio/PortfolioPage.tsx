@@ -6,13 +6,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, Check, FileText, Mail, Pencil, Phone, Plus, Search, Settings, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useAccountCache } from "@/context/AccountCacheContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
-import { readCachedApiAccounts, upsertCachedApiAccount, writeCachedApiAccounts, type CachedApiAccount } from "@/lib/v2/accountCache";
-import { associatePortfolio, portfolioAccounts, type PortfolioAccount, type PortfolioHealth } from "@/lib/v2/portfolioData";
+import type { CachedApiAccount } from "@/lib/v2/accountCache";
+import { type PortfolioAccount, type PortfolioHealth } from "@/lib/v2/portfolioData";
 import type { Role } from "@/types";
-
-const demoAccountIds = new Set([...portfolioAccounts, ...associatePortfolio].map((account) => account.id));
 
 const healthLabel: Record<PortfolioHealth, string> = {
   HEALTHY: "Healthy",
@@ -233,6 +232,8 @@ interface AccountProfileDraft {
   region: string;
   kamOwner: string;
   associateOwner: string;
+  currentWork: string;
+  relationshipSignal: string;
   contractEnd: string;
 }
 
@@ -1495,6 +1496,11 @@ function healthScoreFromAccount(account: Record<string, unknown>, health: Portfo
 function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): PortfolioAccount {
   const health = String(account.health ?? "HEALTHY") as PortfolioHealth;
   const kam = account.kam as { name?: string } | undefined;
+  const associateOwner = account.associateOwner as { name?: string } | undefined;
+  const contacts = Array.isArray(account.contacts) ? account.contacts as Array<Record<string, unknown>> : [];
+  const resources = Array.isArray(account.resources) ? account.resources as Array<Record<string, unknown>> : [];
+  const journeyItems = Array.isArray(account.journeyItems) ? account.journeyItems as Array<Record<string, unknown>> : [];
+  const documents = Array.isArray(account.documents) ? account.documents as Array<Record<string, unknown>> : [];
   const metadata = getAccountRuntimeMetadata({
     id: String(account.id),
     name: String(account.name ?? "New account"),
@@ -1511,21 +1517,51 @@ function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): Port
     healthScore: healthScoreFromAccount(account, health),
     renewalDays: daysUntil(account.contractEnd as string | null | undefined),
     kamOwner: kam?.name ?? "KAM not set",
-    associateOwner: kam?.name ?? "Account owner not set",
-    contactName: metadata?.primaryContact || "Primary contact not set",
+    associateOwner: associateOwner?.name ?? "Account owner not set",
+    contactName: metadata?.primaryContact || String(contacts.find((contact) => contact.isPrimary)?.name ?? contacts[0]?.name ?? "Primary contact not set"),
     logoUrl: typeof account.logoUrl === "string" ? account.logoUrl : undefined,
-    deliveryModel: String(account.segment ?? "Delivery model not set"),
-    currentWork: "Account setup in progress",
-    relationshipSignal: "Review latest account documents",
+    deliveryModel: String(account.deliveryModel ?? account.segment ?? "Delivery model not set"),
+    currentWork: String(account.currentWork ?? "Account setup in progress"),
+    relationshipSignal: String(account.relationshipSignal ?? "Review latest account documents"),
+    contacts: contacts.map((contact, index) => ({
+      id: String(contact.id ?? `contact-${index}`),
+      name: String(contact.name ?? "Unnamed contact"),
+      designation: String(contact.title ?? "Contact"),
+      location: String(contact.location ?? "Location not set"),
+      timeZone: String(contact.timeZone ?? "Time zone not set"),
+      email: String(contact.email ?? "Email not set"),
+      mobile: String(contact.phone ?? "Mobile not set"),
+      hierarchyRank: Number(contact.hierarchyRank ?? index + 1),
+    })),
+    resources: resources.map((resource, index) => ({
+      id: String(resource.id ?? `resource-${index}`),
+      name: String(resource.name ?? "Unnamed resource"),
+      role: String(resource.role ?? "Role not set"),
+      pod: String(resource.pod ?? "Pod not set"),
+      location: String(resource.location ?? "Location not set"),
+      startDate: String(resource.startDate ?? "Start date not set"),
+    })),
+    journeyItems: journeyItems.map((item, index) => ({
+      id: String(item.id ?? `journey-${index}`),
+      title: String(item.title ?? "Journey item"),
+      type: String(item.type ?? "To-do") as "Meeting" | "QBR" | "To-do",
+      date: String(item.dateLabel ?? "Date not set"),
+      detail: String(item.detail ?? ""),
+      status: String(item.status ?? "UPCOMING"),
+    })),
+    documents: documents.map((document, index) => ({
+      id: String(document.id ?? `document-${index}`),
+      name: String(document.name ?? "Document"),
+      type: String(document.type ?? "OTHER"),
+      uploadedAt: document.createdAt ? new Date(String(document.createdAt)).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Uploaded",
+      status: String(document.signalStatus ?? "Processed"),
+      url: String(document.fileUrl ?? documentPreviewUrl(String(document.name ?? "Document"), String(document.type ?? "OTHER"))),
+    })),
   };
 }
 
-function mapApiAccountsToCreatedPortfolioAccounts(accounts: Array<Record<string, unknown>>) {
-  const seededNames = new Set(portfolioAccounts.map((account) => account.name.toLowerCase()));
-  return accounts
-    .filter((account) => !String(account.id ?? "").startsWith("acc-"))
-    .map(mapApiAccountToPortfolioAccount)
-    .filter((account) => !seededNames.has(account.name.toLowerCase()));
+function mapApiAccountsToPortfolioAccounts(accounts: Array<Record<string, unknown>>) {
+  return accounts.map(mapApiAccountToPortfolioAccount);
 }
 
 const taskTypeTone: Record<TaskType, string> = {
@@ -3061,8 +3097,19 @@ function UploadDocumentDialog({
 
 function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount; onAccountUpdate: (account: PortfolioAccount) => void }) {
   const { role } = useRole();
-  const isDemoAccount = demoAccountIds.has(account.id);
+  const { upsertAccount } = useAccountCache();
   const accountMetadata = getAccountRuntimeMetadata(account);
+  const accountDocuments = (account.documents ?? []).map((document, index): UploadedAccountDocument => ({
+    id: document.id,
+    name: document.name,
+    type: document.type,
+    uploadedBy: account.associateOwner || "Associate",
+    uploadedAt: document.uploadedAt,
+    uploadedAtMs: Date.now() - index,
+    status: document.status === "PENDING_REVIEW" ? "Pending review" : "Processed",
+    affected: "Account profile and KYC",
+    url: document.url,
+  }));
   const metadataDocuments = (accountMetadata?.sourceFiles ?? []).map((fileName, index): UploadedAccountDocument => ({
     id: `source-doc-${account.id}-${index}`,
     name: fileName,
@@ -3074,8 +3121,8 @@ function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount;
     affected: "Account profile and KYC",
     url: documentPreviewUrl(fileName, "Account source"),
   }));
-  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedAccountDocument[]>(() => isDemoAccount ? seededAccountDocuments : metadataDocuments);
-  const [signalProposals, setSignalProposals] = useState<DocumentSignalProposal[]>(() => isDemoAccount ? seededDocumentProposals : []);
+  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedAccountDocument[]>(() => accountDocuments.length > 0 ? accountDocuments : metadataDocuments);
+  const [signalProposals, setSignalProposals] = useState<DocumentSignalProposal[]>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [documentUploading, setDocumentUploading] = useState(false);
   const [documentUploadError, setDocumentUploadError] = useState("");
@@ -3103,8 +3150,18 @@ function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount;
   const recentDocuments = [...uploadedDocuments].sort((a, b) => b.uploadedAtMs - a.uploadedAtMs);
 
   useEffect(() => {
-    const nextIsDemoAccount = demoAccountIds.has(account.id);
     const nextMetadata = getAccountRuntimeMetadata(account);
+    const nextAccountDocuments = (account.documents ?? []).map((document, index): UploadedAccountDocument => ({
+      id: document.id,
+      name: document.name,
+      type: document.type,
+      uploadedBy: account.associateOwner || "Associate",
+      uploadedAt: document.uploadedAt,
+      uploadedAtMs: Date.now() - index,
+      status: document.status === "PENDING_REVIEW" ? "Pending review" : "Processed",
+      affected: "Account profile and KYC",
+      url: document.url,
+    }));
     const nextMetadataDocuments = (nextMetadata?.sourceFiles ?? []).map((fileName, index): UploadedAccountDocument => ({
       id: `source-doc-${account.id}-${index}`,
       name: fileName,
@@ -3116,8 +3173,8 @@ function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount;
       affected: "Account profile and KYC",
       url: documentPreviewUrl(fileName, "Account source"),
     }));
-    setUploadedDocuments(nextIsDemoAccount ? seededAccountDocuments : nextMetadataDocuments);
-    setSignalProposals(nextIsDemoAccount ? seededDocumentProposals : []);
+    setUploadedDocuments(nextAccountDocuments.length > 0 ? nextAccountDocuments : nextMetadataDocuments);
+    setSignalProposals([]);
     setProposalResolutionDraft(null);
     setDocumentUploadError("");
     setQbrDraftReady(false);
@@ -3151,12 +3208,8 @@ function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount;
       const response = await fetch(`/api/accounts/${account.id}`, { headers: { "x-role": role } });
       const payload = await response.json();
       if (response.ok) {
-        onAccountUpdate({
-          ...account,
-          ...mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>),
-          currentWork: account.currentWork,
-          relationshipSignal: account.relationshipSignal,
-        });
+        upsertAccount(payload.data as CachedApiAccount);
+        onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
       }
     } catch {
       // The local card remains usable if refresh fails.
@@ -3522,11 +3575,21 @@ function ProfileTab({
   onResolveQueuedTask: (taskId: string) => void;
 }) {
   const { role } = useRole();
+  const { upsertAccount } = useAccountCache();
   const canEditProfile = role !== "EXECUTIVE";
-  const isDemoAccount = demoAccountIds.has(account.id);
   const accountMetadata = getAccountRuntimeMetadata(account);
   const primaryContactName = accountMetadata?.primaryContact || account.contactName;
-  const accountDerivedContacts: AccountContact[] = !isDemoAccount && primaryContactName && primaryContactName !== "Primary contact not set"
+  const accountPersistedContacts: AccountContact[] = (account.contacts ?? []).map((contact) => ({
+    id: contact.id,
+    name: contact.name,
+    designation: contact.designation,
+    location: contact.location,
+    timeZone: contact.timeZone,
+    email: contact.email,
+    mobile: contact.mobile,
+    hierarchyRank: contact.hierarchyRank,
+  }));
+  const accountDerivedContacts: AccountContact[] = accountPersistedContacts.length === 0 && primaryContactName && primaryContactName !== "Primary contact not set"
     ? [{
         id: `derived-contact-${account.id}`,
         name: primaryContactName,
@@ -3538,17 +3601,41 @@ function ProfileTab({
         hierarchyRank: 1,
       }]
     : [];
-  const baseContacts = isDemoAccount ? accountContacts : accountDerivedContacts;
-  const baseResources = isDemoAccount ? tkxelResources : [];
-  const metadataJourneyItems: JourneyItem[] = (accountMetadata?.journey ?? []).map((item) => ({
+  const baseContacts = accountPersistedContacts.length > 0 ? accountPersistedContacts : accountDerivedContacts;
+  const baseResources = (account.resources ?? []).map((resource) => ({
+    id: resource.id,
+    name: resource.name,
+    role: resource.role,
+    pod: resource.pod,
+    location: resource.location,
+    startDate: resource.startDate,
+  }));
+  const persistedUpcomingJourneyItems: JourneyItem[] = (account.journeyItems ?? [])
+    .filter((item) => item.status !== "COMPLETED" && item.status !== "DISMISSED")
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      type: item.type,
+      date: item.date,
+      detail: item.detail,
+    }));
+  const metadataJourneyItems: JourneyItem[] = persistedUpcomingJourneyItems.length === 0 ? (accountMetadata?.journey ?? []).map((item) => ({
     id: `metadata-${item.id}`,
     title: item.title,
     type: item.type,
     date: item.dueDate,
     detail: item.recurrence,
-  }));
-  const baseUpcomingJourneyItems = isDemoAccount ? upcomingJourneyItems : metadataJourneyItems;
-  const baseCompletedJourneyItems = isDemoAccount ? completedJourneyItems : [];
+  })) : [];
+  const baseUpcomingJourneyItems = persistedUpcomingJourneyItems.length > 0 ? persistedUpcomingJourneyItems : metadataJourneyItems;
+  const baseCompletedJourneyItems = (account.journeyItems ?? [])
+    .filter((item) => item.status === "COMPLETED")
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      type: item.type,
+      date: "Done",
+      detail: item.detail,
+    }));
   const [profileEditing, setProfileEditing] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
@@ -3562,6 +3649,8 @@ function ProfileTab({
     region: account.region,
     kamOwner: account.kamOwner,
     associateOwner: account.associateOwner,
+    currentWork: account.currentWork,
+    relationshipSignal: account.relationshipSignal,
     contractEnd: new Date(Date.now() + account.renewalDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
   }));
   const [journeyResolutionDraft, setJourneyResolutionDraft] = useState<TaskResolutionDraft | null>(null);
@@ -3645,6 +3734,8 @@ function ProfileTab({
       region: account.region,
       kamOwner: account.kamOwner,
       associateOwner: account.associateOwner,
+      currentWork: account.currentWork,
+      relationshipSignal: account.relationshipSignal,
       contractEnd: new Date(Date.now() + account.renewalDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
     });
     setProfileEditing(false);
@@ -3681,13 +3772,9 @@ function ProfileTab({
         renewalDays: daysUntil(profileDraft.contractEnd),
         kamOwner: profileDraft.kamOwner.trim() || account.kamOwner,
         associateOwner: profileDraft.associateOwner.trim() || account.associateOwner,
+        currentWork: profileDraft.currentWork.trim() || account.currentWork,
+        relationshipSignal: profileDraft.relationshipSignal.trim() || account.relationshipSignal,
       };
-
-      if (account.id.startsWith("v2-acct-")) {
-        onAccountUpdate(localUpdatedAccount);
-        setProfileEditing(false);
-        return;
-      }
 
       const response = await fetch(`/api/accounts/${account.id}`, {
         method: "PATCH",
@@ -3704,12 +3791,16 @@ function ProfileTab({
           country: profileDraft.country.trim(),
           region: profileDraft.region.trim(),
           kamOwnerName: profileDraft.kamOwner.trim() || undefined,
+          associateOwnerName: profileDraft.associateOwner.trim() || undefined,
+          deliveryModel: profileDraft.segment.trim() || undefined,
+          currentWork: profileDraft.currentWork.trim() || undefined,
+          relationshipSignal: profileDraft.relationshipSignal.trim() || undefined,
           contractEnd: profileDraft.contractEnd || undefined,
         }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Profile update failed");
-      upsertCachedApiAccount(role, payload.data as CachedApiAccount);
+      upsertAccount(payload.data as CachedApiAccount);
       const updated = mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>);
       onAccountUpdate({
         ...localUpdatedAccount,
@@ -3740,7 +3831,8 @@ function ProfileTab({
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Icon upload failed");
-      onAccountUpdate({ ...account, logoUrl: payload.data?.logoUrl ?? account.logoUrl });
+      upsertAccount(payload.data as CachedApiAccount);
+      onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Icon upload failed");
     } finally {
@@ -3752,9 +3844,32 @@ function ProfileTab({
     setJourneyResolutionDraft({ taskId: itemId, action, reason: "" });
   }
 
-  function confirmJourneyResolution() {
+  async function confirmJourneyResolution() {
     const reason = journeyResolutionDraft?.reason.trim();
     if (!journeyResolutionDraft || !reason) return;
+    const persistedItem = account.journeyItems?.find((item) => item.id === journeyResolutionDraft.taskId);
+    if (persistedItem) {
+      try {
+        const response = await fetch(`/api/accounts/${account.id}/journey-items`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "x-role": role },
+          body: JSON.stringify({
+            id: persistedItem.id,
+            status: journeyResolutionDraft.action === "Done" ? "COMPLETED" : "DISMISSED",
+            dismissReason: journeyResolutionDraft.action === "Dismiss" ? reason : undefined,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Journey update failed");
+        upsertAccount(payload.data as CachedApiAccount);
+        onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
+        setJourneyResolutionDraft(null);
+        return;
+      } catch (error) {
+        setProfileError(error instanceof Error ? error.message : "Journey update failed");
+        return;
+      }
+    }
     setResolvedJourneyItems((items) => ({
       ...items,
       [journeyResolutionDraft.taskId]: {
@@ -3768,101 +3883,143 @@ function ProfileTab({
     setJourneyResolutionDraft(null);
   }
 
-  function saveContact() {
+  async function saveContact() {
     if (!contactDraft.name.trim() || !contactDraft.email.trim() || !contactDraft.designation.trim()) return;
-    setCustomContacts((contacts) => [
-      ...contacts,
-      {
-        id: `custom-contact-${Date.now()}`,
-        name: contactDraft.name.trim(),
-        designation: contactDraft.designation.trim(),
-        location: contactDraft.location.trim() || "Location not set",
-        timeZone: contactDraft.timeZone.trim() || "Time zone not set",
-        email: contactDraft.email.trim(),
-        mobile: contactDraft.mobile.trim() || "Mobile not set",
-        hierarchyRank: Number(contactDraft.hierarchyRank) || baseContacts.length + contacts.length + 1,
-      },
-    ]);
-    setContactDraft({
-      name: "",
-      email: "",
-      mobile: "",
-      designation: "",
-      location: "",
-      timeZone: "",
-      hierarchyRank: "",
-    });
-    setContactDialogOpen(false);
-  }
-
-  function saveResource() {
-    if (!resourceDraft.name.trim() || !resourceDraft.role.trim() || !resourceDraft.pod.trim()) return;
-    setCustomResources((resources) => [
-      ...resources,
-      {
-        id: `custom-resource-${Date.now()}`,
-        name: resourceDraft.name.trim(),
-        role: resourceDraft.role.trim(),
-        pod: resourceDraft.pod.trim(),
-        location: resourceDraft.location.trim() || "Location not set",
-        startDate: resourceDraft.startDate.trim() || "Start date not set",
-      },
-    ]);
-    setResourceDraft({
-      name: "",
-      role: "",
-      pod: "",
-      location: "",
-      startDate: "",
-    });
-    setResourceDialogOpen(false);
-  }
-
-  function handleContactDelete(contactId: string) {
-    if (role === "KAM") {
-      setDeletedContactIds((ids) => new Set(ids).add(contactId));
-      setContactDeletionRequests((requests) => {
-        const next = new Set(requests);
-        next.delete(contactId);
-        return next;
+    setProfileError("");
+    try {
+      const response = await fetch(`/api/accounts/${account.id}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-role": role },
+        body: JSON.stringify({
+          name: contactDraft.name.trim(),
+          title: contactDraft.designation.trim(),
+          email: contactDraft.email.trim(),
+          phone: contactDraft.mobile.trim() || undefined,
+          location: contactDraft.location.trim() || undefined,
+          timeZone: contactDraft.timeZone.trim() || undefined,
+          hierarchyRank: Number(contactDraft.hierarchyRank) || baseContacts.length + customContacts.length + 1,
+          isPrimary: sortedContacts.length === 0,
+        }),
       });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Contact save failed");
+      upsertAccount(payload.data as CachedApiAccount);
+      onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
+      setContactDraft({
+        name: "",
+        email: "",
+        mobile: "",
+        designation: "",
+        location: "",
+        timeZone: "",
+        hierarchyRank: "",
+      });
+      setContactDialogOpen(false);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Contact save failed");
+    }
+  }
+
+  async function saveResource() {
+    if (!resourceDraft.name.trim() || !resourceDraft.role.trim() || !resourceDraft.pod.trim()) return;
+    setProfileError("");
+    try {
+      const response = await fetch(`/api/accounts/${account.id}/resources`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-role": role },
+        body: JSON.stringify({
+          name: resourceDraft.name.trim(),
+          role: resourceDraft.role.trim(),
+          pod: resourceDraft.pod.trim(),
+          location: resourceDraft.location.trim() || undefined,
+          startDate: resourceDraft.startDate.trim() || undefined,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Resource save failed");
+      upsertAccount(payload.data as CachedApiAccount);
+      onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
+      setResourceDraft({
+        name: "",
+        role: "",
+        pod: "",
+        location: "",
+        startDate: "",
+      });
+      setResourceDialogOpen(false);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Resource save failed");
+    }
+  }
+
+  async function handleContactDelete(contactId: string) {
+    if (role === "KAM") {
+      try {
+        const response = await fetch(`/api/accounts/${account.id}/contacts?id=${encodeURIComponent(contactId)}`, {
+          method: "DELETE",
+          headers: { "x-role": role },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Contact delete failed");
+        upsertAccount(payload.data as CachedApiAccount);
+        onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
+      } catch (error) {
+        setProfileError(error instanceof Error ? error.message : "Contact delete failed");
+      }
       return;
     }
     setContactDeletionRequests((requests) => new Set(requests).add(contactId));
   }
 
-  function handleResourceDelete(resourceId: string) {
+  async function handleResourceDelete(resourceId: string) {
     if (role === "KAM") {
-      setDeletedResourceIds((ids) => new Set(ids).add(resourceId));
-      setResourceDeletionRequests((requests) => {
-        const next = new Set(requests);
-        next.delete(resourceId);
-        return next;
-      });
+      try {
+        const response = await fetch(`/api/accounts/${account.id}/resources?id=${encodeURIComponent(resourceId)}`, {
+          method: "DELETE",
+          headers: { "x-role": role },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Resource delete failed");
+        upsertAccount(payload.data as CachedApiAccount);
+        onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
+      } catch (error) {
+        setProfileError(error instanceof Error ? error.message : "Resource delete failed");
+      }
       return;
     }
     setResourceDeletionRequests((requests) => new Set(requests).add(resourceId));
   }
 
-  function saveJourneyItem() {
+  async function saveJourneyItem() {
     if (!journeyDraft.title.trim() || !journeyDraft.date || !journeyDraft.detail.trim()) return;
-    setCustomJourneyItems((items) => [
-      ...items,
-      {
-        id: `custom-journey-${Date.now()}`,
-        title: journeyDraft.title.trim(),
-        type: journeyDraft.type,
-        date: displayDateFromInput(journeyDraft.date),
-        detail: journeyDraft.detail.trim(),
-      },
-    ]);
-    setJourneyDraft({
-      type: "To-do",
-      title: "",
-      date: "",
-      detail: "",
-    });
-    setJourneyDialogOpen(false);
+    setProfileError("");
+    try {
+      const response = await fetch(`/api/accounts/${account.id}/journey-items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-role": role },
+        body: JSON.stringify({
+          title: journeyDraft.title.trim(),
+          type: journeyDraft.type,
+          dateLabel: displayDateFromInput(journeyDraft.date),
+          detail: journeyDraft.detail.trim(),
+          status: "UPCOMING",
+          sortOrder: visibleUpcomingItems.length + 1,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Journey item save failed");
+      upsertAccount(payload.data as CachedApiAccount);
+      onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
+      setJourneyDraft({
+        type: "To-do",
+        title: "",
+        date: "",
+        detail: "",
+      });
+      setJourneyDialogOpen(false);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Journey item save failed");
+    }
   }
 
   return (
@@ -3943,6 +4100,14 @@ function ProfileTab({
             <label>
               <FieldLabel>Contract end</FieldLabel>
               <input type="date" value={profileDraft.contractEnd} onChange={(event) => updateProfileDraft("contractEnd", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label className="md:col-span-2">
+              <FieldLabel>Current work</FieldLabel>
+              <input value={profileDraft.currentWork} onChange={(event) => updateProfileDraft("currentWork", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label className="md:col-span-2">
+              <FieldLabel>Relationship signal</FieldLabel>
+              <input value={profileDraft.relationshipSignal} onChange={(event) => updateProfileDraft("relationshipSignal", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
             </label>
             <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2">
               {profileError ? <p className="mr-auto text-[12px] font-bold text-[#B33D32]">{profileError}</p> : null}
@@ -6215,13 +6380,15 @@ export function PortfolioPage() {
   const searchParams = useSearchParams();
   const { role } = useRole();
   const { fireNotification } = useNotifications();
+  const {
+    accounts: apiAccountRecords,
+    loading: accountHydrationPending,
+    upsertAccount,
+  } = useAccountCache();
   const [query, setQuery] = useState("");
   const [healthFilter, setHealthFilter] = useState<PortfolioHealth | "ALL">("ALL");
   const [selectedAccount, setSelectedAccount] = useState<PortfolioAccount | null>(null);
   const [selectedAccountTab, setSelectedAccountTab] = useState<AccountWorkspaceTab>("overview");
-  const [createdAccounts, setCreatedAccounts] = useState<PortfolioAccount[]>([]);
-  const [persistedAccountsLoaded, setPersistedAccountsLoaded] = useState(false);
-  const [accountOverrides, setAccountOverrides] = useState<Record<string, PortfolioAccount>>({});
   const [accountCreationRequests, setAccountCreationRequests] = useState<PendingAccountCreationRequest[]>([]);
   const [accountCreationRequestsLoaded, setAccountCreationRequestsLoaded] = useState(false);
   const [selectedAccountCreationRequestId, setSelectedAccountCreationRequestId] = useState<string | null>(null);
@@ -6254,9 +6421,7 @@ export function PortfolioPage() {
   const [suggestionDismissalDraft, setSuggestionDismissalDraft] = useState<SuggestionDismissalDraft | null>(null);
 
   const isExecutive = role === "EXECUTIVE" || role === "ADMIN" || role === "MANAGER";
-  const demoPortfolioAccounts = portfolioAccounts.map((account) => accountOverrides[account.id] ?? account);
-  const demoAssociateAccounts = associatePortfolio.map((account) => accountOverrides[account.id] ?? account);
-  const roleAccounts = role === "ASSOCIATE" ? demoAssociateAccounts : [...createdAccounts, ...demoPortfolioAccounts];
+  const roleAccounts = useMemo(() => mapApiAccountsToPortfolioAccounts(apiAccountRecords), [apiAccountRecords]);
   const visibleAccounts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return roleAccounts.filter((account) => {
@@ -6272,9 +6437,9 @@ export function PortfolioPage() {
 
   const totalArr = visibleAccounts.reduce((sum, account) => sum + account.arr, 0);
   const upcomingRenewals = visibleAccounts.filter((account) => account.renewalDays <= 90).length;
-  const accountHydrationPending = role !== "ASSOCIATE" && !persistedAccountsLoaded;
   const sourceFileNames = sourceDocuments.map((document) => document.fileName);
   const routeFocus = searchParams.get("focus");
+  const routeTarget = searchParams.get("target") ?? searchParams.get("account");
   const visibleAccountCreationRequests = role === "ASSOCIATE"
     ? accountCreationRequests.filter((request) => request.creatorRole === "ASSOCIATE" || request.submittedBy === "Aisha Khan" || request.id.endsWith("-associate"))
     : accountCreationRequests;
@@ -6285,8 +6450,6 @@ export function PortfolioPage() {
     null;
 
   function updatePortfolioAccount(updatedAccount: PortfolioAccount) {
-    setCreatedAccounts((accounts) => accounts.map((account) => account.id === updatedAccount.id ? updatedAccount : account));
-    setAccountOverrides((accounts) => ({ ...accounts, [updatedAccount.id]: updatedAccount }));
     setSelectedAccount((account) => account?.id === updatedAccount.id ? updatedAccount : account);
   }
 
@@ -6332,6 +6495,12 @@ export function PortfolioPage() {
     if (routeFocus === "pending-account-draft") router.push("/portfolio");
   }
 
+  useEffect(() => {
+    if (!selectedAccount) return;
+    const refreshedAccount = roleAccounts.find((account) => account.id === selectedAccount.id);
+    if (refreshedAccount && refreshedAccount !== selectedAccount) setSelectedAccount(refreshedAccount);
+  }, [roleAccounts, selectedAccount]);
+
   async function approveAccountCreationRequest(request: PendingAccountCreationRequest) {
     let nextAccount = createPortfolioAccountFromDraft(request.draft);
     const renewalDate = new Date(request.draft.contractRenewal);
@@ -6352,6 +6521,10 @@ export function PortfolioPage() {
         country: nextAccount.country,
         arr: nextAccount.arr,
         kamOwnerName: request.draft.kamOwner.trim() || nextAccount.kamOwner,
+        associateOwnerName: request.draft.associateOwner.trim() || nextAccount.associateOwner,
+        deliveryModel: nextAccount.deliveryModel,
+        currentWork: nextAccount.currentWork,
+        relationshipSignal: nextAccount.relationshipSignal,
         contractEnd: contractEnd.toISOString(),
       }),
     });
@@ -6359,14 +6532,11 @@ export function PortfolioPage() {
     if (!response.ok) {
       throw new Error(payload.error || "Account approval failed");
     }
-    upsertCachedApiAccount("KAM", payload.data as CachedApiAccount);
+    upsertAccount(payload.data as CachedApiAccount);
 
     nextAccount = {
       ...nextAccount,
       ...mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>),
-      contactName: nextAccount.contactName,
-      currentWork: nextAccount.currentWork,
-      relationshipSignal: nextAccount.relationshipSignal,
     };
     saveAccountRuntimeMetadata(nextAccount, {
       accountId: nextAccount.id,
@@ -6376,7 +6546,6 @@ export function PortfolioPage() {
       kycSections: request.kycSections ?? [],
       journey: request.journey ?? [],
     });
-    setCreatedAccounts((accounts) => [nextAccount, ...accounts.filter((account) => account.id !== nextAccount.id)]);
     setAccountCreationRequests((requests) => requests.filter((item) => item.id !== request.id));
     setSelectedAccountCreationRequestId(null);
     setPendingAccountReviewOpen(false);
@@ -6428,7 +6597,7 @@ export function PortfolioPage() {
       });
     }
 
-    const watchedAccount = portfolioAccounts.find((account) => account.id === "v2-acct-maersk");
+    const watchedAccount = roleAccounts.find((account) => account.name.toLowerCase() === "maersk");
     if (watchedAccount && watchedAccount.health !== "HEALTHY") {
       fireNotification({
         id: `score-drop-${watchedAccount.id}`,
@@ -6440,37 +6609,7 @@ export function PortfolioPage() {
         createdAt: "Today",
       });
     }
-  }, [accountCreationRequests, fireNotification, role]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadPersistedAccounts() {
-      const cachedAccounts = readCachedApiAccounts(role);
-      if (cachedAccounts) {
-        setCreatedAccounts(mapApiAccountsToCreatedPortfolioAccounts(cachedAccounts));
-        setPersistedAccountsLoaded(true);
-      } else {
-        setPersistedAccountsLoaded(false);
-      }
-      try {
-        const response = await fetch("/api/accounts", { headers: { "x-role": role } });
-        const payload = await response.json();
-        if (!response.ok) return;
-        const apiAccounts = Array.isArray(payload.data) ? payload.data as CachedApiAccount[] : [];
-        writeCachedApiAccounts(role, apiAccounts);
-        const accounts = mapApiAccountsToCreatedPortfolioAccounts(apiAccounts);
-        if (!cancelled) setCreatedAccounts(accounts);
-      } catch {
-        if (!cancelled && !cachedAccounts) setCreatedAccounts((accounts) => accounts);
-      } finally {
-        if (!cancelled) setPersistedAccountsLoaded(true);
-      }
-    }
-    void loadPersistedAccounts();
-    return () => {
-      cancelled = true;
-    };
-  }, [role]);
+  }, [accountCreationRequests, fireNotification, role, roleAccounts]);
 
   useEffect(() => {
     if (routeFocus === "pending-account-draft") {
@@ -6479,6 +6618,23 @@ export function PortfolioPage() {
       return;
     }
   }, [routeFocus]);
+
+  useEffect(() => {
+    if (!routeTarget || routeFocus === "pending-account-draft") return;
+    const normalizedTarget = routeTarget.replace(/^acc-/, "").toLowerCase();
+    const account = roleAccounts.find((item) => (
+      item.id === routeTarget ||
+      item.name.toLowerCase().replace(/\s+/g, "-") === normalizedTarget
+    ));
+    if (!account) return;
+
+    setQuery("");
+    setHealthFilter("ALL");
+    setSelectedAccountCreationRequestId(null);
+    setPendingAccountReviewOpen(false);
+    setSelectedAccountTab("overview");
+    setSelectedAccount(account);
+  }, [roleAccounts, routeFocus, routeTarget]);
 
   useEffect(() => {
     function openFromNotification(event: Event) {
@@ -6494,7 +6650,7 @@ export function PortfolioPage() {
 
       const accountTarget = target.searchParams.get("target") ?? target.searchParams.get("account");
       if (!accountTarget) return;
-      const account = [...createdAccounts, ...portfolioAccounts, ...associatePortfolio].find((item) => (
+      const account = roleAccounts.find((item) => (
         item.id === accountTarget || item.name.toLowerCase().replace(/\s+/g, "-") === accountTarget.replace(/^acc-/, "")
       ));
       if (!account) return;
@@ -6504,7 +6660,7 @@ export function PortfolioPage() {
 
     window.addEventListener("kam:notification-selected", openFromNotification);
     return () => window.removeEventListener("kam:notification-selected", openFromNotification);
-  }, [createdAccounts]);
+  }, [roleAccounts]);
 
   function resetOnboardingState() {
     setOnboardingStage("source-upload");
@@ -6909,7 +7065,7 @@ export function PortfolioPage() {
   function createPortfolioAccountFromDraft(draftInput: AccountDraft = accountDraft): PortfolioAccount {
     const arr = parseArrValue(draftInput.arr);
     const name = draftInput.name.trim() || "New account";
-    const [countryPart, regionPart] = accountDraft.location.split("·").map((part) => part.trim());
+    const [countryPart, regionPart] = draftInput.location.split(/\s*[·-]\s*/).map((part) => part.trim());
     return {
       id: `v2-acct-created-${Date.now()}`,
       name,
@@ -6947,18 +7103,19 @@ export function PortfolioPage() {
             country: nextAccount.country,
             arr: nextAccount.arr,
             kamOwnerName: accountDraft.kamOwner.trim() || nextAccount.kamOwner,
+            associateOwnerName: accountDraft.associateOwner.trim() || nextAccount.associateOwner,
+            deliveryModel: nextAccount.deliveryModel,
+            currentWork: nextAccount.currentWork,
+            relationshipSignal: nextAccount.relationshipSignal,
             contractEnd: new Date(Date.now() + nextAccount.renewalDays * 24 * 60 * 60 * 1000).toISOString(),
           }),
         });
         const payload = await response.json();
         if (response.ok) {
-          upsertCachedApiAccount(role, payload.data as CachedApiAccount);
+          upsertAccount(payload.data as CachedApiAccount);
           nextAccount = {
             ...nextAccount,
             ...mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>),
-            contactName: nextAccount.contactName,
-            currentWork: nextAccount.currentWork,
-            relationshipSignal: nextAccount.relationshipSignal,
           };
           saveAccountRuntimeMetadata(nextAccount, {
             accountId: nextAccount.id,
@@ -6968,9 +7125,12 @@ export function PortfolioPage() {
             kycSections: onboardingKycSections,
             journey: onboardingJourney,
           });
+        } else {
+          throw new Error(payload.error || "Account creation failed");
         }
-      } catch {
-        // Keep the in-session account available if persistence is temporarily unavailable.
+      } catch (error) {
+        setOnboardingAssistantError(error instanceof Error ? error.message : "Account creation failed");
+        return;
       }
       saveAccountRuntimeMetadata(nextAccount, {
         accountId: nextAccount.id,
@@ -6980,7 +7140,6 @@ export function PortfolioPage() {
         kycSections: onboardingKycSections,
         journey: onboardingJourney,
       });
-      setCreatedAccounts((accounts) => [nextAccount, ...accounts]);
       setOnboardingAssistantMessages((messages) => [`Created account: ${nextAccount.name}.`, ...messages]);
       fireNotification({
         id: `account-created-${nextAccount.id}`,
