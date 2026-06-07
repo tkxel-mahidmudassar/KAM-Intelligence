@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     if (denied) return denied;
 
     const body = await req.json();
-    const { name, industry, region, country, arr, kamId, contractStart, contractEnd } = body;
+    const { name, industry, segment, website, logoUrl, region, country, arr, kamId, contractStart, contractEnd } = body;
 
     if (!name) return badRequest("name is required");
 
@@ -56,6 +56,9 @@ export async function POST(req: NextRequest) {
       data: {
         name,
         industry,
+        segment,
+        website,
+        logoUrl,
         region,
         country,
         arr: arr ?? 0,

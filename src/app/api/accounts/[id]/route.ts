@@ -100,6 +100,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       data: {
         name:     body.name,
         industry: body.industry,
+        segment:  body.segment,
+        website:  body.website,
+        logoUrl:  body.logoUrl,
         region:   body.region,
         country:  body.country,
         arr:      body.arr,

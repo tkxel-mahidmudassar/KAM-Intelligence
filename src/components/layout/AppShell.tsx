@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, BriefcaseBusiness, Home, LogOut, Settings, UserRound } from "lucide-react";
+import { Bell, BriefcaseBusiness, Home, LogOut, Settings, UserRound, X } from "lucide-react";
 import { RoleBar } from "@/components/layout/RoleBar";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
@@ -17,11 +17,28 @@ function isAuthRoute(pathname: string) {
   return pathname === "/login" || pathname === "/forgot-password";
 }
 
+function formatNotificationTime(createdAtIso?: string, fallback?: string) {
+  const date = createdAtIso ? new Date(createdAtIso) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return fallback === "Today" || fallback === "Now" ? new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : fallback ?? "";
+  }
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfNotificationDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const dayDiff = Math.round((startOfToday - startOfNotificationDay) / (1000 * 60 * 60 * 24));
+  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+  if (dayDiff === 0) return `Today, ${time}`;
+  if (dayDiff === 1) return `Yesterday, ${time}`;
+  return `${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { userId, userName, userEmail, clearUser, hydrated } = useRole();
-  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, markRead, markAllRead, dismissNotification } = useNotifications();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
@@ -98,8 +115,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {unreadCount > 0 ? <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#D66A4B]" /> : null}
                 </button>
                 {notificationsOpen ? (
-                  <div className="absolute right-0 top-11 z-50 w-[340px] rounded-3xl border border-[#E2D8CC] bg-[#FFF9EF] p-3 shadow-[0_24px_70px_-38px_rgba(31,39,34,0.75)]">
-                    <div className="mb-2 flex items-center justify-between">
+                  <div className="absolute right-0 top-11 z-50 flex max-h-[min(520px,calc(100vh-5.5rem))] w-[340px] flex-col rounded-3xl border border-[#E2D8CC] bg-[#FFF9EF] p-3 shadow-[0_24px_70px_-38px_rgba(31,39,34,0.75)]">
+                    <div className="mb-2 flex shrink-0 items-center justify-between">
                       <p className="text-[14px] font-black text-[#25352E]">Notifications</p>
                       <div className="flex items-center gap-2">
                         {notifications.length > 0 ? (
@@ -112,27 +129,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         </span>
                       </div>
                     </div>
-                    {notifications.length > 0 ? <div className="space-y-2">
+                    {notifications.length > 0 ? <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
                       {notifications.map((item) => (
-                        <button
+                        <article
                           key={item.id}
-                          type="button"
-                          onClick={() => {
-                            setNotificationsOpen(false);
-                            markRead(item.id);
-                            window.dispatchEvent(new CustomEvent("kam:notification-selected", { detail: item }));
-                            router.push(item.href);
-                          }}
-                          className={`block w-full rounded-2xl border p-3 text-left transition hover:border-[#BBAA96] hover:bg-[#F6EFE4] ${
+                          className={`rounded-2xl border p-3 transition hover:border-[#BBAA96] hover:bg-[#F6EFE4] ${
                             item.read ? "border-[#E8DDCF] bg-[#FFFCF6]/62" : "border-[#D4B88F] bg-[#FFF8ED]"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <p className="text-[13px] font-black text-[#25352E]">{item.title}</p>
-                            <span className="shrink-0 text-[10px] font-black text-[#9A8A79]">{item.createdAt}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNotificationsOpen(false);
+                                markRead(item.id);
+                                window.dispatchEvent(new CustomEvent("kam:notification-selected", { detail: item }));
+                                router.push(item.href);
+                              }}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <p className="text-[13px] font-black text-[#25352E]">{item.title}</p>
+                              <p className="mt-1 text-[12px] font-semibold leading-snug text-[#75685A]">{item.detail}</p>
+                            </button>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <span className="text-[10px] font-black text-[#9A8A79]">{formatNotificationTime(item.createdAtIso, item.createdAt)}</span>
+                              <button
+                                type="button"
+                                aria-label={`Dismiss ${item.title}`}
+                                onClick={() => dismissNotification(item.id)}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[#8A7A69] transition hover:bg-[#EFE4D5] hover:text-[#25352E]"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          <p className="mt-1 text-[12px] font-semibold leading-snug text-[#75685A]">{item.detail}</p>
-                        </button>
+                        </article>
                       ))}
                     </div> : (
                       <div className="rounded-2xl border border-[#E8DDCF] bg-[#FFFCF6] p-3 text-[12px] font-bold text-[#75685A]">

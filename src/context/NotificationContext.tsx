@@ -14,13 +14,16 @@ export interface AppNotification {
   source: string;
   severity: NotificationSeverity;
   createdAt: string;
+  createdAtIso?: string;
   read: boolean;
+  dismissed?: boolean;
 }
 
 type NotificationInput = Omit<AppNotification, "id" | "severity" | "createdAt" | "read"> & {
   id?: string;
   severity?: NotificationSeverity;
   createdAt?: string;
+  createdAtIso?: string;
 };
 
 interface NotificationContextValue {
@@ -29,6 +32,7 @@ interface NotificationContextValue {
   fireNotification: (notification: NotificationInput) => void;
   markRead: (notificationId: string) => void;
   markAllRead: () => void;
+  dismissNotification: (notificationId: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -57,16 +61,6 @@ function baselineNotifications(): AppNotification[] {
     .slice(0, 4);
 
   const notifications: AppNotification[] = [
-    {
-      id: "account-draft-pending-novagrid",
-      title: "NovaGrid account draft needs review",
-      detail: "Aisha submitted a new account creation package.",
-      href: "/portfolio?focus=pending-account-draft",
-      source: "account-creation-approval",
-      severity: "warning",
-      createdAt: "Today",
-      read: false,
-    },
     {
       id: "playbook-project-health-parsed",
       title: "Project Health playbook parsed",
@@ -123,10 +117,21 @@ function baselineNotifications(): AppNotification[] {
 
 function mergeNotifications(stored: AppNotification[], baseline: AppNotification[]) {
   const byId = new Map<string, AppNotification>();
-  baseline.forEach((item) => byId.set(item.id, item));
-  stored.forEach((item) => {
+  baseline.forEach((item) => byId.set(item.id, { ...item, createdAtIso: item.createdAtIso ?? new Date().toISOString() }));
+  stored.filter((item) => item.id !== "account-draft-pending-novagrid").forEach((item) => {
     const defaultItem = byId.get(item.id);
-    byId.set(item.id, defaultItem ? { ...defaultItem, read: item.read, createdAt: item.createdAt || defaultItem.createdAt } : item);
+    byId.set(
+      item.id,
+      defaultItem
+        ? {
+            ...defaultItem,
+            read: item.read,
+            dismissed: item.dismissed,
+            createdAt: item.createdAt || defaultItem.createdAt,
+            createdAtIso: item.createdAtIso ?? defaultItem.createdAtIso ?? new Date().toISOString(),
+          }
+        : { ...item, createdAtIso: item.createdAtIso ?? new Date().toISOString() },
+    );
   });
   return Array.from(byId.values());
 }
@@ -164,7 +169,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         source: notification.source,
         severity: notification.severity ?? "info",
         createdAt: notification.createdAt ?? existing?.createdAt ?? "Now",
+        createdAtIso: notification.createdAtIso ?? existing?.createdAtIso ?? new Date().toISOString(),
         read: existing?.read ?? false,
+        dismissed: false,
       };
       return [nextNotification, ...current.filter((item) => item.id !== id)];
     });
@@ -178,13 +185,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setNotifications((current) => current.map((item) => ({ ...item, read: true })));
   }, []);
 
+  const dismissNotification = useCallback((notificationId: string) => {
+    setNotifications((current) => current.map((item) => (
+      item.id === notificationId ? { ...item, read: true, dismissed: true } : item
+    )));
+  }, []);
+
+  const activeNotifications = useMemo(() => notifications.filter((item) => !item.dismissed), [notifications]);
+
   const value = useMemo<NotificationContextValue>(() => ({
-    notifications,
-    unreadCount: notifications.filter((item) => !item.read).length,
+    notifications: activeNotifications,
+    unreadCount: activeNotifications.filter((item) => !item.read).length,
     fireNotification,
     markRead,
     markAllRead,
-  }), [fireNotification, markAllRead, markRead, notifications]);
+    dismissNotification,
+  }), [activeNotifications, dismissNotification, fireNotification, markAllRead, markRead]);
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 }

@@ -4,6 +4,7 @@ export interface PortfolioAccount {
   id: string;
   name: string;
   industry: string;
+  segment?: string;
   region: string;
   country: string;
   arr: number;

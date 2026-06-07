@@ -138,6 +138,7 @@ model Account {
   id              String        @id @default(uuid())
   name            String
   industry        String?
+  segment         String?
   region          String?
   country         String?
   logoUrl         String?

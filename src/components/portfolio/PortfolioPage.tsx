@@ -169,6 +169,11 @@ interface DocumentSignalProposal {
   currentValue: string;
   proposedValue: string;
   status: "Needs review" | "Routed to KAM" | "Approved" | "Denied";
+  kind?: "profile" | "score" | "kyc" | "risk" | "opportunity" | "action";
+  kpiKey?: string;
+  confidence?: number;
+  evidence?: string;
+  documentId?: string;
   associateReason?: string;
   kamReason?: string;
   latestReason?: string;
@@ -212,12 +217,27 @@ interface DocumentUploadDraft {
   type: string;
   fileName: string;
   fileUrl: string;
+  file?: File;
+}
+
+interface AccountProfileDraft {
+  name: string;
+  industry: string;
+  segment: string;
+  arr: string;
+  website: string;
+  country: string;
+  region: string;
+  kamOwner: string;
+  associateOwner: string;
+  contractEnd: string;
 }
 
 type OnboardingStage = "source-upload" | "workspace";
 type AccountOnboardingStep = "profile" | "kyc" | "journey" | "review";
 type AccountWorkspaceTab = "overview" | "profile" | "documents";
 type OnboardingSuggestionStatus = "Pending" | "Accepted" | "Dismissed";
+const LS_ACCOUNT_CREATION_REQUESTS = "kam_v2_account_creation_requests";
 type OnboardingStepStatus = "Done" | "Active" | "Pending";
 
 interface AccountDraft {
@@ -297,6 +317,7 @@ interface PendingAccountCreationRequest {
   id: string;
   submittedBy: string;
   submittedAt: string;
+  status?: "Draft" | "Submitted to KAM";
   associateReason: string;
   draft: AccountDraft;
   sourceFiles: string[];
@@ -1406,6 +1427,46 @@ function parseArrValue(value: string) {
   return Math.round(numeric);
 }
 
+function daysUntil(dateValue?: string | null) {
+  if (!dateValue) return 180;
+  const time = new Date(dateValue).getTime();
+  if (Number.isNaN(time)) return 180;
+  return Math.max(0, Math.ceil((time - Date.now()) / (1000 * 60 * 60 * 24)));
+}
+
+function healthScoreFromAccount(account: Record<string, unknown>, health: PortfolioHealth) {
+  const scores = Array.isArray(account.kamScores) ? account.kamScores as Array<Record<string, unknown>> : [];
+  const latestScore = Number(scores[0]?.overall);
+  if (Number.isFinite(latestScore)) return Math.round(latestScore);
+  if (health === "CRITICAL") return 35;
+  if (health === "AT_RISK") return 58;
+  return 82;
+}
+
+function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): PortfolioAccount {
+  const health = String(account.health ?? "HEALTHY") as PortfolioHealth;
+  const kam = account.kam as { name?: string } | undefined;
+  return {
+    id: String(account.id),
+    name: String(account.name ?? "New account"),
+    industry: String(account.industry ?? "Industry not set"),
+    segment: String(account.segment ?? ""),
+    region: String(account.region ?? "Region not set"),
+    country: String(account.country ?? "Country not set"),
+    arr: Number(account.arr ?? 0),
+    health,
+    healthScore: healthScoreFromAccount(account, health),
+    renewalDays: daysUntil(account.contractEnd as string | null | undefined),
+    kamOwner: kam?.name ?? "KAM not set",
+    associateOwner: kam?.name ?? "Account owner not set",
+    contactName: "Primary contact not set",
+    logoUrl: typeof account.logoUrl === "string" ? account.logoUrl : undefined,
+    deliveryModel: String(account.segment ?? "Delivery model not set"),
+    currentWork: "Account setup in progress",
+    relationshipSignal: "Review latest account documents",
+  };
+}
+
 const taskTypeTone: Record<TaskType, string> = {
   Meeting: "border-[#B7D8C3] bg-[#EEF8F1] text-[#23633E]",
   QBR: "border-[#DEC997] bg-[#FFF7E4] text-[#8A5C16]",
@@ -1446,6 +1507,7 @@ function documentPreviewUrl(name: string, type: string) {
 }
 
 function AccountLogo({ account, size = "md" }: { account: PortfolioAccount; size?: "md" | "lg" }) {
+  const initials = account.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   return (
     <div
       className={`flex shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[#E7DED1] bg-white shadow-[0_12px_22px_-18px_rgba(36,27,16,0.68)] ${
@@ -1463,7 +1525,9 @@ function AccountLogo({ account, size = "md" }: { account: PortfolioAccount; size
             event.currentTarget.style.opacity = "0";
           }}
         />
-      ) : null}
+      ) : (
+        <span className="text-[13px] font-black text-[#25352E]">{initials}</span>
+      )}
     </div>
   );
 }
@@ -2902,7 +2966,7 @@ function UploadDocumentDialog({
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (!file) return;
-                  onDraftChange({ ...draft, fileName: file.name, fileUrl: URL.createObjectURL(file) });
+                  onDraftChange({ ...draft, fileName: file.name, fileUrl: URL.createObjectURL(file), file });
                 }}
               />
               {draft.fileName ? <p className="mt-3 text-[13px] font-black text-[#1F2722]">{draft.fileName}</p> : null}
@@ -2934,11 +2998,13 @@ function UploadDocumentDialog({
   );
 }
 
-function DocumentsTab({ account }: { account: PortfolioAccount }) {
+function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount; onAccountUpdate: (account: PortfolioAccount) => void }) {
   const { role } = useRole();
   const [uploadedDocuments, setUploadedDocuments] = useState<UploadedAccountDocument[]>(seededAccountDocuments);
   const [signalProposals, setSignalProposals] = useState<DocumentSignalProposal[]>(seededDocumentProposals);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [documentUploading, setDocumentUploading] = useState(false);
+  const [documentUploadError, setDocumentUploadError] = useState("");
   const [qbrOpen, setQbrOpen] = useState(false);
   const [qbrDraftReady, setQbrDraftReady] = useState(false);
   const [qbrDeckUrl, setQbrDeckUrl] = useState("");
@@ -2962,9 +3028,123 @@ function DocumentsTab({ account }: { account: PortfolioAccount }) {
   const proposalUnderReview = proposalResolutionDraft ? signalProposals.find((proposal) => proposal.id === proposalResolutionDraft.proposalId) : undefined;
   const recentDocuments = [...uploadedDocuments].sort((a, b) => b.uploadedAtMs - a.uploadedAtMs);
 
-  function saveUploadedDocument() {
+  function apiDocumentType(type: string) {
+    const normalized = type.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+    if (["CONTRACT", "SOW", "MSA", "NDA", "PROPOSAL", "QBR_DECK", "OTHER"].includes(normalized)) return normalized;
+    return "OTHER";
+  }
+
+  function impactProposalToDocumentProposal(proposal: Record<string, unknown>, sourceDocument: string, documentId: string): DocumentSignalProposal {
+    return {
+      id: String(proposal.id ?? `proposal-${Date.now()}`),
+      sourceDocument,
+      field: String(proposal.field ?? "Document finding"),
+      currentValue: String(proposal.currentValue ?? "Current account value"),
+      proposedValue: String(proposal.proposedValue ?? ""),
+      status: proposal.status === "APPROVED" ? "Approved" : proposal.status === "REJECTED" ? "Denied" : "Needs review",
+      kind: proposal.kind as DocumentSignalProposal["kind"],
+      kpiKey: proposal.kpiKey ? String(proposal.kpiKey) : undefined,
+      confidence: Number(proposal.confidence ?? 0),
+      evidence: proposal.evidence ? String(proposal.evidence) : undefined,
+      documentId,
+    };
+  }
+
+  async function refreshAccountFromApi() {
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, { headers: { "x-role": role } });
+      const payload = await response.json();
+      if (response.ok) {
+        onAccountUpdate({
+          ...account,
+          ...mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>),
+          currentWork: account.currentWork,
+          relationshipSignal: account.relationshipSignal,
+        });
+      }
+    } catch {
+      // The local card remains usable if refresh fails.
+    }
+  }
+
+  async function saveUploadedDocument() {
     if (!uploadDraft.fileName) return;
     const selectedType = documentTypes.find((documentType) => documentType.type === uploadDraft.type) ?? documentTypes[0];
+    setDocumentUploading(true);
+    setDocumentUploadError("");
+    if (uploadDraft.file && !account.id.startsWith("v2-acct-")) {
+      try {
+        const formData = new FormData();
+        formData.append("file", uploadDraft.file);
+        formData.append("accountId", account.id);
+        formData.append("type", apiDocumentType(uploadDraft.type));
+        const uploadResponse = await fetch("/api/documents/upload", {
+          method: "POST",
+          headers: { "x-role": role },
+          body: formData,
+        });
+        const uploadPayload = await uploadResponse.json();
+        if (!uploadResponse.ok) throw new Error(uploadPayload.error || "Document upload failed");
+        const uploaded = uploadPayload.data as Record<string, unknown>;
+        const documentId = String(uploaded.id);
+        let proposals: DocumentSignalProposal[] = [];
+        try {
+          const analysisResponse = await fetch(`/api/documents/${documentId}/analyze-impact`, {
+            method: "POST",
+            headers: { "x-role": role },
+          });
+          const analysisPayload = await analysisResponse.json();
+          if (analysisResponse.ok && Array.isArray(analysisPayload.data?.proposals)) {
+            proposals = (analysisPayload.data.proposals as Array<Record<string, unknown>>).map((proposal) =>
+              impactProposalToDocumentProposal(proposal, uploadDraft.fileName, documentId),
+            );
+          }
+        } catch {
+          proposals = [];
+        }
+        setUploadedDocuments((documents) => [
+          {
+            id: documentId,
+            name: uploadDraft.fileName,
+            type: uploadDraft.type,
+            uploadedBy: "Current user",
+            uploadedAt: "Today",
+            uploadedAtMs: Date.now(),
+            status: proposals.length > 0 ? "Pending review" : "Processed",
+            affected: selectedType.affects,
+            url: String((uploaded.fileUrl ?? uploadDraft.fileUrl) || documentPreviewUrl(uploadDraft.fileName, uploadDraft.type)),
+          },
+          ...documents,
+        ]);
+        setSignalProposals((items) => [
+          ...(proposals.length > 0 ? proposals : [{
+            id: `proposal-${Date.now()}`,
+            sourceDocument: uploadDraft.fileName,
+            field: "Document analysis",
+            currentValue: "No reviewed finding",
+            proposedValue: "Document uploaded. No score/profile changes were suggested automatically.",
+            status: "Needs review" as const,
+            documentId,
+            kind: "kyc" as const,
+          }]),
+          ...items,
+        ]);
+        setUploadDraft({
+          type: documentTypes[0].type,
+          fileName: "",
+          fileUrl: "",
+          file: undefined,
+        });
+        setUploadOpen(false);
+        return;
+      } catch (error) {
+        setDocumentUploadError(error instanceof Error ? error.message : "Document upload failed");
+      } finally {
+        setDocumentUploading(false);
+      }
+      return;
+    }
+
     setUploadedDocuments((documents) => [
       {
         id: `uploaded-${Date.now()}`,
@@ -2994,18 +3174,45 @@ function DocumentsTab({ account }: { account: PortfolioAccount }) {
       type: documentTypes[0].type,
       fileName: "",
       fileUrl: "",
+      file: undefined,
     });
     setUploadOpen(false);
+    setDocumentUploading(false);
   }
 
   function startProposalResolution(proposalId: string, action: ProposalResolutionAction) {
     setProposalResolutionDraft({ proposalId, action, reason: "" });
   }
 
-  function confirmProposalResolution() {
+  async function confirmProposalResolution() {
     const reason = proposalResolutionDraft?.reason.trim();
     if (!proposalResolutionDraft || !reason) return;
     const decidedAt = "Today";
+    const currentProposal = signalProposals.find((proposal) => proposal.id === proposalResolutionDraft.proposalId);
+    if (currentProposal?.documentId) {
+      try {
+        const response = await fetch(`/api/documents/${currentProposal.documentId}/analyze-impact`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-role": role,
+          },
+          body: JSON.stringify({
+            action: proposalResolutionDraft.action === "approve" ? "APPROVE" : "REJECT",
+            proposalId: currentProposal.id,
+            reason,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Document proposal review failed");
+        if (payload.data?.profileUpdated || payload.data?.scoreRecomputed) {
+          void refreshAccountFromApi();
+        }
+      } catch (error) {
+        setDocumentUploadError(error instanceof Error ? error.message : "Document proposal review failed");
+        return;
+      }
+    }
     setSignalProposals((proposals) =>
       proposals.map((proposal) => {
         if (proposal.id !== proposalResolutionDraft.proposalId) return proposal;
@@ -3082,8 +3289,8 @@ function DocumentsTab({ account }: { account: PortfolioAccount }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={() => setUploadOpen(true)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#25352E]">
-          Upload
+        <button type="button" onClick={() => setUploadOpen(true)} disabled={documentUploading} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#25352E] disabled:opacity-60">
+          {documentUploading ? "Uploading..." : "Upload"}
         </button>
         <button type="button" onClick={() => setQbrOpen(true)} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF]">
           Generate QBR
@@ -3176,6 +3383,11 @@ function DocumentsTab({ account }: { account: PortfolioAccount }) {
           {qbrError}
         </div>
       ) : null}
+      {documentUploadError ? (
+        <div className="rounded-2xl border border-[#E8B8B0] bg-[#FFF0ED] p-3 text-[13px] font-bold text-[#B33D32]">
+          {documentUploadError}
+        </div>
+      ) : null}
 
       <QbrBuilderDialog open={qbrOpen} draft={qbrDraft} onOpenChange={setQbrOpen} onDraftChange={setQbrDraft} onGenerate={generateQbr} generating={qbrGenerating} />
       <UploadDocumentDialog open={uploadOpen} draft={uploadDraft} onOpenChange={setUploadOpen} onDraftChange={setUploadDraft} onSave={saveUploadedDocument} />
@@ -3197,13 +3409,33 @@ function DocumentsTab({ account }: { account: PortfolioAccount }) {
 }
 
 function ProfileTab({
+  account,
   activeTasks,
+  onAccountUpdate,
   onResolveQueuedTask,
 }: {
+  account: PortfolioAccount;
   activeTasks: ActiveTask[];
+  onAccountUpdate: (account: PortfolioAccount) => void;
   onResolveQueuedTask: (taskId: string) => void;
 }) {
   const { role } = useRole();
+  const canEditProfile = role !== "EXECUTIVE";
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileDraft, setProfileDraft] = useState<AccountProfileDraft>(() => ({
+    name: account.name,
+    industry: account.industry,
+    segment: account.segment ?? account.deliveryModel,
+    arr: String(account.arr),
+    website: "",
+    country: account.country,
+    region: account.region,
+    kamOwner: account.kamOwner,
+    associateOwner: account.associateOwner,
+    contractEnd: new Date(Date.now() + account.renewalDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  }));
   const [journeyResolutionDraft, setJourneyResolutionDraft] = useState<TaskResolutionDraft | null>(null);
   const [resolvedJourneyItems, setResolvedJourneyItems] = useState<Record<string, { action: TaskResolutionAction; reason: string }>>({});
   const [customContacts, setCustomContacts] = useState<AccountContact[]>([]);
@@ -3273,6 +3505,109 @@ function ProfileTab({
   const resolutionItem = journeyResolutionDraft
     ? [...upcomingJourneyItems, ...customJourneyItems, ...queuedJourneyItems].find((item) => item.id === journeyResolutionDraft.taskId)
     : undefined;
+
+  useEffect(() => {
+    setProfileDraft({
+      name: account.name,
+      industry: account.industry,
+      segment: account.segment ?? account.deliveryModel,
+      arr: String(account.arr),
+      website: "",
+      country: account.country,
+      region: account.region,
+      kamOwner: account.kamOwner,
+      associateOwner: account.associateOwner,
+      contractEnd: new Date(Date.now() + account.renewalDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    });
+    setProfileEditing(false);
+    setProfileError("");
+  }, [account]);
+
+  function updateProfileDraft(field: keyof AccountProfileDraft, value: string) {
+    setProfileDraft((draft) => ({ ...draft, [field]: value }));
+  }
+
+  async function saveProfile() {
+    if (!profileDraft.name.trim()) return;
+    setProfileSaving(true);
+    setProfileError("");
+    try {
+      const localUpdatedAccount: PortfolioAccount = {
+        ...account,
+        name: profileDraft.name.trim(),
+        industry: profileDraft.industry.trim() || "Industry not set",
+        segment: profileDraft.segment.trim() || undefined,
+        deliveryModel: profileDraft.segment.trim() || account.deliveryModel,
+        arr: parseArrValue(profileDraft.arr),
+        country: profileDraft.country.trim() || "Country not set",
+        region: profileDraft.region.trim() || "Region not set",
+        renewalDays: daysUntil(profileDraft.contractEnd),
+        kamOwner: profileDraft.kamOwner.trim() || account.kamOwner,
+        associateOwner: profileDraft.associateOwner.trim() || account.associateOwner,
+      };
+
+      if (account.id.startsWith("v2-acct-")) {
+        onAccountUpdate(localUpdatedAccount);
+        setProfileEditing(false);
+        return;
+      }
+
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-role": role,
+        },
+        body: JSON.stringify({
+          name: profileDraft.name.trim(),
+          industry: profileDraft.industry.trim(),
+          segment: profileDraft.segment.trim(),
+          arr: parseArrValue(profileDraft.arr),
+          website: profileDraft.website.trim() || undefined,
+          country: profileDraft.country.trim(),
+          region: profileDraft.region.trim(),
+          contractEnd: profileDraft.contractEnd || undefined,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Profile update failed");
+      const updated = mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>);
+      onAccountUpdate({
+        ...localUpdatedAccount,
+        ...updated,
+        kamOwner: localUpdatedAccount.kamOwner,
+        associateOwner: localUpdatedAccount.associateOwner,
+        currentWork: localUpdatedAccount.currentWork,
+        relationshipSignal: localUpdatedAccount.relationshipSignal,
+      });
+      setProfileEditing(false);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Profile update failed");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function uploadAccountIcon(file: File) {
+    setProfileSaving(true);
+    setProfileError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`/api/accounts/${account.id}/icon`, {
+        method: "POST",
+        headers: { "x-role": role },
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Icon upload failed");
+      onAccountUpdate({ ...account, logoUrl: payload.data?.logoUrl ?? account.logoUrl });
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Icon upload failed");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   function startJourneyResolution(itemId: string, action: TaskResolutionAction) {
     setJourneyResolutionDraft({ taskId: itemId, action, reason: "" });
@@ -3393,6 +3728,95 @@ function ProfileTab({
 
   return (
     <div className="space-y-4">
+      <section className="rounded-3xl border border-[#E5DACD] bg-white/58 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Profile details</h3>
+            <p className="mt-1 text-[12px] font-bold text-[#7D6E5F]">{account.industry} - {account.segment ?? account.deliveryModel}</p>
+          </div>
+          {canEditProfile ? (
+            <div className="flex flex-wrap gap-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#25352E]">
+                <Pencil className="h-3.5 w-3.5" />
+                Icon
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  disabled={profileSaving}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadAccountIcon(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setProfileEditing((editing) => !editing)}
+                className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {profileEditing ? "Close" : "Edit profile"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {profileEditing ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <label>
+              <FieldLabel>Account name</FieldLabel>
+              <input value={profileDraft.name} onChange={(event) => updateProfileDraft("name", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
+              <FieldLabel>Industry</FieldLabel>
+              <input value={profileDraft.industry} onChange={(event) => updateProfileDraft("industry", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
+              <FieldLabel>Segment</FieldLabel>
+              <input value={profileDraft.segment} onChange={(event) => updateProfileDraft("segment", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
+              <FieldLabel>ARR</FieldLabel>
+              <input value={profileDraft.arr} onChange={(event) => updateProfileDraft("arr", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
+              <FieldLabel>Website</FieldLabel>
+              <input value={profileDraft.website} onChange={(event) => updateProfileDraft("website", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
+              <FieldLabel>Country</FieldLabel>
+              <input value={profileDraft.country} onChange={(event) => updateProfileDraft("country", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
+              <FieldLabel>Region</FieldLabel>
+              <input value={profileDraft.region} onChange={(event) => updateProfileDraft("region", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <label>
+              <FieldLabel>Contract end</FieldLabel>
+              <input type="date" value={profileDraft.contractEnd} onChange={(event) => updateProfileDraft("contractEnd", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
+            </label>
+            <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2">
+              {profileError ? <p className="mr-auto text-[12px] font-bold text-[#B33D32]">{profileError}</p> : null}
+              <button type="button" onClick={() => setProfileEditing(false)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]">
+                Cancel
+              </button>
+              <button type="button" onClick={saveProfile} disabled={profileSaving} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:bg-[#25352E]/35">
+                {profileSaving ? "Saving..." : "Save profile"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-2 md:grid-cols-4">
+            <SummaryItem label="Segment" value={account.segment ?? account.deliveryModel} />
+            <SummaryItem label="ARR" value={money(account.arr)} />
+            <SummaryItem label="Location" value={`${account.country} - ${account.region}`} />
+            <SummaryItem label="Owner" value={account.associateOwner} />
+          </div>
+        )}
+      </section>
+
       <section className="rounded-3xl border border-[#E5DACD] bg-white/58 p-4">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Contacts</h3>
@@ -3528,11 +3952,13 @@ function AccountModal({
   account,
   open,
   initialTab,
+  onAccountUpdate,
   onOpenChange,
 }: {
   account: PortfolioAccount | null;
   open: boolean;
   initialTab: AccountWorkspaceTab;
+  onAccountUpdate: (account: PortfolioAccount) => void;
   onOpenChange: (open: boolean) => void;
 }) {
   const { role } = useRole();
@@ -3547,6 +3973,9 @@ function AccountModal({
   const [weightDrafts, setWeightDrafts] = useState<Record<string, { weight: string }>>({});
   const [weightReason, setWeightReason] = useState("");
   const [weightRequest, setWeightRequest] = useState<KpiWeightRequest | undefined>();
+  const [kycRegenerating, setKycRegenerating] = useState(false);
+  const [kycRegenerationMessage, setKycRegenerationMessage] = useState("");
+  const [kycRegenerationError, setKycRegenerationError] = useState("");
 
   const acceptedTaskIds = useMemo(() => new Set(activeTasks.map((task) => task.id)), [activeTasks]);
   const kpiRows = useMemo(() => buildAccountKpiRows(account), [account]);
@@ -3554,7 +3983,11 @@ function AccountModal({
   const canOverrideDirectly = role === "KAM";
 
   useEffect(() => {
-    if (open) setActiveTab(initialTab);
+    if (open) {
+      setActiveTab(initialTab);
+      setKycRegenerationMessage("");
+      setKycRegenerationError("");
+    }
   }, [account?.id, initialTab, open]);
 
   function acceptRecommendation(row: KpiOverviewRow) {
@@ -3744,6 +4177,28 @@ function AccountModal({
     });
   }
 
+  async function regenerateKyc() {
+    if (!account || kycRegenerating) return;
+    setKycRegenerating(true);
+    setKycRegenerationError("");
+    setKycRegenerationMessage("");
+    try {
+      const response = await fetch(`/api/accounts/${account.id}/kyc/regenerate`, {
+        method: "POST",
+        headers: { "x-role": role },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "KYC regeneration failed");
+      const version = payload.data?.kyc?.version;
+      const source = payload.data?.webSearchUsed ? "with web search" : "from account context";
+      setKycRegenerationMessage(`KYC v${version ?? "new"} generated ${source}.`);
+    } catch (error) {
+      setKycRegenerationError(error instanceof Error ? error.message : "KYC regeneration failed");
+    } finally {
+      setKycRegenerating(false);
+    }
+  }
+
   if (!account) return null;
 
   return (
@@ -3766,16 +4221,37 @@ function AccountModal({
                   </Dialog.Description>
                 </div>
               </div>
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#6F6254] transition-colors hover:bg-white hover:text-[#25352E]"
-                  aria-label="Close account modal"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </Dialog.Close>
+              <div className="flex shrink-0 items-center gap-2">
+                {role !== "EXECUTIVE" ? (
+                  <button
+                    type="button"
+                    onClick={regenerateKyc}
+                    disabled={kycRegenerating}
+                    className="inline-flex items-center gap-2 rounded-full border border-[#D8CAB9] bg-[#FFF9EF]/80 px-3 py-2 text-[12px] font-bold text-[#25352E] disabled:opacity-60"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {kycRegenerating ? "Regenerating..." : "Regenerate KYC"}
+                  </button>
+                ) : null}
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#6F6254] transition-colors hover:bg-white hover:text-[#25352E]"
+                    aria-label="Close account modal"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </Dialog.Close>
+              </div>
             </div>
+
+            {kycRegenerationMessage || kycRegenerationError ? (
+              <div className={`relative z-10 mt-3 rounded-2xl border p-3 text-[12px] font-bold ${
+                kycRegenerationError ? "border-[#E8B8B0] bg-[#FFF0ED] text-[#B33D32]" : "border-[#B7D8C3] bg-[#EEF8F1] text-[#23633E]"
+              }`}>
+                {kycRegenerationError || kycRegenerationMessage}
+              </div>
+            ) : null}
 
             <div className="relative z-10 mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               <SummaryItem label="Score" value={<span className={scoreTone[account.health]}>{account.healthScore}/100</span>} />
@@ -3835,10 +4311,10 @@ function AccountModal({
                 />
               </Tabs.Content>
               <Tabs.Content value="profile" className="focus:outline-none">
-                <ProfileTab activeTasks={activeTasks} onResolveQueuedTask={resolveQueuedTask} />
+                <ProfileTab account={account} activeTasks={activeTasks} onAccountUpdate={onAccountUpdate} onResolveQueuedTask={resolveQueuedTask} />
               </Tabs.Content>
               <Tabs.Content value="documents" className="focus:outline-none">
-                <DocumentsTab account={account} />
+                <DocumentsTab account={account} onAccountUpdate={onAccountUpdate} />
               </Tabs.Content>
             </div>
           </Tabs.Root>
@@ -4096,6 +4572,14 @@ function PendingAccountCreationDialog({
     "I can help the KAM review this account draft, update fields, inspect sources, and refine KYC or journey items before approval.",
   ]);
 
+  useEffect(() => {
+    if (!request) return;
+    setDraft(request.draft);
+    setSourceFiles(request.sourceFiles);
+    setStatus("Pending");
+    setDecisionReason("");
+  }, [request]);
+
   if (!request) return null;
 
   function updateDraft(nextDraft: AccountDraft) {
@@ -4145,7 +4629,7 @@ function PendingAccountCreationDialog({
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E5DACD] bg-[#F7F1E7] px-5 py-4">
             <div>
               <Dialog.Title className="text-[26px] font-black tracking-[-0.06em] text-[#1F2722]">Review account creation</Dialog.Title>
-              <p className="mt-1 text-[13px] font-bold text-[#6F6254]">{request.submittedBy} · {request.submittedAt}</p>
+              <p className="mt-1 text-[13px] font-bold text-[#6F6254]">{request.submittedBy} - {request.submittedAt} - {request.status ?? "Draft"}</p>
             </div>
             <button
               type="button"
@@ -4407,7 +4891,7 @@ function AccountOnboardingWorkspace({
   onPromptChange: (prompt: string) => void;
   onApplyPrompt: () => void;
   onSaveDraft: () => void;
-  onFinalizeAccount: () => void;
+  onFinalizeAccount: () => void | Promise<void>;
 }) {
   const [activeStep, setActiveStep] = useState<AccountOnboardingStep>("profile");
   const [acceptedKycSections, setAcceptedKycSections] = useState<Set<string>>(() => new Set());
@@ -5030,6 +5514,9 @@ export function PortfolioPage() {
   const [selectedAccount, setSelectedAccount] = useState<PortfolioAccount | null>(null);
   const [selectedAccountTab, setSelectedAccountTab] = useState<AccountWorkspaceTab>("overview");
   const [createdAccounts, setCreatedAccounts] = useState<PortfolioAccount[]>([]);
+  const [accountOverrides, setAccountOverrides] = useState<Record<string, PortfolioAccount>>({});
+  const [accountCreationRequests, setAccountCreationRequests] = useState<PendingAccountCreationRequest[]>([]);
+  const [selectedAccountCreationRequestId, setSelectedAccountCreationRequestId] = useState<string | null>(null);
   const [pendingAccountReviewOpen, setPendingAccountReviewOpen] = useState(() => searchParams.get("focus") === "pending-account-draft");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingStage, setOnboardingStage] = useState<OnboardingStage>("source-upload");
@@ -5059,7 +5546,9 @@ export function PortfolioPage() {
   const [suggestionDismissalDraft, setSuggestionDismissalDraft] = useState<SuggestionDismissalDraft | null>(null);
 
   const isExecutive = role === "EXECUTIVE" || role === "ADMIN" || role === "MANAGER";
-  const roleAccounts = role === "ASSOCIATE" ? associatePortfolio : [...createdAccounts, ...portfolioAccounts];
+  const demoPortfolioAccounts = portfolioAccounts.map((account) => accountOverrides[account.id] ?? account);
+  const demoAssociateAccounts = associatePortfolio.map((account) => accountOverrides[account.id] ?? account);
+  const roleAccounts = role === "ASSOCIATE" ? demoAssociateAccounts : [...createdAccounts, ...demoPortfolioAccounts];
   const visibleAccounts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return roleAccounts.filter((account) => {
@@ -5080,9 +5569,64 @@ export function PortfolioPage() {
   const routeAccount = searchParams.get("account");
   const routeTab = searchParams.get("tab");
   const pendingReviewDialogOpen = pendingAccountReviewOpen || routeFocus === "pending-account-draft";
+  const selectedAccountCreationRequest =
+    accountCreationRequests.find((request) => request.id === selectedAccountCreationRequestId) ??
+    accountCreationRequests[0] ??
+    null;
+
+  function updatePortfolioAccount(updatedAccount: PortfolioAccount) {
+    setCreatedAccounts((accounts) => accounts.map((account) => account.id === updatedAccount.id ? updatedAccount : account));
+    setAccountOverrides((accounts) => ({ ...accounts, [updatedAccount.id]: updatedAccount }));
+    setSelectedAccount((account) => account?.id === updatedAccount.id ? updatedAccount : account);
+  }
+
+  function pendingRequestFromDraft(status: "Draft" | "Submitted to KAM"): PendingAccountCreationRequest {
+    const draftName = accountDraft.name.trim() || "Untitled account draft";
+    const sourceFiles = [...sourceDocuments, ...onboardingDocuments].map((document) => document.fileName);
+    return {
+      id: `pending-${draftName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account"}-${role.toLowerCase()}`,
+      submittedBy: role === "ASSOCIATE" ? "Aisha Khan" : accountDraft.kamOwner.trim() || "Sarah Chen",
+      submittedAt: "Today",
+      status,
+      associateReason: status === "Draft"
+        ? "Draft saved from the account onboarding workspace."
+        : "Submitted from the account onboarding workspace for KAM review.",
+      sourceFiles,
+      draft: {
+        ...accountDraft,
+        name: draftName,
+      },
+    };
+  }
+
+  function upsertAccountCreationRequest(request: PendingAccountCreationRequest) {
+    setAccountCreationRequests((requests) => [
+      request,
+      ...requests.filter((item) => item.id !== request.id),
+    ]);
+    setSelectedAccountCreationRequestId(request.id);
+  }
 
   useEffect(() => {
-    const pendingRequest = pendingAccountCreationRequests[0];
+    try {
+      const stored = localStorage.getItem(LS_ACCOUNT_CREATION_REQUESTS);
+      const parsed = stored ? JSON.parse(stored) as PendingAccountCreationRequest[] : [];
+      setAccountCreationRequests(Array.isArray(parsed) ? parsed.filter((request) => request.id !== "pending-novagrid") : []);
+    } catch {
+      setAccountCreationRequests([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_ACCOUNT_CREATION_REQUESTS, JSON.stringify(accountCreationRequests));
+    } catch {
+      // No-op for restricted browser storage.
+    }
+  }, [accountCreationRequests]);
+
+  useEffect(() => {
+    const pendingRequest = accountCreationRequests.find((request) => request.status === "Submitted to KAM");
     if (pendingRequest && role !== "ASSOCIATE") {
       fireNotification({
         id: `account-draft-${pendingRequest.id}`,
@@ -5107,7 +5651,32 @@ export function PortfolioPage() {
         createdAt: "Today",
       });
     }
-  }, [fireNotification, role]);
+  }, [accountCreationRequests, fireNotification, role]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPersistedAccounts() {
+      try {
+        const response = await fetch("/api/accounts", { headers: { "x-role": role } });
+        const payload = await response.json();
+        if (!response.ok) return;
+        const seededNames = new Set(portfolioAccounts.map((account) => account.name.toLowerCase()));
+        const accounts = Array.isArray(payload.data)
+          ? (payload.data as Array<Record<string, unknown>>)
+              .filter((account) => !String(account.id ?? "").startsWith("acc-"))
+              .map(mapApiAccountToPortfolioAccount)
+              .filter((account) => !seededNames.has(account.name.toLowerCase()))
+          : [];
+        if (!cancelled) setCreatedAccounts(accounts);
+      } catch {
+        if (!cancelled) setCreatedAccounts((accounts) => accounts);
+      }
+    }
+    void loadPersistedAccounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   useEffect(() => {
     if (routeFocus === "pending-account-draft") {
@@ -5525,7 +6094,19 @@ export function PortfolioPage() {
   }
 
   function saveOnboardingDraft() {
-    setOnboardingAssistantMessages((messages) => ["Account setup draft saved.", ...messages]);
+    const request = pendingRequestFromDraft("Draft");
+    upsertAccountCreationRequest(request);
+    setOnboardingAssistantMessages((messages) => [`Account setup draft saved: ${request.draft.name}.`, ...messages]);
+    fireNotification({
+      id: `account-draft-saved-${request.id}`,
+      title: `${request.draft.name} draft saved`,
+      detail: "The draft is available in pending account creations.",
+      href: "/portfolio?focus=pending-account-draft",
+      source: "account-onboarding",
+      severity: "info",
+    });
+    setOnboardingOpen(false);
+    setPendingAccountReviewOpen(true);
   }
 
   function createPortfolioAccountFromDraft(): PortfolioAccount {
@@ -5551,9 +6132,39 @@ export function PortfolioPage() {
     };
   }
 
-  function finalizeOnboardingAccount() {
+  async function finalizeOnboardingAccount() {
     if (role === "KAM") {
-      const nextAccount = createPortfolioAccountFromDraft();
+      let nextAccount = createPortfolioAccountFromDraft();
+      try {
+        const response = await fetch("/api/accounts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-role": role,
+          },
+          body: JSON.stringify({
+            name: nextAccount.name,
+            industry: nextAccount.industry,
+            segment: accountDraft.segment.trim() || nextAccount.deliveryModel,
+            region: nextAccount.region,
+            country: nextAccount.country,
+            arr: nextAccount.arr,
+            contractEnd: new Date(Date.now() + nextAccount.renewalDays * 24 * 60 * 60 * 1000).toISOString(),
+          }),
+        });
+        const payload = await response.json();
+        if (response.ok) {
+          nextAccount = {
+            ...nextAccount,
+            ...mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>),
+            contactName: nextAccount.contactName,
+            currentWork: nextAccount.currentWork,
+            relationshipSignal: nextAccount.relationshipSignal,
+          };
+        }
+      } catch {
+        // Keep the in-session account available if persistence is temporarily unavailable.
+      }
       setCreatedAccounts((accounts) => [nextAccount, ...accounts]);
       setOnboardingAssistantMessages((messages) => [`Created account: ${nextAccount.name}.`, ...messages]);
       fireNotification({
@@ -5569,16 +6180,19 @@ export function PortfolioPage() {
       setSelectedAccount(nextAccount);
       return;
     }
+    const submittedRequest = pendingRequestFromDraft("Submitted to KAM");
+    upsertAccountCreationRequest(submittedRequest);
     setOnboardingAssistantMessages((messages) => ["Account creation submitted to KAM for review.", ...messages]);
     fireNotification({
-      id: `account-submitted-${accountDraft.name || "new-account"}`,
+      id: `account-submitted-${submittedRequest.id}`,
       title: "Account creation submitted",
-      detail: `${accountDraft.name || "New account"} is waiting for KAM review.`,
+      detail: `${submittedRequest.draft.name} is waiting for KAM review.`,
       href: "/portfolio?focus=pending-account-draft",
       source: "account-onboarding",
       severity: "warning",
     });
     setOnboardingOpen(false);
+    setPendingAccountReviewOpen(true);
   }
 
   return (
@@ -5624,22 +6238,25 @@ export function PortfolioPage() {
           <section className="rounded-[1.5rem] border border-[#E5DACD] bg-[#FFF9EF]/78 p-4 shadow-[0_18px_46px_-34px_rgba(55,43,28,0.58)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Pending account creations</h2>
-              <span className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1 text-[12px] font-bold text-[#6F6254]">{pendingAccountCreationRequests.length} draft</span>
+              <span className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1 text-[12px] font-bold text-[#6F6254]">{accountCreationRequests.length} draft</span>
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {pendingAccountCreationRequests.map((request) => (
+              {accountCreationRequests.map((request) => (
                 <button
                   key={request.id}
                   type="button"
-                  onClick={() => setPendingAccountReviewOpen(true)}
+                  onClick={() => {
+                    setSelectedAccountCreationRequestId(request.id);
+                    setPendingAccountReviewOpen(true);
+                  }}
                   className="rounded-3xl border border-[#E5DACD] bg-white/62 p-4 text-left transition-colors hover:bg-white"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[16px] font-black tracking-[-0.04em] text-[#1F2722]">{request.draft.name}</p>
-                      <p className="mt-1 text-[13px] font-bold text-[#6F6254]">{request.submittedBy} · {request.submittedAt}</p>
+                      <p className="mt-1 text-[13px] font-bold text-[#6F6254]">{request.submittedBy} - {request.submittedAt}</p>
                     </div>
-                    <span className="rounded-full border border-[#DEC997] bg-[#FFF7E4] px-3 py-1 text-[11px] font-bold text-[#8A5C16]">Review</span>
+                    <span className="rounded-full border border-[#DEC997] bg-[#FFF7E4] px-3 py-1 text-[11px] font-bold text-[#8A5C16]">{request.status ?? "Draft"}</span>
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-2">
                     <div className="rounded-2xl border border-[#E5DACD] bg-[#FFF9EF]/70 p-3">
@@ -5658,6 +6275,11 @@ export function PortfolioPage() {
                 </button>
               ))}
             </div>
+            {accountCreationRequests.length === 0 ? (
+              <div className="mt-3 rounded-2xl border border-dashed border-[#D8CAB9] bg-white/50 p-4 text-[13px] font-bold text-[#7D6E5F]">
+                No account drafts or Associate submissions are waiting for review.
+              </div>
+            ) : null}
           </section>
         ) : null}
 
@@ -5711,13 +6333,19 @@ export function PortfolioPage() {
       <CammiePanel role={role} accounts={visibleAccounts} activeAccount={selectedAccount} />
       <PendingAccountCreationDialog
         open={pendingReviewDialogOpen}
-        request={pendingAccountCreationRequests[0] ?? null}
+        request={selectedAccountCreationRequest}
         onOpenChange={(open) => {
           setPendingAccountReviewOpen(open);
           if (!open && routeFocus === "pending-account-draft") router.push("/portfolio");
         }}
       />
-      <AccountModal account={selectedAccount} open={Boolean(selectedAccount)} initialTab={selectedAccountTab} onOpenChange={(open) => !open && setSelectedAccount(null)} />
+      <AccountModal
+        account={selectedAccount}
+        open={Boolean(selectedAccount)}
+        initialTab={selectedAccountTab}
+        onAccountUpdate={updatePortfolioAccount}
+        onOpenChange={(open) => !open && setSelectedAccount(null)}
+      />
       <AccountSourceUploadDialog
         open={onboardingOpen && onboardingStage === "source-upload"}
         files={selectedSourceFiles}

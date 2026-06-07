@@ -1,0 +1,1 @@
+ALTER TABLE `accounts` ADD COLUMN `segment` VARCHAR(191) NULL;
