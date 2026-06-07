@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
 import { AppShell } from "@/components/layout/AppShell";
+import { NotificationProvider } from "@/context/NotificationContext";
 import { RoleProvider } from "@/context/RoleContext";
 import "../styles/globals.css";
 
@@ -15,7 +16,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <RoleProvider>
-            <AppShell>{children}</AppShell>
+            <NotificationProvider>
+              <AppShell>{children}</AppShell>
+            </NotificationProvider>
           </RoleProvider>
         </ThemeProvider>
       </body>

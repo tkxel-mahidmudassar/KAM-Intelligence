@@ -1,36 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, BriefcaseBusiness, Home, LogOut, Settings, UserRound } from "lucide-react";
 import { RoleBar } from "@/components/layout/RoleBar";
+import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 
 const navItems = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
-];
-
-const notifications = [
-  {
-    id: "notif-draft-account",
-    title: "NovaGrid account draft needs review",
-    detail: "Aisha submitted a new account creation package.",
-    href: "/portfolio?focus=pending-account-draft",
-  },
-  {
-    id: "notif-score-drop",
-    title: "Maersk risk score fell",
-    detail: "Open the account workspace to review the proposed task.",
-    href: "/portfolio?account=acc-maersk&tab=overview",
-  },
-  {
-    id: "notif-playbook",
-    title: "Project health playbook parsed",
-    detail: "The new playbook is ready for score task suggestions.",
-    href: "/settings?section=playbooks",
-  },
 ];
 
 function isAuthRoute(pathname: string) {
@@ -40,10 +20,18 @@ function isAuthRoute(pathname: string) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { userName, userEmail, clearUser } = useRole();
+  const { userId, userName, userEmail, clearUser, hydrated } = useRole();
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!hydrated || isAuthRoute(pathname) || userId) return;
+    router.replace("/login");
+  }, [hydrated, pathname, router, userId]);
 
   if (isAuthRoute(pathname)) return <>{children}</>;
+  if (!hydrated || !userId) return null;
 
   function logout() {
     clearUser();
@@ -99,59 +87,91 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setNotificationsOpen((open) => !open)}
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    setNotificationsOpen((open) => !open);
+                  }}
                   className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#E2D8CC] bg-[#FFF9EF]/74 text-[#25352E]"
                   aria-label="Open notifications"
                 >
                   <Bell className="h-4 w-4" />
-                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#D66A4B]" />
+                  {unreadCount > 0 ? <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#D66A4B]" /> : null}
                 </button>
                 {notificationsOpen ? (
                   <div className="absolute right-0 top-11 z-50 w-[340px] rounded-3xl border border-[#E2D8CC] bg-[#FFF9EF] p-3 shadow-[0_24px_70px_-38px_rgba(31,39,34,0.75)]">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-[14px] font-black text-[#25352E]">Notifications</p>
-                      <span className="rounded-full border border-[#DFD4C7] px-2 py-0.5 text-[11px] font-bold text-[#766859]">{notifications.length} new</span>
+                      <div className="flex items-center gap-2">
+                        {notifications.length > 0 ? (
+                          <button type="button" onClick={markAllRead} className="text-[11px] font-black text-[#75685A] hover:text-[#25352E]">
+                            Mark read
+                          </button>
+                        ) : null}
+                        <span className="rounded-full border border-[#DFD4C7] px-2 py-0.5 text-[11px] font-bold text-[#766859]">
+                          {unreadCount > 0 ? `${unreadCount} new` : "All read"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="space-y-2">
+                    {notifications.length > 0 ? <div className="space-y-2">
                       {notifications.map((item) => (
                         <button
                           key={item.id}
                           type="button"
                           onClick={() => {
                             setNotificationsOpen(false);
+                            markRead(item.id);
+                            window.dispatchEvent(new CustomEvent("kam:notification-selected", { detail: item }));
                             router.push(item.href);
                           }}
-                          className="block w-full rounded-2xl border border-[#E8DDCF] bg-[#FFFCF6] p-3 text-left transition hover:border-[#BBAA96] hover:bg-[#F6EFE4]"
+                          className={`block w-full rounded-2xl border p-3 text-left transition hover:border-[#BBAA96] hover:bg-[#F6EFE4] ${
+                            item.read ? "border-[#E8DDCF] bg-[#FFFCF6]/62" : "border-[#D4B88F] bg-[#FFF8ED]"
+                          }`}
                         >
-                          <p className="text-[13px] font-black text-[#25352E]">{item.title}</p>
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-[13px] font-black text-[#25352E]">{item.title}</p>
+                            <span className="shrink-0 text-[10px] font-black text-[#9A8A79]">{item.createdAt}</span>
+                          </div>
                           <p className="mt-1 text-[12px] font-semibold leading-snug text-[#75685A]">{item.detail}</p>
                         </button>
                       ))}
-                    </div>
+                    </div> : (
+                      <div className="rounded-2xl border border-[#E8DDCF] bg-[#FFFCF6] p-3 text-[12px] font-bold text-[#75685A]">
+                        No alerts have fired yet.
+                      </div>
+                    )}
                   </div>
                 ) : null}
               </div>
-              <div className="group relative">
-                <button type="button" className="inline-flex h-9 items-center gap-2 rounded-full border border-[#E2D8CC] bg-[#FFF9EF]/74 pl-2 pr-3 text-[#25352E]">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationsOpen(false);
+                    setProfileMenuOpen((open) => !open);
+                  }}
+                  className="inline-flex h-9 items-center gap-2 rounded-full border border-[#E2D8CC] bg-[#FFF9EF]/74 pl-2 pr-3 text-[#25352E]"
+                  aria-expanded={profileMenuOpen}
+                  aria-haspopup="menu"
+                >
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#25352E] text-[11px] font-black text-[#FFF9EF]">
                     {(userName || "Sarah Chen").split(" ").map((part) => part[0]).join("").slice(0, 2)}
                   </span>
                   <span className="hidden text-[12px] font-black sm:inline">{userName || "Sarah Chen"}</span>
                 </button>
-                <div className="invisible absolute right-0 top-11 w-56 rounded-2xl border border-[#E2D8CC] bg-[#FFF9EF] p-2 opacity-0 shadow-[0_22px_60px_-34px_rgba(31,39,34,0.72)] transition-all group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+                {profileMenuOpen ? <div className="absolute right-0 top-11 w-56 rounded-2xl border border-[#E2D8CC] bg-[#FFF9EF] p-2 opacity-100 shadow-[0_22px_60px_-34px_rgba(31,39,34,0.72)] transition-all" role="menu">
                   <div className="rounded-xl bg-[#F7F1E7] px-3 py-2">
                     <p className="text-[13px] font-black text-[#25352E]">{userName || "Sarah Chen"}</p>
                     <p className="truncate text-[11px] font-bold text-[#7D6E5F]">{userEmail || "sarah.chen@tkxel.com"}</p>
                   </div>
-                  <Link href="/settings" className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-bold text-[#25352E] hover:bg-[#F0E7DA]">
+                  <Link href="/settings" onClick={() => setProfileMenuOpen(false)} className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-bold text-[#25352E] hover:bg-[#F0E7DA]" role="menuitem">
                     <UserRound className="h-4 w-4" />
                     My profile
                   </Link>
-                  <button type="button" onClick={logout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] font-bold text-[#B33D32] hover:bg-[#FFF0ED]">
+                  <button type="button" onClick={logout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] font-bold text-[#B33D32] hover:bg-[#FFF0ED]" role="menuitem">
                     <LogOut className="h-4 w-4" />
                     Log out
                   </button>
-                </div>
+                </div> : null}
               </div>
             </div>
           </div>

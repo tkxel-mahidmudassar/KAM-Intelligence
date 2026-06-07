@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { FileText, Link2, Plus, Trash2, Upload, UserPlus } from "lucide-react";
 import { defaultKpiWeights, integrationMocks, workspaceAccounts } from "@/lib/v2/workspaceData";
+import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 
 const initialAssociates = ["Aisha Khan", "Omar Farooq", "Nadia Raza"];
@@ -14,6 +15,7 @@ const ruleLog = [
 
 export function SettingsPage() {
   const { role, userName, userEmail } = useRole();
+  const { fireNotification } = useNotifications();
   const [weights, setWeights] = useState(defaultKpiWeights);
   const [associates, setAssociates] = useState(initialAssociates);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -204,7 +206,17 @@ export function SettingsPage() {
                     className="hidden"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (file) setPlaybooks((current) => ({ ...current, [item.id]: file.name }));
+                      if (file) {
+                        setPlaybooks((current) => ({ ...current, [item.id]: file.name }));
+                        fireNotification({
+                          id: `playbook-uploaded-${item.id}-${file.name}`,
+                          title: `${item.name} playbook parsed`,
+                          detail: "Ready for score task suggestions.",
+                          href: "/settings?section=playbooks",
+                          source: "playbook-upload",
+                          severity: "info",
+                        });
+                      }
                     }}
                   />
                 </label>

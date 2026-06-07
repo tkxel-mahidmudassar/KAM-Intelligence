@@ -19,6 +19,18 @@ const healthTone: Record<WorkspaceHealth, string> = {
   critical: "border-[#EAB3A9] bg-[#FFF1EE] text-[#A63F33]",
 };
 
+const taskTypeTone: Record<WorkspaceActionItem["type"], string> = {
+  "To-do": "border-[#B9CCE9] bg-[#F0F6FF] text-[#245D9A]",
+  Meeting: "border-[#BFD9C6] bg-[#F3FAF2] text-[#1F6C42]",
+  QBR: "border-[#E5C57D] bg-[#FFF7E2] text-[#8A5C16]",
+};
+
+const statusTone: Record<WorkspaceActionItem["status"], string> = {
+  pending: "border-[#D8CAB9] bg-[#FFFCF6] text-[#6F6254]",
+  done: "border-[#BFD9C6] bg-[#F3FAF2] text-[#1F6C42]",
+  dismissed: "border-[#EAB3A9] bg-[#FFF1EE] text-[#A63F33]",
+};
+
 function isoDate(day: number) {
   return `2026-06-${String(day).padStart(2, "0")}`;
 }
@@ -33,8 +45,8 @@ function reasonPlaceholder(status: ActionStatus) {
 }
 
 export function HomePage() {
-  const [calendarView, setCalendarView] = useState<CalendarView>("month");
-  const [expandedHealth, setExpandedHealth] = useState<WorkspaceHealth | "renewals" | null>("critical");
+  const [calendarView, setCalendarView] = useState<CalendarView>("timeline");
+  const [expandedHealth, setExpandedHealth] = useState<WorkspaceHealth | "renewals" | null>(null);
   const [selectedDate, setSelectedDate] = useState("2026-06-08");
   const [items, setItems] = useState<WorkspaceActionItem[]>(workspaceActionItems);
   const [reasonTarget, setReasonTarget] = useState<{ id: string; status: ActionStatus } | null>(null);
@@ -89,13 +101,15 @@ export function HomePage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 lg:grid-cols-4">
+          <div className="relative mt-5 grid gap-3 overflow-visible lg:grid-cols-4">
             {healthStats.map((stat) => (
               <button
                 key={stat.health}
                 type="button"
                 onClick={() => setExpandedHealth(expandedHealth === stat.health ? null : stat.health)}
-                className={`rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 ${healthTone[stat.health]}`}
+                className={`relative min-h-52 overflow-visible rounded-3xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 ${healthTone[stat.health]} ${
+                  expandedHealth === stat.health ? "z-20 -translate-y-1 scale-[1.015] shadow-[0_24px_54px_-30px_rgba(31,39,34,0.42)]" : "z-0"
+                }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-[16px] font-black">{healthLabels[stat.health]}</p>
@@ -103,13 +117,15 @@ export function HomePage() {
                 </div>
                 <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{stat.accounts.length}</p>
                 {expandedHealth === stat.health ? (
-                  <div className="mt-4 space-y-2">
+                  <div className="absolute inset-x-3 top-[6.75rem] rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.92)] p-3 shadow-[0_24px_56px_-34px_rgba(31,39,34,0.48)] [backdrop-filter:blur(16px)]">
+                    <div className="space-y-2">
                     {stat.accounts.slice(0, 5).map((account) => (
                       <div key={account.id} className="flex items-center justify-between rounded-2xl bg-white/66 px-3 py-2 text-[12px] font-bold">
                         <span>{account.name}</span>
                         <span>{account.score}/100</span>
                       </div>
                     ))}
+                    </div>
                     <p className="text-[12px] font-bold opacity-75">{money(stat.arr)} ARR</p>
                   </div>
                 ) : null}
@@ -119,7 +135,9 @@ export function HomePage() {
             <button
               type="button"
               onClick={() => setExpandedHealth(expandedHealth === "renewals" ? null : "renewals")}
-              className="rounded-3xl border border-[#D7C6B4] bg-[#FFFCF6] p-4 text-left text-[#25352E] transition hover:-translate-y-0.5"
+              className={`relative min-h-52 overflow-visible rounded-3xl border border-[#D7C6B4] bg-[#FFFCF6] p-4 text-left text-[#25352E] transition-all duration-200 hover:-translate-y-0.5 ${
+                expandedHealth === "renewals" ? "z-20 -translate-y-1 scale-[1.015] shadow-[0_24px_54px_-30px_rgba(31,39,34,0.42)]" : "z-0"
+              }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[16px] font-black">Renewals under 90d</p>
@@ -127,7 +145,7 @@ export function HomePage() {
               </div>
               <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{renewalSoon.length}</p>
               {expandedHealth === "renewals" ? (
-                <div className="mt-4 space-y-2">
+                <div className="absolute inset-x-3 top-[6.75rem] space-y-2 rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.92)] p-3 shadow-[0_24px_56px_-34px_rgba(31,39,34,0.48)] [backdrop-filter:blur(16px)]">
                   {renewalSoon.map((account) => (
                     <div key={account.id} className="flex items-center justify-between rounded-2xl bg-[#F7F1E7] px-3 py-2 text-[12px] font-bold">
                       <span>{account.name}</span>
@@ -199,33 +217,74 @@ export function HomePage() {
               <DayPanel date={selectedDate} items={selectedItems} onAction={(id, status) => setReasonTarget({ id, status })} />
             </div>
           ) : (
-            <div className="mt-4 grid gap-3 lg:grid-cols-3">
-              {["2026-06-08", "2026-06-09", "2026-06-10"].map((date) => (
-                <div key={date} className="rounded-3xl border border-[#E1D3C2] bg-[#FFF8ED] p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="text-lg font-black text-[#25352E]">{displayDate(date)}</p>
-                    <Clock className="h-4 w-4 text-[#827365]" />
-                  </div>
-                  <div className="space-y-2">
-                    {(groupedByDate[date] || []).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setSelectedDate(date)}
-                        className="flex w-full items-start gap-3 rounded-2xl border border-[#E2D5C6] bg-[#FFFCF6] p-3 text-left"
-                      >
-                        <span className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${item.status === "done" ? "bg-[#25352E] text-[#FFF9EF]" : "text-[#8B7D6E]"}`}>
-                          {item.status === "done" ? <Check className="h-3 w-3" /> : null}
-                        </span>
-                        <span>
-                          <span className="block text-[13px] font-black text-[#25352E]">{item.title}</span>
-                          <span className="mt-1 block text-[12px] font-semibold text-[#7D6E5F]">{item.accountName}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div className="relative mt-5 overflow-hidden rounded-[28px] border border-[#E1D3C2] bg-[linear-gradient(135deg,#FFF9EF_0%,#F8EFE2_48%,#EEF6EE_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+              <div className="grid gap-4 lg:grid-cols-3">
+                {["2026-06-08", "2026-06-09", "2026-06-10"].map((date, index) => {
+                  const dayItems = groupedByDate[date] || [];
+                  const doneCount = dayItems.filter((item) => item.status === "done").length;
+                  const pendingCount = dayItems.filter((item) => item.status === "pending").length;
+                  return (
+                    <section key={date} className="relative flex min-h-[22rem] flex-col rounded-[26px] border border-[#D8CAB9] bg-[rgba(255,252,246,0.84)] p-4 shadow-[0_22px_52px_-38px_rgba(31,39,34,0.56)] [backdrop-filter:blur(14px)]">
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[20px] font-black tracking-[-0.05em] text-[#25352E]">{displayDate(date)}</p>
+                          <p className="mt-1 text-[12px] font-bold text-[#7D6E5F]">{pendingCount} pending · {doneCount} done</p>
+                        </div>
+                        <Clock className="h-4 w-4 text-[#827365]" />
+                      </div>
+                      <div className="flex flex-1 flex-col gap-3">
+                        {dayItems.length ? (
+                          dayItems.map((item) => (
+                            <article key={item.id} className={`flex min-h-36 flex-col rounded-2xl border p-3 shadow-[0_14px_34px_-30px_rgba(31,39,34,0.58)] ${statusTone[item.status]}`}>
+                              <div className="flex items-start gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => item.status === "pending" ? setReasonTarget({ id: item.id, status: "done" }) : undefined}
+                                  className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition ${
+                                    item.status === "done"
+                                      ? "border-[#1F6C42] bg-[#1F6C42] text-[#FFF9EF]"
+                                      : item.status === "dismissed"
+                                        ? "border-[#A63F33] bg-[#FFF1EE] text-[#A63F33]"
+                                        : "border-[#BCA994] bg-white/78 text-transparent hover:border-[#25352E] hover:text-[#25352E]"
+                                  }`}
+                                  aria-label={`Mark ${item.title} done`}
+                                >
+                                  {item.status === "done" ? <Check className="h-3.5 w-3.5" /> : item.status === "dismissed" ? <X className="h-3.5 w-3.5" /> : <Check className="h-3 w-3" />}
+                                </button>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${taskTypeTone[item.type]}`}>{item.type}</span>
+                                    <span className="text-[12px] font-black text-[#7D6E5F]">{item.accountName}</span>
+                                  </div>
+                                  <p className="mt-2 text-[14px] font-black leading-snug text-[#25352E]">{item.title}</p>
+                                  <p className="mt-1 text-[12px] font-semibold leading-relaxed text-[#75685A]">{item.details}</p>
+                                </div>
+                              </div>
+                              <div className="mt-auto flex items-center justify-between gap-2 pt-3">
+                                <span className="rounded-full border border-[#D8CAB9] bg-white/58 px-2.5 py-1 text-[11px] font-black capitalize text-[#6F6254]">{item.status}</span>
+                                {item.status === "pending" ? (
+                                  <div className="flex gap-2">
+                                    <button type="button" onClick={() => setReasonTarget({ id: item.id, status: "done" })} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-black text-[#FFF9EF]">
+                                      Done
+                                    </button>
+                                    <button type="button" onClick={() => setReasonTarget({ id: item.id, status: "dismissed" })} className="rounded-full border border-[#D9C8B4] bg-white/56 px-3 py-1.5 text-[12px] font-black text-[#6F6254]">
+                                      Dismiss
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </article>
+                          ))
+                        ) : (
+                          <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[#D8CAB9] bg-white/42 p-5 text-center">
+                            <p className="text-[13px] font-bold text-[#75685A]">No actions scheduled.</p>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             </div>
           )}
         </section>

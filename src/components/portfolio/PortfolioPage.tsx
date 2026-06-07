@@ -3,8 +3,10 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useEffect, useMemo, useState } from "react";
-import { Bell, CalendarDays, Check, FileText, Mail, Pencil, Phone, Plus, Search, Settings, Sparkles, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CalendarDays, Check, FileText, Mail, Pencil, Phone, Plus, Search, Settings, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 import { associatePortfolio, portfolioAccounts, type PortfolioAccount, type PortfolioHealth } from "@/lib/v2/portfolioData";
 import type { Role } from "@/types";
@@ -4364,51 +4366,6 @@ function AccountOnboardingWorkspace({
   );
 }
 
-function NotificationsPanel({
-  open,
-  onOpenChange,
-  onSelect,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSelect: (notificationId: string) => void;
-}) {
-  const notifications = [
-    { id: "pending-account-creation", label: "Account creation draft needs KAM review" },
-    { id: "maersk-risk-drop", label: "Risk score dropped on Maersk" },
-    { id: "stripe-document-review", label: "Document proposal needs review on Stripe" },
-  ];
-
-  return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[60] bg-transparent" />
-        <Dialog.Content className="fixed right-5 top-16 z-[80] w-[min(92vw,380px)] rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] p-4 shadow-[0_28px_70px_-32px_rgba(31,39,34,0.56)] focus:outline-none">
-          <div className="flex items-center justify-between gap-3">
-            <Dialog.Title className="text-[20px] font-black tracking-[-0.05em] text-[#1F2722]">Notifications</Dialog.Title>
-            <button type="button" onClick={() => onOpenChange(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254]" aria-label="Close notifications">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mt-4 space-y-2">
-            {notifications.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onSelect(item.id)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-[#E5DACD] bg-white/58 p-3 text-left text-[13px] font-bold text-[#25352E] hover:bg-white"
-              >
-                <Bell className="h-4 w-4 shrink-0 text-[#8A7A69]" />
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
 function CammiePanel({
   role,
   accounts,
@@ -4591,14 +4548,16 @@ function CammiePanel({
 }
 
 export function PortfolioPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { role } = useRole();
+  const { fireNotification } = useNotifications();
   const [query, setQuery] = useState("");
   const [healthFilter, setHealthFilter] = useState<PortfolioHealth | "ALL">("ALL");
   const [selectedAccount, setSelectedAccount] = useState<PortfolioAccount | null>(null);
   const [selectedAccountTab, setSelectedAccountTab] = useState<AccountWorkspaceTab>("overview");
   const [createdAccounts, setCreatedAccounts] = useState<PortfolioAccount[]>([]);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [pendingAccountReviewOpen, setPendingAccountReviewOpen] = useState(false);
+  const [pendingAccountReviewOpen, setPendingAccountReviewOpen] = useState(() => searchParams.get("focus") === "pending-account-draft");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingStage, setOnboardingStage] = useState<OnboardingStage>("source-upload");
   const [selectedSourceFiles, setSelectedSourceFiles] = useState<File[]>([]);
@@ -4644,6 +4603,84 @@ export function PortfolioPage() {
   const totalArr = visibleAccounts.reduce((sum, account) => sum + account.arr, 0);
   const upcomingRenewals = visibleAccounts.filter((account) => account.renewalDays <= 90).length;
   const sourceFileNames = sourceDocuments.map((document) => document.fileName);
+  const routeFocus = searchParams.get("focus");
+  const routeAccount = searchParams.get("account");
+  const routeTab = searchParams.get("tab");
+  const pendingReviewDialogOpen = pendingAccountReviewOpen || routeFocus === "pending-account-draft";
+
+  useEffect(() => {
+    const pendingRequest = pendingAccountCreationRequests[0];
+    if (pendingRequest && role !== "ASSOCIATE") {
+      fireNotification({
+        id: `account-draft-${pendingRequest.id}`,
+        title: `${pendingRequest.draft.name} account draft needs review`,
+        detail: `${pendingRequest.submittedBy} submitted an account creation package.`,
+        href: "/portfolio?focus=pending-account-draft",
+        source: "account-creation-approval",
+        severity: "warning",
+        createdAt: "Today",
+      });
+    }
+
+    const watchedAccount = portfolioAccounts.find((account) => account.id === "v2-acct-maersk");
+    if (watchedAccount && watchedAccount.health !== "HEALTHY") {
+      fireNotification({
+        id: `score-drop-${watchedAccount.id}`,
+        title: `${watchedAccount.name} risk score fell`,
+        detail: `Score ${watchedAccount.healthScore}/100. Review the proposed mitigation task.`,
+        href: `/portfolio?account=${watchedAccount.id}&tab=overview&focus=risk-score`,
+        source: "score-monitor",
+        severity: "warning",
+        createdAt: "Today",
+      });
+    }
+  }, [fireNotification, role]);
+
+  useEffect(() => {
+    if (routeFocus === "pending-account-draft") {
+      setSelectedAccount(null);
+      setPendingAccountReviewOpen(true);
+      return;
+    }
+
+    if (!routeAccount) return;
+
+    const account = [...createdAccounts, ...portfolioAccounts, ...associatePortfolio].find((item) => (
+      item.id === routeAccount || item.name.toLowerCase().replace(/\s+/g, "-") === routeAccount.replace(/^acc-/, "")
+    ));
+    if (!account) return;
+
+    const tab: AccountWorkspaceTab = routeTab === "documents" || routeTab === "profile" ? routeTab : "overview";
+    setSelectedAccountTab(tab);
+    setSelectedAccount(account);
+  }, [createdAccounts, routeAccount, routeFocus, routeTab]);
+
+  useEffect(() => {
+    function openFromNotification(event: Event) {
+      const href = (event as CustomEvent<{ href?: string }>).detail?.href;
+      if (!href) return;
+      const target = new URL(href, window.location.origin);
+      const focusTarget = target.searchParams.get("focus");
+      if (focusTarget === "pending-account-draft") {
+        setSelectedAccount(null);
+        setPendingAccountReviewOpen(true);
+        return;
+      }
+
+      const accountTarget = target.searchParams.get("account");
+      if (!accountTarget) return;
+      const account = [...createdAccounts, ...portfolioAccounts, ...associatePortfolio].find((item) => (
+        item.id === accountTarget || item.name.toLowerCase().replace(/\s+/g, "-") === accountTarget.replace(/^acc-/, "")
+      ));
+      if (!account) return;
+      const requestedTab = target.searchParams.get("tab");
+      setSelectedAccountTab(requestedTab === "documents" || requestedTab === "profile" ? requestedTab : "overview");
+      setSelectedAccount(account);
+    }
+
+    window.addEventListener("kam:notification-selected", openFromNotification);
+    return () => window.removeEventListener("kam:notification-selected", openFromNotification);
+  }, [createdAccounts]);
 
   function resetOnboardingState() {
     setOnboardingStage("source-upload");
@@ -4986,11 +5023,27 @@ export function PortfolioPage() {
   function submitKycForKam() {
     setGeneratedKycDocument((document) => document ? { ...document, approvalStatus: "Submitted to KAM" } : document);
     setOnboardingAssistantMessages((messages) => ["KYC document submitted to KAM for approval.", ...messages]);
+    fireNotification({
+      id: `kyc-submitted-${accountDraft.name || "new-account"}`,
+      title: "KYC draft submitted for KAM review",
+      detail: `${accountDraft.name || "New account"} KYC is waiting for approval.`,
+      href: "/portfolio?focus=pending-account-draft",
+      source: "kyc-approval",
+      severity: "warning",
+    });
   }
 
   function approveKycDocument() {
     setGeneratedKycDocument((document) => document ? { ...document, approvalStatus: "Approved" } : document);
     setOnboardingAssistantMessages((messages) => ["KYC document approved.", ...messages]);
+    fireNotification({
+      id: `kyc-approved-${accountDraft.name || "new-account"}`,
+      title: "KYC draft approved",
+      detail: `${accountDraft.name || "New account"} KYC has been approved.`,
+      href: "/portfolio?focus=pending-account-draft",
+      source: "kyc-approval",
+      severity: "success",
+    });
   }
 
   function applyOnboardingPrompt() {
@@ -5029,36 +5082,29 @@ export function PortfolioPage() {
       const nextAccount = createPortfolioAccountFromDraft();
       setCreatedAccounts((accounts) => [nextAccount, ...accounts]);
       setOnboardingAssistantMessages((messages) => [`Created account: ${nextAccount.name}.`, ...messages]);
+      fireNotification({
+        id: `account-created-${nextAccount.id}`,
+        title: `${nextAccount.name} account created`,
+        detail: "The new account is now available in the portfolio.",
+        href: `/portfolio?account=${nextAccount.id}&tab=overview`,
+        source: "account-onboarding",
+        severity: "success",
+      });
       setOnboardingOpen(false);
       setSelectedAccountTab("overview");
       setSelectedAccount(nextAccount);
       return;
     }
     setOnboardingAssistantMessages((messages) => ["Account creation submitted to KAM for review.", ...messages]);
+    fireNotification({
+      id: `account-submitted-${accountDraft.name || "new-account"}`,
+      title: "Account creation submitted",
+      detail: `${accountDraft.name || "New account"} is waiting for KAM review.`,
+      href: "/portfolio?focus=pending-account-draft",
+      source: "account-onboarding",
+      severity: "warning",
+    });
     setOnboardingOpen(false);
-  }
-
-  function openAccountByName(accountName: string, tab: AccountWorkspaceTab = "overview") {
-    const account = createdAccounts.find((item) => item.name === accountName) ?? portfolioAccounts.find((item) => item.name === accountName) ?? associatePortfolio.find((item) => item.name === accountName);
-    if (account) {
-      setSelectedAccountTab(tab);
-      setSelectedAccount(account);
-    }
-  }
-
-  function selectNotification(notificationId: string) {
-    setNotificationsOpen(false);
-    if (notificationId === "pending-account-creation") {
-      setPendingAccountReviewOpen(true);
-      return;
-    }
-    if (notificationId === "maersk-risk-drop") {
-      openAccountByName("Maersk");
-      return;
-    }
-    if (notificationId === "stripe-document-review") {
-      openAccountByName("Stripe", "documents");
-    }
   }
 
   return (
@@ -5188,20 +5234,14 @@ export function PortfolioPage() {
           </div>
         </section>
       </section>
-      <button
-        type="button"
-        onClick={() => setNotificationsOpen(true)}
-        className="fixed right-5 top-5 z-[44] inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D8CAB9] bg-[#FFF9EF]/90 text-[#25352E] shadow-[0_18px_38px_-28px_rgba(31,39,34,0.7)]"
-        aria-label="Open notifications"
-      >
-        <Bell className="h-4 w-4" />
-      </button>
-      <NotificationsPanel open={notificationsOpen} onOpenChange={setNotificationsOpen} onSelect={selectNotification} />
       <CammiePanel role={role} accounts={visibleAccounts} activeAccount={selectedAccount} />
       <PendingAccountCreationDialog
-        open={pendingAccountReviewOpen}
+        open={pendingReviewDialogOpen}
         request={pendingAccountCreationRequests[0] ?? null}
-        onOpenChange={setPendingAccountReviewOpen}
+        onOpenChange={(open) => {
+          setPendingAccountReviewOpen(open);
+          if (!open && routeFocus === "pending-account-draft") router.push("/portfolio");
+        }}
       />
       <AccountModal account={selectedAccount} open={Boolean(selectedAccount)} initialTab={selectedAccountTab} onOpenChange={(open) => !open && setSelectedAccount(null)} />
       <AccountSourceUploadDialog
