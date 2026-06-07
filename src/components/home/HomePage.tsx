@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronDown, Clock, ListChecks, X } from "lucide-react";
 import { money, workspaceAccounts, workspaceActionItems, type WorkspaceActionItem, type WorkspaceHealth } from "@/lib/v2/workspaceData";
 
@@ -45,6 +46,7 @@ function reasonPlaceholder(status: ActionStatus) {
 }
 
 export function HomePage() {
+  const router = useRouter();
   const [calendarView, setCalendarView] = useState<CalendarView>("timeline");
   const [expandedHealth, setExpandedHealth] = useState<WorkspaceHealth | "renewals" | null>(null);
   const [selectedDate, setSelectedDate] = useState("2026-06-08");
@@ -87,6 +89,10 @@ export function HomePage() {
     setReason("");
   }
 
+  function openAccount(accountId: string) {
+    router.push(`/portfolio?account=${accountId}&tab=overview`);
+  }
+
   return (
     <main className="min-h-screen px-5 py-5">
       <section className="mx-auto max-w-[1500px] space-y-5">
@@ -101,60 +107,89 @@ export function HomePage() {
             </div>
           </div>
 
-          <div className="relative mt-5 grid gap-3 overflow-visible lg:grid-cols-4">
-            {healthStats.map((stat) => (
-              <button
-                key={stat.health}
-                type="button"
-                onClick={() => setExpandedHealth(expandedHealth === stat.health ? null : stat.health)}
-                className={`relative min-h-52 overflow-visible rounded-3xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 ${healthTone[stat.health]} ${
-                  expandedHealth === stat.health ? "z-20 -translate-y-1 scale-[1.015] shadow-[0_24px_54px_-30px_rgba(31,39,34,0.42)]" : "z-0"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[16px] font-black">{healthLabels[stat.health]}</p>
-                  <ChevronDown className={`h-4 w-4 transition ${expandedHealth === stat.health ? "rotate-180" : ""}`} />
-                </div>
-                <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{stat.accounts.length}</p>
-                {expandedHealth === stat.health ? (
-                  <div className="absolute inset-x-3 top-[6.75rem] rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.92)] p-3 shadow-[0_24px_56px_-34px_rgba(31,39,34,0.48)] [backdrop-filter:blur(16px)]">
-                    <div className="space-y-2">
-                    {stat.accounts.slice(0, 5).map((account) => (
-                      <div key={account.id} className="flex items-center justify-between rounded-2xl bg-white/66 px-3 py-2 text-[12px] font-bold">
-                        <span>{account.name}</span>
-                        <span>{account.score}/100</span>
-                      </div>
-                    ))}
-                    </div>
-                    <p className="text-[12px] font-bold opacity-75">{money(stat.arr)} ARR</p>
-                  </div>
-                ) : null}
-              </button>
-            ))}
-
+          {expandedHealth ? (
             <button
               type="button"
-              onClick={() => setExpandedHealth(expandedHealth === "renewals" ? null : "renewals")}
-              className={`relative min-h-52 overflow-visible rounded-3xl border border-[#D7C6B4] bg-[#FFFCF6] p-4 text-left text-[#25352E] transition-all duration-200 hover:-translate-y-0.5 ${
-                expandedHealth === "renewals" ? "z-20 -translate-y-1 scale-[1.015] shadow-[0_24px_54px_-30px_rgba(31,39,34,0.42)]" : "z-0"
+              aria-label="Close expanded account summary"
+              onClick={() => setExpandedHealth(null)}
+              className="fixed inset-0 z-20 bg-[#1F2722]/18 [backdrop-filter:blur(1px)]"
+            />
+          ) : null}
+
+          <div className="relative z-30 mt-5 grid gap-3 overflow-visible lg:grid-cols-4">
+            {healthStats.map((stat) => (
+              <article
+                key={stat.health}
+                className={`relative min-h-36 overflow-visible rounded-3xl border text-left transition-all duration-200 hover:-translate-y-0.5 ${healthTone[stat.health]} ${
+                  expandedHealth === stat.health ? "z-40 -translate-y-1 scale-[1.015] shadow-[0_30px_72px_-34px_rgba(31,39,34,0.56)]" : "z-0"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpandedHealth(expandedHealth === stat.health ? null : stat.health)}
+                  className="flex min-h-36 w-full flex-col justify-center rounded-3xl p-4 text-left"
+                  aria-expanded={expandedHealth === stat.health}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[16px] font-black">{healthLabels[stat.health]}</p>
+                    <ChevronDown className={`h-4 w-4 transition ${expandedHealth === stat.health ? "rotate-180" : ""}`} />
+                  </div>
+                  <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{stat.accounts.length}</p>
+                </button>
+                {expandedHealth === stat.health ? (
+                  <div className="absolute inset-x-3 top-[5.75rem] rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.96)] p-3 shadow-[0_28px_68px_-34px_rgba(31,39,34,0.58)] [backdrop-filter:blur(16px)]">
+                    <div className="space-y-2">
+                      {stat.accounts.slice(0, 5).map((account) => (
+                        <button
+                          key={account.id}
+                          type="button"
+                          onClick={() => openAccount(account.id)}
+                          className="flex w-full items-center justify-between rounded-2xl bg-white/72 px-3 py-2 text-[12px] font-bold transition hover:bg-[#25352E] hover:text-[#FFF9EF]"
+                        >
+                          <span>{account.name}</span>
+                          <span>{account.score}/100</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[12px] font-bold opacity-75">{money(stat.arr)} ARR</p>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+
+            <article
+              className={`relative min-h-36 overflow-visible rounded-3xl border border-[#D7C6B4] bg-[#FFFCF6] text-left text-[#25352E] transition-all duration-200 hover:-translate-y-0.5 ${
+                expandedHealth === "renewals" ? "z-40 -translate-y-1 scale-[1.015] shadow-[0_30px_72px_-34px_rgba(31,39,34,0.56)]" : "z-0"
               }`}
             >
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[16px] font-black">Renewals under 90d</p>
-                <ChevronDown className={`h-4 w-4 transition ${expandedHealth === "renewals" ? "rotate-180" : ""}`} />
-              </div>
-              <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{renewalSoon.length}</p>
+              <button
+                type="button"
+                onClick={() => setExpandedHealth(expandedHealth === "renewals" ? null : "renewals")}
+                className="flex min-h-36 w-full flex-col justify-center rounded-3xl p-4 text-left"
+                aria-expanded={expandedHealth === "renewals"}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[16px] font-black">Renewals under 90d</p>
+                  <ChevronDown className={`h-4 w-4 transition ${expandedHealth === "renewals" ? "rotate-180" : ""}`} />
+                </div>
+                <p className="mt-3 text-4xl font-black tracking-[-0.05em]">{renewalSoon.length}</p>
+              </button>
               {expandedHealth === "renewals" ? (
-                <div className="absolute inset-x-3 top-[6.75rem] space-y-2 rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.92)] p-3 shadow-[0_24px_56px_-34px_rgba(31,39,34,0.48)] [backdrop-filter:blur(16px)]">
+                <div className="absolute inset-x-3 top-[5.75rem] space-y-2 rounded-3xl border border-white/80 bg-[rgba(255,252,246,0.96)] p-3 shadow-[0_28px_68px_-34px_rgba(31,39,34,0.58)] [backdrop-filter:blur(16px)]">
                   {renewalSoon.map((account) => (
-                    <div key={account.id} className="flex items-center justify-between rounded-2xl bg-[#F7F1E7] px-3 py-2 text-[12px] font-bold">
+                    <button
+                      key={account.id}
+                      type="button"
+                      onClick={() => openAccount(account.id)}
+                      className="flex w-full items-center justify-between rounded-2xl bg-[#F7F1E7] px-3 py-2 text-[12px] font-bold transition hover:bg-[#25352E] hover:text-[#FFF9EF]"
+                    >
                       <span>{account.name}</span>
                       <span>{account.renewalDays}d</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : null}
-            </button>
+            </article>
           </div>
         </div>
 
@@ -217,25 +252,45 @@ export function HomePage() {
               <DayPanel date={selectedDate} items={selectedItems} onAction={(id, status) => setReasonTarget({ id, status })} />
             </div>
           ) : (
-            <div className="relative mt-5 overflow-hidden rounded-[28px] border border-[#E1D3C2] bg-[linear-gradient(135deg,#FFF9EF_0%,#F8EFE2_48%,#EEF6EE_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-              <div className="grid gap-4 lg:grid-cols-3">
+            <div className="relative mt-5 overflow-hidden rounded-[30px] border border-[#D9CCE2] bg-[radial-gradient(circle_at_10%_20%,rgba(255,255,255,0.78),transparent_28%),linear-gradient(135deg,#EFE6F7_0%,#E6D8F3_42%,#F8EFE2_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+              <div className="pointer-events-none absolute left-8 right-8 top-[5.8rem] hidden h-[3px] rounded-full bg-[#8F6AC8]/38 lg:block" />
+              <div className="grid gap-5 lg:grid-cols-3">
                 {["2026-06-08", "2026-06-09", "2026-06-10"].map((date, index) => {
                   const dayItems = groupedByDate[date] || [];
                   const doneCount = dayItems.filter((item) => item.status === "done").length;
                   const pendingCount = dayItems.filter((item) => item.status === "pending").length;
+                  const complete = dayItems.length > 0 && pendingCount === 0;
                   return (
-                    <section key={date} className="relative flex min-h-[22rem] flex-col rounded-[26px] border border-[#D8CAB9] bg-[rgba(255,252,246,0.84)] p-4 shadow-[0_22px_52px_-38px_rgba(31,39,34,0.56)] [backdrop-filter:blur(14px)]">
-                      <div className="mb-4 flex items-start justify-between gap-3">
+                    <section key={date} className="relative flex min-h-[25rem] flex-col pt-2">
+                      <div className="relative z-10 mb-7 flex items-start justify-between gap-3 rounded-[24px] border border-white/58 bg-[rgba(255,252,246,0.52)] px-4 py-3 shadow-[0_18px_45px_-38px_rgba(59,40,91,0.72)] [backdrop-filter:blur(16px)]">
                         <div>
-                          <p className="text-[20px] font-black tracking-[-0.05em] text-[#25352E]">{displayDate(date)}</p>
-                          <p className="mt-1 text-[12px] font-bold text-[#7D6E5F]">{pendingCount} pending · {doneCount} done</p>
+                          <p className="text-[22px] font-black tracking-[-0.05em] text-[#25352E]">{displayDate(date)}</p>
+                          <div className="mt-1 flex items-center gap-2 text-[12px] font-black text-[#6F6254]">
+                            <span>{pendingCount} pending</span>
+                            <span className="h-1 w-1 rounded-full bg-[#8F6AC8]/55" />
+                            <span>{doneCount} done</span>
+                          </div>
                         </div>
-                        <Clock className="h-4 w-4 text-[#827365]" />
+                        <div className={`absolute left-1/2 top-[calc(100%+0.35rem)] z-20 inline-flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border-[5px] border-[#EFE6F7] shadow-[0_16px_30px_-18px_rgba(70,45,112,0.72)] ${
+                          complete ? "bg-[#6F4FB1] text-white" : "bg-[#F5EDF9] text-[#6F4FB1]"
+                        }`}>
+                          {complete ? <Check className="h-5 w-5" /> : <Clock className="h-4 w-4" />}
+                        </div>
                       </div>
-                      <div className="flex flex-1 flex-col gap-3">
+                      <div className={`relative flex flex-1 flex-col gap-3 rounded-[28px] border p-4 shadow-[0_24px_62px_-42px_rgba(59,40,91,0.74)] ${
+                        index % 2 === 0
+                          ? "border-[#CDBAE8] bg-[rgba(128,92,190,0.22)]"
+                          : "border-[#E2CFB7] bg-[rgba(255,249,239,0.68)]"
+                      } [backdrop-filter:blur(14px)]`}>
                         {dayItems.length ? (
                           dayItems.map((item) => (
-                            <article key={item.id} className={`flex min-h-36 flex-col rounded-2xl border p-3 shadow-[0_14px_34px_-30px_rgba(31,39,34,0.58)] ${statusTone[item.status]}`}>
+                            <article key={item.id} className={`flex min-h-[11rem] flex-col rounded-[22px] border p-3 shadow-[0_18px_36px_-30px_rgba(59,40,91,0.66)] ${
+                              item.status === "done"
+                                ? "border-[#BFD9C6] bg-[#F3FAF2]"
+                                : item.status === "dismissed"
+                                  ? "border-[#EAB3A9] bg-[#FFF1EE]"
+                                  : "border-white/68 bg-[rgba(255,252,246,0.76)]"
+                            }`}>
                               <div className="flex items-start gap-3">
                                 <button
                                   type="button"
@@ -256,7 +311,7 @@ export function HomePage() {
                                     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${taskTypeTone[item.type]}`}>{item.type}</span>
                                     <span className="text-[12px] font-black text-[#7D6E5F]">{item.accountName}</span>
                                   </div>
-                                  <p className="mt-2 text-[14px] font-black leading-snug text-[#25352E]">{item.title}</p>
+                                  <p className="mt-2 text-[15px] font-black leading-snug text-[#25352E]">{item.title}</p>
                                   <p className="mt-1 text-[12px] font-semibold leading-relaxed text-[#75685A]">{item.details}</p>
                                 </div>
                               </div>

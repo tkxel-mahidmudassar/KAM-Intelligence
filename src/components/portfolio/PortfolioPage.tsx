@@ -302,7 +302,7 @@ interface PendingAccountCreationRequest {
   sourceFiles: string[];
 }
 
-const kpiOverviewRows: KpiOverviewRow[] = [
+const baseKpiOverviewRows: KpiOverviewRow[] = [
   {
     id: "relationship",
     name: "Relationship Health",
@@ -521,6 +521,345 @@ const kpiOverviewRows: KpiOverviewRow[] = [
     dueInDays: 10,
   },
 ];
+
+function cloneKpiRows() {
+  return baseKpiOverviewRows.map((row) => ({
+    ...row,
+    subParameters: row.subParameters.map((parameter) => ({
+      ...parameter,
+      fallingWhy: parameter.fallingWhy
+        ? {
+            ...parameter.fallingWhy,
+            sources: [...parameter.fallingWhy.sources],
+          }
+        : undefined,
+    })),
+  }));
+}
+
+function clampFrameworkScore(score: number) {
+  return Math.min(5, Math.max(1, score));
+}
+
+function accountScoreBand(account: PortfolioAccount) {
+  if (account.health === "CRITICAL") return 2;
+  if (account.health === "AT_RISK") return 3;
+  if (account.healthScore >= 90) return 5;
+  return 4;
+}
+
+function accountTrend(score: number): KpiTrend {
+  if (score <= 2) return "down";
+  if (score === 3) return "flat";
+  return "up";
+}
+
+function findKpiRow(rows: KpiOverviewRow[], rowId: string) {
+  return rows.find((row) => row.id === rowId);
+}
+
+function setKpiScore(rows: KpiOverviewRow[], rowId: string, score: number, trend: KpiTrend = accountTrend(score)) {
+  const row = findKpiRow(rows, rowId);
+  if (!row) return;
+  row.score = clampFrameworkScore(score);
+  row.trend = trend;
+}
+
+function setSubParameterScore(
+  rows: KpiOverviewRow[],
+  rowId: string,
+  parameterName: string,
+  score: number,
+  trend: KpiTrend = accountTrend(score),
+  summary?: string,
+) {
+  const row = findKpiRow(rows, rowId);
+  const parameter = row?.subParameters.find((item) => item.name === parameterName);
+  if (!parameter) return;
+  parameter.score = clampFrameworkScore(score);
+  parameter.trend = trend;
+  parameter.fallingWhy =
+    summary && score <= 3
+      ? {
+          summary,
+          sources: ["Account score trend", "Account journey history", "AI rules learning log"],
+        }
+      : undefined;
+}
+
+function setKpiAction(rows: KpiOverviewRow[], rowId: string, why: string, task: string, taskType: TaskType, dueInDays: number) {
+  const row = findKpiRow(rows, rowId);
+  if (!row) return;
+  row.why = why;
+  row.task = task;
+  row.taskType = taskType;
+  row.dueInDays = dueInDays;
+}
+
+function clearKpiAction(rows: KpiOverviewRow[], rowId: string) {
+  const row = findKpiRow(rows, rowId);
+  if (!row) return;
+  delete row.why;
+  delete row.task;
+  delete row.taskType;
+  delete row.dueInDays;
+}
+
+function alignSubParametersToRowScores(rows: KpiOverviewRow[], account: PortfolioAccount) {
+  rows.forEach((row, rowIndex) => {
+    row.subParameters.forEach((parameter, parameterIndex) => {
+      const variationSeed = account.id.length + rowIndex + parameterIndex;
+      const variation = variationSeed % 5 === 0 ? -1 : variationSeed % 4 === 0 ? 1 : 0;
+      const score = clampFrameworkScore(row.score + variation);
+      parameter.score = score;
+      parameter.trend = score < row.score ? "down" : row.trend;
+      parameter.fallingWhy =
+        score <= 3 && row.score <= 3
+          ? {
+              summary: `${parameter.name} is below the healthy band for ${account.name}, so it should be checked against the account journey before the next client checkpoint.`,
+              sources: ["Account score trend", "Account journey history", "AI rules learning log"],
+            }
+          : undefined;
+    });
+  });
+}
+
+function applyBaselineScores(rows: KpiOverviewRow[], account: PortfolioAccount) {
+  const baseline = accountScoreBand(account);
+  const renewalPressure = account.renewalDays < 90 ? 2 : account.renewalDays < 140 ? 3 : baseline;
+  const deliveryPressure = account.health === "CRITICAL" ? 2 : account.health === "AT_RISK" ? 3 : baseline;
+  const relationshipScore = account.relationshipSignal.toLowerCase().includes("escalation")
+    ? 2
+    : account.relationshipSignal.toLowerCase().includes("friction") || account.relationshipSignal.toLowerCase().includes("incomplete")
+      ? 3
+      : baseline;
+
+  setKpiScore(rows, "relationship", relationshipScore);
+  setKpiScore(rows, "contract-health", renewalPressure);
+  setKpiScore(rows, "customer-success", account.health === "HEALTHY" ? baseline : Math.max(2, baseline - 1));
+  setKpiScore(rows, "risk", account.health === "CRITICAL" ? 1 : account.health === "AT_RISK" ? 2 : 4, account.health === "HEALTHY" ? "flat" : "down");
+  setKpiScore(rows, "resource-health", deliveryPressure);
+  setKpiScore(rows, "project-health", deliveryPressure);
+  setKpiScore(rows, "financial-health", account.health === "CRITICAL" ? 2 : account.arr > 1_500_000 ? 4 : 3);
+  setKpiScore(rows, "whitespace", account.health === "HEALTHY" ? (account.relationshipSignal.toLowerCase().includes("expansion") ? 5 : 4) : 3);
+
+  alignSubParametersToRowScores(rows, account);
+
+  if (account.renewalDays < 140) {
+    setSubParameterScore(
+      rows,
+      "contract-health",
+      "Renewability",
+      renewalPressure,
+      "down",
+      `${account.name} is ${account.renewalDays} days from renewal, so the renewal owner and commercial next step need to be confirmed.`,
+    );
+    setSubParameterScore(
+      rows,
+      "contract-health",
+      "Notice Period Protection",
+      Math.max(2, renewalPressure),
+      "down",
+      `${account.name} has a near-term contract window, making notice-period and procurement timing more important than usual.`,
+    );
+  }
+
+  if (account.health !== "HEALTHY") {
+    setSubParameterScore(
+      rows,
+      "risk",
+      "Delivery Risk",
+      account.health === "CRITICAL" ? 1 : 2,
+      "down",
+      `${account.name} is marked ${healthLabel[account.health]}, and the current workstream (${account.currentWork}) has not yet been converted into a named mitigation path.`,
+    );
+    setSubParameterScore(
+      rows,
+      "project-health",
+      "Client Confidence",
+      account.health === "CRITICAL" ? 2 : 3,
+      "down",
+      `${account.name}'s relationship signal is "${account.relationshipSignal}", so client confidence needs direct validation in the next checkpoint.`,
+    );
+  }
+}
+
+function applyIndustrySpecificScores(rows: KpiOverviewRow[], account: PortfolioAccount) {
+  const industry = account.industry.toLowerCase();
+  if (industry.includes("logistics")) {
+    setSubParameterScore(
+      rows,
+      "project-health",
+      "Delivery Performance",
+      account.health === "HEALTHY" ? 4 : 2,
+      account.health === "HEALTHY" ? "flat" : "down",
+      `${account.name}'s logistics work depends on operational reliability, so delivery performance is weighted by exception handling and platform stability.`,
+    );
+    setSubParameterScore(rows, "risk", "Industry Risk", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
+  }
+  if (industry.includes("aviation") || industry.includes("energy")) {
+    setSubParameterScore(
+      rows,
+      "risk",
+      "Commercial Risk",
+      account.health === "CRITICAL" ? 1 : 2,
+      "down",
+      `${account.name} operates in a high-governance ${account.industry} environment, so unresolved scope or sponsor pressure materially raises commercial risk.`,
+    );
+    setSubParameterScore(rows, "project-health", "Escalation Status", account.health === "HEALTHY" ? 4 : 2, account.health === "HEALTHY" ? "flat" : "down");
+  }
+  if (industry.includes("banking") || industry.includes("financial") || industry.includes("payments") || industry.includes("fintech")) {
+    setSubParameterScore(rows, "contract-health", "Termination Protection", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
+    setSubParameterScore(rows, "financial-health", "Contract vs Billing Alignment", account.health === "HEALTHY" ? 5 : 3, account.health === "HEALTHY" ? "up" : "flat");
+  }
+  if (industry.includes("pharma") || industry.includes("health")) {
+    setSubParameterScore(rows, "customer-success", "Issue Resolution", account.health === "HEALTHY" ? 5 : 3, account.health === "HEALTHY" ? "up" : "down");
+    setSubParameterScore(rows, "contract-health", "Contract Duration", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
+  }
+  if (industry.includes("retail") || industry.includes("commerce")) {
+    setSubParameterScore(rows, "whitespace", "Cross-Sell Potential", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "up" : "flat");
+    setSubParameterScore(rows, "customer-success", "Communication Satisfaction", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "up" : "down");
+  }
+}
+
+function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAccount) {
+  const name = account.name.toLowerCase();
+  if (name.includes("maersk")) {
+    setKpiScore(rows, "risk", 2, "down");
+    setKpiScore(rows, "contract-health", 3, "down");
+    setKpiScore(rows, "project-health", 2, "down");
+    setKpiAction(
+      rows,
+      "risk",
+      "Maersk is inside a near-renewal window and the port visibility workstream has delivery timing under review.",
+      "Confirm delivery risk owner, competitor exposure, and renewal mitigation plan for Maersk.",
+      "To-do",
+      3,
+    );
+    setKpiAction(
+      rows,
+      "project-health",
+      "The port visibility platform needs a clearer execution checkpoint before commercial confidence can recover.",
+      "Run a Maersk delivery governance review with the pod lead and client sponsor.",
+      "Meeting",
+      6,
+    );
+  } else if (name.includes("emirates")) {
+    setKpiScore(rows, "project-health", 2, "down");
+    setKpiScore(rows, "risk", 2, "down");
+    setKpiScore(rows, "relationship", 3, "flat");
+    setKpiAction(
+      rows,
+      "project-health",
+      "Emirates has scope-change pressure around the passenger operations dashboard, which can dilute delivery confidence.",
+      "Lock scope-change decisions and next milestone owners for Emirates.",
+      "Meeting",
+      5,
+    );
+  } else if (name.includes("adidas")) {
+    setKpiScore(rows, "contract-health", 2, "down");
+    setKpiScore(rows, "risk", 2, "down");
+    setKpiScore(rows, "whitespace", 3, "flat");
+    setKpiAction(
+      rows,
+      "contract-health",
+      "Adidas has only 74 days to renewal and the renewal narrative is not yet mature.",
+      "Create the Adidas renewal readiness map covering buyer, procurement path, and value proof.",
+      "To-do",
+      2,
+    );
+  } else if (name === "bp") {
+    setKpiScore(rows, "risk", 1, "down");
+    setKpiScore(rows, "relationship", 2, "down");
+    setKpiScore(rows, "contract-health", 2, "down");
+    setKpiScore(rows, "project-health", 2, "down");
+    setKpiAction(
+      rows,
+      "relationship",
+      "BP has an open executive escalation, so stakeholder confidence cannot be treated as healthy.",
+      "Schedule an executive recovery call for BP with a named remediation owner.",
+      "Meeting",
+      1,
+    );
+    setKpiAction(
+      rows,
+      "risk",
+      "BP combines a critical health score with a 48-day renewal window, creating immediate retention exposure.",
+      "Build a BP renewal rescue plan with commercial, delivery, and executive owners.",
+      "To-do",
+      1,
+    );
+  } else if (name.includes("fedex")) {
+    setKpiScore(rows, "project-health", 1, "down");
+    setKpiScore(rows, "resource-health", 2, "down");
+    setKpiScore(rows, "risk", 1, "down");
+    setKpiAction(
+      rows,
+      "project-health",
+      "FedEx delivery confidence is damaged on exception triage workflows, so recovery needs to be visible before renewal.",
+      "Stand up a FedEx recovery plan with daily exception triage and sponsor updates.",
+      "Meeting",
+      1,
+    );
+  } else if (name.includes("jpmorgan") || name.includes("hsbc") || name.includes("barclays")) {
+    setKpiScore(rows, "contract-health", 3, "down");
+    setKpiScore(rows, "relationship", 3, "flat");
+    setKpiAction(
+      rows,
+      "contract-health",
+      `${account.name} has procurement or commercial review friction, so renewal readiness needs stronger evidence.`,
+      `Confirm ${account.name} procurement path and commercial decision owner.`,
+      "To-do",
+      5,
+    );
+  } else if (name.includes("roche") || name.includes("philips")) {
+    setKpiScore(rows, "project-health", 3, "down");
+    setKpiScore(rows, "risk", 2, "down");
+    setKpiAction(
+      rows,
+      "project-health",
+      `${account.name} has healthcare delivery blockers that need clinical or technical stakeholder closure.`,
+      `Resolve ${account.name} blocker ownership with the client technical sponsor.`,
+      "Meeting",
+      4,
+    );
+  }
+}
+
+function removeUnneededActions(rows: KpiOverviewRow[], account: PortfolioAccount) {
+  rows.forEach((row) => {
+    if (row.score >= 4 || (account.health === "HEALTHY" && row.score >= 3)) {
+      clearKpiAction(rows, row.id);
+    }
+  });
+}
+
+function buildAccountKpiRows(account: PortfolioAccount | null): KpiOverviewRow[] {
+  const rows = cloneKpiRows();
+  if (!account) return rows;
+
+  applyBaselineScores(rows, account);
+  applyIndustrySpecificScores(rows, account);
+  applyNamedAccountReality(rows, account);
+
+  if (account.health === "HEALTHY" && account.relationshipSignal.toLowerCase().includes("expansion")) {
+    setKpiScore(rows, "whitespace", 5, "up");
+  }
+
+  if (account.health !== "HEALTHY" && !findKpiRow(rows, "risk")?.task) {
+    setKpiAction(
+      rows,
+      "risk",
+      `${account.name} is currently ${healthLabel[account.health]} with a ${account.renewalDays}-day renewal window and a "${account.relationshipSignal}" signal.`,
+      `Confirm the next risk owner and mitigation checkpoint for ${account.name}.`,
+      "To-do",
+      account.health === "CRITICAL" ? 1 : 4,
+    );
+  }
+
+  removeUnneededActions(rows, account);
+  return rows;
+}
 
 const accountContacts: AccountContact[] = [
   {
@@ -1389,6 +1728,7 @@ function OverviewActionCell({
 function KpiWeightSettingsModal({
   open,
   onOpenChange,
+  kpiRows,
   kpiWeights,
   weightDrafts,
   weightRequest,
@@ -1404,6 +1744,7 @@ function KpiWeightSettingsModal({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  kpiRows: KpiOverviewRow[];
   kpiWeights: Record<string, number>;
   weightDrafts: Record<string, { weight: string }>;
   weightRequest: KpiWeightRequest | undefined;
@@ -1417,7 +1758,7 @@ function KpiWeightSettingsModal({
   onApproveRequest: () => void;
   onDenyRequest: () => void;
 }) {
-  const draftWeights = kpiOverviewRows.reduce<Record<string, number>>((weights, row) => {
+  const draftWeights = kpiRows.reduce<Record<string, number>>((weights, row) => {
     weights[row.id] = clampPercent(weightDrafts[row.id]?.weight ?? String(kpiWeights[row.id] ?? parseWeightValue(row.weight)));
     return weights;
   }, {});
@@ -1480,7 +1821,7 @@ function KpiWeightSettingsModal({
             ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
-              {kpiOverviewRows.map((row) => {
+              {kpiRows.map((row) => {
                 const currentWeight = kpiWeights[row.id] ?? parseWeightValue(row.weight);
                 const draft = weightDrafts[row.id] ?? { weight: String(currentWeight) };
                 const draftWeight = clampPercent(draft.weight);
@@ -1555,6 +1896,7 @@ function KpiWeightSettingsModal({
 }
 
 function OverviewTab({
+  kpiRows,
   activeTasks,
   acceptedTaskIds,
   pendingDenials,
@@ -1585,6 +1927,7 @@ function OverviewTab({
   onApproveWeightRequest,
   onDenyWeightRequest,
 }: {
+  kpiRows: KpiOverviewRow[];
   activeTasks: ActiveTask[];
   acceptedTaskIds: Set<string>;
   pendingDenials: Record<string, string>;
@@ -1619,7 +1962,7 @@ function OverviewTab({
   const [hoveredOverrideTargetId, setHoveredOverrideTargetId] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
   const [weightSettingsOpen, setWeightSettingsOpen] = useState(false);
-  const sortedKpiRows = [...kpiOverviewRows].sort((a, b) => a.score - b.score);
+  const sortedKpiRows = [...kpiRows].sort((a, b) => a.score - b.score);
 
   function toggleRow(rowId: string) {
     setExpandedRows((rows) => {
@@ -1821,6 +2164,7 @@ function OverviewTab({
       <KpiWeightSettingsModal
         open={weightSettingsOpen}
         onOpenChange={setWeightSettingsOpen}
+        kpiRows={kpiRows}
         kpiWeights={kpiWeights}
         weightDrafts={weightDrafts}
         weightRequest={weightRequest}
@@ -3123,6 +3467,7 @@ function AccountModal({
   const [weightRequest, setWeightRequest] = useState<KpiWeightRequest | undefined>();
 
   const acceptedTaskIds = useMemo(() => new Set(activeTasks.map((task) => task.id)), [activeTasks]);
+  const kpiRows = useMemo(() => buildAccountKpiRows(account), [account]);
   const isAssociate = role === "ASSOCIATE";
   const canOverrideDirectly = role === "KAM";
 
@@ -3186,7 +3531,7 @@ function AccountModal({
   }
 
   function defaultScoreForOverrideTarget(targetId: string) {
-    for (const row of kpiOverviewRows) {
+    for (const row of kpiRows) {
       for (const parameter of row.subParameters) {
         if (subParameterKey(row.id, parameter.name) === targetId) return parameter.score;
       }
@@ -3258,12 +3603,12 @@ function AccountModal({
   }
 
   function defaultWeightForKpi(rowId: string) {
-    const row = kpiOverviewRows.find((item) => item.id === rowId);
+    const row = kpiRows.find((item) => item.id === rowId);
     return row ? parseWeightValue(row.weight) : 0;
   }
 
   function draftKpiWeights() {
-    return kpiOverviewRows.reduce<Record<string, number>>((weights, row) => {
+    return kpiRows.reduce<Record<string, number>>((weights, row) => {
       weights[row.id] = clampPercent(weightDrafts[row.id]?.weight ?? String(kpiWeights[row.id] ?? defaultWeightForKpi(row.id)));
       return weights;
     }, {});
@@ -3375,6 +3720,7 @@ function AccountModal({
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <Tabs.Content value="overview" className="focus:outline-none">
                 <OverviewTab
+                  kpiRows={kpiRows}
                   activeTasks={activeTasks}
                   acceptedTaskIds={acceptedTaskIds}
                   pendingDenials={pendingDenials}

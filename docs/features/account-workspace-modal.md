@@ -99,6 +99,16 @@ The sub-parameters are also sourced from the framework:
 The KPI rows are always sorted by score in ascending order, with the lowest
 score at the top and the highest score at the bottom.
 
+The KPI framework is shared across accounts, but the row scores, falling
+sub-parameter diagnoses, proposed tasks, and due dates are generated per
+account. The current prototype derives those account-specific rows from the
+selected account's health state, health score, industry, ARR, renewal window,
+current workstream, and relationship signal. Named high-risk demo accounts
+such as Maersk, BP, FedEx, Emirates, Adidas, regulated finance accounts, and
+healthcare accounts also receive tailored weak dimensions and proposed next
+steps so account workspaces do not reuse the same Stripe-style or
+Maersk-style data.
+
 Each row includes:
 
 - KPI name

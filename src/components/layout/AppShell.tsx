@@ -163,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <p className="text-[13px] font-black text-[#25352E]">{userName || "Sarah Chen"}</p>
                     <p className="truncate text-[11px] font-bold text-[#7D6E5F]">{userEmail || "sarah.chen@tkxel.com"}</p>
                   </div>
-                  <Link href="/settings" onClick={() => setProfileMenuOpen(false)} className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-bold text-[#25352E] hover:bg-[#F0E7DA]" role="menuitem">
+                  <Link href="/profile" onClick={() => setProfileMenuOpen(false)} className="mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-bold text-[#25352E] hover:bg-[#F0E7DA]" role="menuitem">
                     <UserRound className="h-4 w-4" />
                     My profile
                   </Link>

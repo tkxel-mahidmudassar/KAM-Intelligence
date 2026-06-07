@@ -9,7 +9,7 @@ Built in:
 - Left sidebar navigation for Home, Portfolio, and Settings.
 - Compact role switcher in the top bar.
 - Top-right notification bell with route-aware notifications.
-- Avatar dropdown with My profile and Log out.
+- Avatar dropdown with My profile and Log out. My profile routes to a dedicated `/profile` page, not the general Settings page.
 - Login and forgot-password screens render without the dashboard shell.
 
 Notifications currently route to the relevant module using client navigation:
@@ -25,9 +25,11 @@ The Home page is a portfolio operating view.
 Built in:
 
 - Four expandable topline cards: healthy accounts, at risk accounts, critical accounts, and renewals under 90 days.
+- Topline cards stay compact by default. Expanding one opens a focused popover-style account list and dims the rest of the page behind it.
+- Accounts inside expanded topline cards are clickable and route to the relevant Portfolio account workspace overview.
 - Month calendar with action counts per day.
 - Day detail panel after selecting a calendar date.
-- Timeline view for the next three operating days.
+- Timeline view for the next three operating days. The timeline uses a horizontal rail with checkpoint nodes and checklist cards attached to each day.
 - Done and dismiss actions for calendar items.
 - Done and dismiss both require a reason in a floating modal before status changes locally.
 
@@ -55,7 +57,6 @@ Built in:
 - Playbook upload controls per KPI.
 - AI rules playbook display and local add-rule flow for learned denial/dismissal behavior.
 - Mock integrations: Salesforce, Gmail, Jira, Worksphere, Finance Invoice Tracking, LLM, and AI Note Taker. Integration pills can be toggled locally between connected and needs setup.
-- My profile card using the current active user context.
 
 Current persistence:
 
@@ -73,6 +74,18 @@ Built in:
 - Demo account type shortcuts for Associate, KAM, and C-Level set the active demo user and route into Home.
 - Login sets the active demo user in role context and routes to Home.
 - Forgot password flow collects an email and shows non-revealing success copy.
+
+## Profile
+
+The profile page is a dedicated user settings surface at `/profile`.
+
+Built in:
+
+- Editable name and email fields.
+- Current role display.
+- Password change form with current password, new password, and confirmation fields.
+- Save profile updates the active demo user context.
+- Password changes are validated locally for this prototype.
 
 Current persistence:
 

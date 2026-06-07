@@ -15,7 +15,7 @@ const ruleLog = [
 ];
 
 export function SettingsPage() {
-  const { role, userName, userEmail } = useRole();
+  const { role, userName } = useRole();
   const { fireNotification } = useNotifications();
   const [weights, setWeights] = useState(defaultKpiWeights);
   const [associates, setAssociates] = useState(initialAssociates);
@@ -160,36 +160,22 @@ export function SettingsPage() {
           </div>
 
           <div className="rounded-3xl border border-[#E1D3C2] bg-[#FFFCF6] p-4">
-            <h2 className="text-xl font-black text-[#25352E]">My profile</h2>
-            <div className="mt-4 rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-4">
-              <div className="flex items-center gap-3">
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#25352E] text-[16px] font-black text-[#FFF9EF]">
-                  {(userName || "Sarah Chen").split(" ").map((part) => part[0]).join("").slice(0, 2)}
-                </span>
-                <div>
-                  <p className="text-[16px] font-black text-[#25352E]">{userName || "Sarah Chen"}</p>
-                  <p className="text-[13px] font-bold text-[#75685A]">{userEmail || "sarah.chen@tkxel.com"}</p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-4">
-              <h3 className="text-[16px] font-black text-[#25352E]">Integrations</h3>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {integrationMocks.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => toggleIntegration(name)}
-                    className="flex items-center justify-between rounded-2xl border border-[#E1D3C2] bg-[#FFFCF6] px-3 py-2 text-left transition hover:border-[#25352E]/45"
-                  >
-                    <span className="text-[13px] font-black text-[#25352E]">{name}</span>
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-black ${integrationStatuses[name] === "connected" ? "bg-[#EDF8EE] text-[#1F6C42]" : "bg-[#F2E8D8] text-[#6E5F4F]"}`}>
-                      <Link2 className="h-3.5 w-3.5" />
-                      {integrationStatuses[name]}
-                    </span>
-                  </button>
-                ))}
-              </div>
+            <h2 className="text-xl font-black text-[#25352E]">Integrations</h2>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {integrationMocks.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => toggleIntegration(name)}
+                  className="flex items-center justify-between rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] px-3 py-2 text-left transition hover:border-[#25352E]/45"
+                >
+                  <span className="text-[13px] font-black text-[#25352E]">{name}</span>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-black ${integrationStatuses[name] === "connected" ? "bg-[#EDF8EE] text-[#1F6C42]" : "bg-[#F2E8D8] text-[#6E5F4F]"}`}>
+                    <Link2 className="h-3.5 w-3.5" />
+                    {integrationStatuses[name]}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </section>
