@@ -41,6 +41,14 @@ Current persistence:
 ## Settings
 
 The Settings page is the configuration surface for the V2 prototype.
+The page uses a compact control-surface layout instead of oversized empty
+cards:
+
+- A small top summary strip shows weight total, allocation count, playbook
+  upload progress, and signed-in user.
+- KPI weights and integrations sit in the first row.
+- Associates, allocations, playbooks, and AI rules use scrollable regions so
+  long lists do not stretch the entire page.
 
 Built in:
 

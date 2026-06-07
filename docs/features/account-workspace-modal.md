@@ -103,11 +103,20 @@ The KPI framework is shared across accounts, but the row scores, falling
 sub-parameter diagnoses, proposed tasks, and due dates are generated per
 account. The current prototype derives those account-specific rows from the
 selected account's health state, health score, industry, ARR, renewal window,
-current workstream, and relationship signal. Named high-risk demo accounts
-such as Maersk, BP, FedEx, Emirates, Adidas, regulated finance accounts, and
-healthcare accounts also receive tailored weak dimensions and proposed next
-steps so account workspaces do not reuse the same Stripe-style or
-Maersk-style data.
+current workstream, and relationship signal.
+
+Named high-risk demo accounts receive tailored weak dimensions and proposed
+next steps so low-score accounts do not all fail for the same reason:
+
+- Maersk is delivery-risk and roadmap-visibility driven.
+- Emirates is scope-governance and change-control driven.
+- Adidas is renewal-readiness and displacement-risk driven.
+- BP is executive-escalation and sponsor-recovery driven.
+- FedEx is delivery-confidence and resource-coverage driven.
+- JPMorgan, HSBC, and Barclays split across procurement friction, stakeholder
+  coverage, and commercial-review risk.
+- Roche and Philips split across integration blockers, issue resolution, and
+  clinical stakeholder confidence.
 
 Each row includes:
 

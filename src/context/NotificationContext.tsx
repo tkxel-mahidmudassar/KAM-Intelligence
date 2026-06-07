@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { portfolioAccounts } from "@/lib/v2/portfolioData";
+import { workspaceActionItems } from "@/lib/v2/workspaceData";
 
 export type NotificationSeverity = "info" | "warning" | "success";
 
@@ -32,19 +34,113 @@ interface NotificationContextValue {
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 const LS_NOTIFICATIONS = "kam_v2_notifications";
 
+function portfolioHrefForAccountName(accountName: string, tab: "overview" | "profile" | "documents" = "overview", focus?: string) {
+  const account = portfolioAccounts.find((item) => item.name.toLowerCase() === accountName.toLowerCase());
+  const params = new URLSearchParams();
+  if (account) params.set("account", account.id);
+  params.set("tab", tab);
+  if (focus) params.set("focus", focus);
+  return account ? `/portfolio?${params.toString()}` : "/portfolio";
+}
+
+function baselineNotifications(): AppNotification[] {
+  const criticalAccounts = portfolioAccounts
+    .filter((account) => account.health === "CRITICAL")
+    .sort((a, b) => a.healthScore - b.healthScore)
+    .slice(0, 3);
+  const atRiskRenewals = portfolioAccounts
+    .filter((account) => account.health === "AT_RISK" && account.renewalDays <= 120)
+    .sort((a, b) => a.renewalDays - b.renewalDays)
+    .slice(0, 4);
+  const dueActions = workspaceActionItems
+    .filter((item) => item.status === "pending")
+    .slice(0, 4);
+
+  const notifications: AppNotification[] = [
+    {
+      id: "account-draft-pending-novagrid",
+      title: "NovaGrid account draft needs review",
+      detail: "Aisha submitted a new account creation package.",
+      href: "/portfolio?focus=pending-account-draft",
+      source: "account-creation-approval",
+      severity: "warning",
+      createdAt: "Today",
+      read: false,
+    },
+    {
+      id: "playbook-project-health-parsed",
+      title: "Project Health playbook parsed",
+      detail: "The new playbook is ready for score task suggestions.",
+      href: "/settings?section=playbooks",
+      source: "playbook-upload",
+      severity: "info",
+      createdAt: "Today",
+      read: false,
+    },
+  ];
+
+  criticalAccounts.forEach((account) => {
+    notifications.push({
+      id: `critical-account-${account.id}`,
+      title: `${account.name} is critical`,
+      detail: `Score ${account.healthScore}/100. Review the weakest KPI and recovery task.`,
+      href: `/portfolio?account=${account.id}&tab=overview`,
+      source: "score-monitor",
+      severity: "warning",
+      createdAt: "Today",
+      read: false,
+    });
+  });
+
+  atRiskRenewals.forEach((account) => {
+    notifications.push({
+      id: `renewal-risk-${account.id}`,
+      title: `${account.name} renewal risk needs attention`,
+      detail: `${account.renewalDays} days to renewal with score ${account.healthScore}/100.`,
+      href: `/portfolio?account=${account.id}&tab=overview`,
+      source: "renewal-monitor",
+      severity: "warning",
+      createdAt: "Today",
+      read: false,
+    });
+  });
+
+  dueActions.forEach((item) => {
+    notifications.push({
+      id: `due-action-${item.id}`,
+      title: `${item.accountName}: ${item.title}`,
+      detail: `${item.type} due ${item.date}.`,
+      href: portfolioHrefForAccountName(item.accountName, "profile"),
+      source: "account-journey",
+      severity: "info",
+      createdAt: "Today",
+      read: false,
+    });
+  });
+
+  return notifications;
+}
+
+function mergeNotifications(stored: AppNotification[], baseline: AppNotification[]) {
+  const byId = new Map<string, AppNotification>();
+  baseline.forEach((item) => byId.set(item.id, item));
+  stored.forEach((item) => {
+    const defaultItem = byId.get(item.id);
+    byId.set(item.id, defaultItem ? { ...defaultItem, read: item.read, createdAt: item.createdAt || defaultItem.createdAt } : item);
+  });
+  return Array.from(byId.values());
+}
+
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(LS_NOTIFICATIONS);
-      if (!stored) return;
-      const parsed = JSON.parse(stored) as AppNotification[];
-      if (Array.isArray(parsed)) {
-        setNotifications(parsed);
-      }
+      const parsed = stored ? JSON.parse(stored) as AppNotification[] : [];
+      setNotifications(mergeNotifications(Array.isArray(parsed) ? parsed : [], baselineNotifications()));
     } catch {
-      // Keep notifications ephemeral if localStorage is unavailable or stale.
+      setNotifications(baselineNotifications());
     }
   }, []);
 

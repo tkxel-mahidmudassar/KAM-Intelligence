@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import { extname, join } from "path";
+import { extname } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { parseV2AccountDocument } from "@/lib/v2/documentParser";
 
@@ -23,9 +22,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "At least one file is required" }, { status: 400 });
     }
 
-    const uploadsDir = join(process.cwd(), "public", "uploads", "v2-onboarding");
-    await mkdir(uploadsDir, { recursive: true });
-
     const documents = await Promise.all(
       files.map(async (file) => {
         const ext = extname(file.name).toLowerCase();
@@ -37,10 +33,6 @@ export async function POST(req: NextRequest) {
         }
 
         const bytes = Buffer.from(await file.arrayBuffer());
-        const storedName = `${randomUUID()}${ext || ".bin"}`;
-        const filePath = join(uploadsDir, storedName);
-        await writeFile(filePath, bytes);
-
         const parsed = await parseV2AccountDocument(bytes, file.type, file.name);
         const extractedText = compactText(parsed.chunks.map((chunk) => chunk.text).join("\n\n"));
 
@@ -48,7 +40,7 @@ export async function POST(req: NextRequest) {
           id: `source-${randomUUID()}`,
           type: documentType,
           fileName: file.name,
-          fileUrl: `/uploads/v2-onboarding/${storedName}`,
+          fileUrl: "",
           uploadedAt: "Today",
           mimeType: file.type,
           size: file.size,

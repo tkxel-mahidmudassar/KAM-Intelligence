@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
 import type { Role } from "@/types";
 
+const demoPassword = "dotkam-demo";
+
 const demoAccounts: Array<{ label: string; email: string; name: string; role: Role }> = [
   { label: "Associate", email: "associate.aisha@tkxel.com", name: "Aisha Khan", role: "ASSOCIATE" },
   { label: "KAM", email: "sarah.chen@tkxel.com", name: "Sarah Chen", role: "KAM" },
@@ -24,6 +26,7 @@ export default function LoginPage() {
   const { setUser } = useRole();
   const [email, setEmail] = useState("sarah.chen@tkxel.com");
   const [password, setPassword] = useState("");
+  const [selectedDemoRole, setSelectedDemoRole] = useState<Role | null>(null);
   const [demoSigningIn, setDemoSigningIn] = useState(false);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -38,6 +41,9 @@ export default function LoginPage() {
   }
 
   function signInDemo(account: (typeof demoAccounts)[number]) {
+    setSelectedDemoRole(account.role);
+    setEmail(account.email);
+    setPassword(demoPassword);
     setDemoSigningIn(true);
     setUser(`demo-${account.role.toLowerCase()}`, account.name, account.email, account.role);
     router.push("/home");
@@ -89,15 +95,19 @@ export default function LoginPage() {
             <p className="text-[13px] font-black text-[#6F6254]">Demo account types</p>
             <div className="mt-3 grid gap-2">
               {demoAccounts.map((account) => (
-                <button
+                <Link
                   key={account.role}
-                  type="button"
+                  href={`/api/demo-login?role=${account.role}`}
                   onClick={() => signInDemo(account)}
-                  className="flex items-center justify-between rounded-2xl border border-[#D9C8B4] bg-[#FFFCF6] px-4 py-3 text-left transition hover:border-[#25352E] hover:bg-[#F6EFE4]"
+                  className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${
+                    selectedDemoRole === account.role
+                      ? "border-[#25352E] bg-[#25352E] text-[#FFF9EF]"
+                      : "border-[#D9C8B4] bg-[#FFFCF6] hover:border-[#25352E] hover:bg-[#F6EFE4]"
+                  }`}
                 >
-                  <span className="text-[14px] font-black text-[#25352E]">{account.label}</span>
-                  <span className="text-[12px] font-bold text-[#75685A]">{account.email}</span>
-                </button>
+                  <span className={`text-[14px] font-black ${selectedDemoRole === account.role ? "text-[#FFF9EF]" : "text-[#25352E]"}`}>{account.label}</span>
+                  <span className={`text-[12px] font-bold ${selectedDemoRole === account.role ? "text-[#F5EBDD]" : "text-[#75685A]"}`}>{account.email}</span>
+                </Link>
               ))}
             </div>
           </div>

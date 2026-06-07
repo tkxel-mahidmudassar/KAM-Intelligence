@@ -728,6 +728,11 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "risk", 2, "down");
     setKpiScore(rows, "contract-health", 3, "down");
     setKpiScore(rows, "project-health", 2, "down");
+    setSubParameterScore(rows, "risk", "Delivery Risk", 1, "down", "Port visibility delivery timing is under review, so the blocker owner and recovery path are not yet credible.");
+    setSubParameterScore(rows, "risk", "Competitive Threat", 3, "down", "Maersk has not confirmed whether alternative logistics technology partners are being evaluated before renewal.");
+    setSubParameterScore(rows, "project-health", "Delivery Performance", 2, "down", "The current workstream is delivery-sensitive and recent checkpoints have not cleared timing concerns.");
+    setSubParameterScore(rows, "project-health", "Roadmap Visibility", 2, "down", "The next delivery checkpoint exists, but the client-facing recovery roadmap is not explicit enough.");
+    setSubParameterScore(rows, "contract-health", "Renewability", 3, "down", "The renewal window is close enough that renewal owner, value proof, and commercial path need confirmation.");
     setKpiAction(
       rows,
       "risk",
@@ -748,6 +753,10 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "project-health", 2, "down");
     setKpiScore(rows, "risk", 2, "down");
     setKpiScore(rows, "relationship", 3, "flat");
+    setSubParameterScore(rows, "project-health", "Backlog Readiness", 2, "down", "Scope pressure is creating uncertainty about what is actually committed for the next passenger operations release.");
+    setSubParameterScore(rows, "project-health", "Escalation Status", 2, "down", "Scope-change pressure needs a formal governance decision before it becomes an escalation.");
+    setSubParameterScore(rows, "relationship", "Champion Strength", 3, "flat", "A sponsor exists, but decision authority on scope changes is not yet clean enough.");
+    setSubParameterScore(rows, "risk", "Commercial Risk", 2, "down", "Uncontrolled scope pressure can turn into commercial leakage if change control is not locked.");
     setKpiAction(
       rows,
       "project-health",
@@ -760,6 +769,10 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "contract-health", 2, "down");
     setKpiScore(rows, "risk", 2, "down");
     setKpiScore(rows, "whitespace", 3, "flat");
+    setSubParameterScore(rows, "contract-health", "Renewability", 1, "down", "Adidas is inside a 74-day renewal window and the renewal narrative has not been converted into a decision plan.");
+    setSubParameterScore(rows, "contract-health", "Notice Period Protection", 2, "down", "Procurement timing is tight enough that notice-period and decision-path risk need explicit tracking.");
+    setSubParameterScore(rows, "risk", "Vendor Displacement Risk", 2, "down", "A weak renewal narrative leaves room for replacement or internal reprioritization.");
+    setSubParameterScore(rows, "whitespace", "Expansion Readiness", 2, "down", "Potential commerce expansion exists, but renewal proof has to come before expansion positioning.");
     setKpiAction(
       rows,
       "contract-health",
@@ -773,6 +786,11 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "relationship", 2, "down");
     setKpiScore(rows, "contract-health", 2, "down");
     setKpiScore(rows, "project-health", 2, "down");
+    setSubParameterScore(rows, "relationship", "Executive Engagement", 1, "down", "The executive conversation is currently escalation-led, not relationship-led.");
+    setSubParameterScore(rows, "relationship", "Champion Strength", 2, "down", "The account needs a credible internal sponsor who can own the recovery path.");
+    setSubParameterScore(rows, "risk", "Commercial Risk", 1, "down", "Critical health plus a 48-day renewal window creates immediate retention exposure.");
+    setSubParameterScore(rows, "risk", "Vendor Displacement Risk", 1, "down", "The open escalation creates a realistic displacement risk until executive confidence is restored.");
+    setSubParameterScore(rows, "project-health", "Escalation Status", 1, "down", "The escalation is active and must be treated as the primary account-health driver.");
     setKpiAction(
       rows,
       "relationship",
@@ -793,6 +811,11 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "project-health", 1, "down");
     setKpiScore(rows, "resource-health", 2, "down");
     setKpiScore(rows, "risk", 1, "down");
+    setSubParameterScore(rows, "project-health", "Delivery Performance", 1, "down", "Exception triage workflows are damaging delivery confidence and require a recovery cadence.");
+    setSubParameterScore(rows, "project-health", "Client Confidence", 1, "down", "The relationship signal explicitly says delivery confidence is damaged.");
+    setSubParameterScore(rows, "resource-health", "Critical Resource Coverage", 2, "down", "The recovery plan needs named owners for exception triage, delivery lead coverage, and escalation handling.");
+    setSubParameterScore(rows, "resource-health", "Backup Readiness", 2, "down", "Backup coverage must be visible because the recovery path cannot depend on one overloaded owner.");
+    setSubParameterScore(rows, "risk", "Delivery Risk", 1, "down", "Delivery risk is the core account risk, not a generic renewal issue.");
     setKpiAction(
       rows,
       "project-health",
@@ -801,25 +824,84 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
       "Meeting",
       1,
     );
-  } else if (name.includes("jpmorgan") || name.includes("hsbc") || name.includes("barclays")) {
+    setKpiAction(
+      rows,
+      "resource-health",
+      "FedEx needs named recovery ownership and backup coverage for exception triage.",
+      "Assign FedEx recovery owners and backup coverage for every critical workflow.",
+      "To-do",
+      2,
+    );
+  } else if (name.includes("jpmorgan")) {
     setKpiScore(rows, "contract-health", 3, "down");
     setKpiScore(rows, "relationship", 3, "flat");
+    setKpiScore(rows, "financial-health", 3, "flat");
+    setSubParameterScore(rows, "contract-health", "Price Uplift Protection", 2, "down", "Procurement friction means commercial protections need to be reconfirmed before renewal negotiation.");
+    setSubParameterScore(rows, "financial-health", "Contract vs Billing Alignment", 3, "flat", "Commercial review requires finance and contract evidence to be aligned before account confidence improves.");
+    setSubParameterScore(rows, "relationship", "Stakeholder Coverage", 3, "flat", "The decision map needs procurement plus business owner coverage, not just delivery contacts.");
     setKpiAction(
       rows,
       "contract-health",
-      `${account.name} has procurement or commercial review friction, so renewal readiness needs stronger evidence.`,
-      `Confirm ${account.name} procurement path and commercial decision owner.`,
+      "JPMorgan has procurement friction, so commercial path and buyer authority need to be made explicit.",
+      "Confirm JPMorgan procurement route, buyer authority, and renewal evidence pack.",
       "To-do",
       5,
     );
-  } else if (name.includes("roche") || name.includes("philips")) {
+  } else if (name.includes("hsbc")) {
+    setKpiScore(rows, "relationship", 2, "down");
+    setKpiScore(rows, "risk", 2, "down");
+    setSubParameterScore(rows, "relationship", "Stakeholder Coverage", 2, "down", "HSBC has an incomplete stakeholder map, so relationship coverage is the primary weakness.");
+    setSubParameterScore(rows, "relationship", "Relationship Penetration", 2, "down", "The account needs coverage across risk, compliance, procurement, and the business sponsor.");
+    setSubParameterScore(rows, "risk", "Commercial Risk", 3, "flat", "The risk workflow modernization path is not blocked commercially yet, but stakeholder gaps can turn into renewal friction.");
+    setKpiAction(
+      rows,
+      "relationship",
+      "HSBC's stakeholder map is incomplete, which makes the account vulnerable even if delivery is not the main problem.",
+      "Build the HSBC stakeholder coverage map and identify missing business, risk, and procurement owners.",
+      "To-do",
+      6,
+    );
+  } else if (name.includes("barclays")) {
+    setKpiScore(rows, "contract-health", 2, "down");
+    setKpiScore(rows, "financial-health", 3, "flat");
+    setSubParameterScore(rows, "contract-health", "Termination Protection", 2, "down", "Commercial review is pending, so contract protection and continuation assumptions are not yet safe.");
+    setSubParameterScore(rows, "contract-health", "Price Uplift Protection", 2, "down", "Pricing or uplift protection needs confirmation before the commercial review closes.");
+    setSubParameterScore(rows, "financial-health", "Revenue Trend", 3, "flat", "Revenue is not the first failure, but commercial review can constrain growth if unresolved.");
+    setKpiAction(
+      rows,
+      "contract-health",
+      "Barclays has a commercial review pending, so the issue is contract protection rather than delivery execution.",
+      "Prepare Barclays commercial review pack covering scope, uplift, renewal assumptions, and finance owner.",
+      "QBR",
+      7,
+    );
+  } else if (name.includes("roche")) {
     setKpiScore(rows, "project-health", 3, "down");
     setKpiScore(rows, "risk", 2, "down");
+    setKpiScore(rows, "customer-success", 3, "down");
+    setSubParameterScore(rows, "project-health", "Backlog Readiness", 2, "down", "Lab systems integration blockers make backlog readiness weaker than the account average.");
+    setSubParameterScore(rows, "customer-success", "Issue Resolution", 2, "down", "Technical blockers remain active and have not been converted into resolved issue evidence.");
+    setSubParameterScore(rows, "risk", "Delivery Risk", 2, "down", "The delivery risk is technical integration risk, not renewal or procurement risk.");
     setKpiAction(
       rows,
       "project-health",
-      `${account.name} has healthcare delivery blockers that need clinical or technical stakeholder closure.`,
-      `Resolve ${account.name} blocker ownership with the client technical sponsor.`,
+      "Roche has active technical integration blockers, so execution confidence depends on blocker closure.",
+      "Run a Roche technical blocker closure meeting with lab systems owner and integration lead.",
+      "Meeting",
+      4,
+    );
+  } else if (name.includes("philips")) {
+    setKpiScore(rows, "customer-success", 2, "down");
+    setKpiScore(rows, "relationship", 3, "down");
+    setKpiScore(rows, "risk", 2, "down");
+    setSubParameterScore(rows, "customer-success", "Customer Confidence", 2, "down", "Clinical stakeholder concerns are the dominant signal, so confidence must be recovered directly.");
+    setSubParameterScore(rows, "customer-success", "Communication Satisfaction", 2, "down", "Concerns from clinical stakeholders indicate the communication loop needs tightening.");
+    setSubParameterScore(rows, "relationship", "Champion Strength", 3, "down", "A clinical champion or sponsor needs to validate the device-data workflow value path.");
+    setKpiAction(
+      rows,
+      "customer-success",
+      "Philips has clinical stakeholder concerns, so the immediate weakness is customer confidence rather than raw delivery cadence.",
+      "Set a Philips clinical feedback review and document concern-by-concern owner responses.",
       "Meeting",
       4,
     );
@@ -5119,7 +5201,14 @@ export function PortfolioPage() {
     if (!response.ok) {
       throw new Error(payload.error || "Document upload failed");
     }
-    return Array.isArray(payload.documents) ? (payload.documents as OnboardingDocument[]) : [];
+    const documents = Array.isArray(payload.documents) ? (payload.documents as OnboardingDocument[]) : [];
+    return documents.map((document) => {
+      const matchingFile = files.find((file) => file.name === document.fileName);
+      return {
+        ...document,
+        fileUrl: document.fileUrl || (matchingFile ? URL.createObjectURL(matchingFile) : ""),
+      };
+    });
   }
 
   async function continueFromSourceUpload() {

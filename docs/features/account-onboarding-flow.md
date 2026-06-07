@@ -18,6 +18,14 @@ The portfolio `+ Account` button opens a V2 onboarding flow instead of creating 
    - Journey
    - Review
 8. A setup assistant chat opens as a separate floating window, not as an integrated panel inside the setup workspace.
+
+Live deployment note:
+
+- Initial account source uploads are parsed server-side but are not written to
+  `public/uploads`, because Vercel's deployed server bundle is read-only.
+- During the current browser session, selected source files remain previewable
+  through browser object URLs while parsed text is passed to the onboarding
+  assistant.
 9. The setup assistant shows progress, parsed field suggestions, agent replies, prompt input, and save/submit actions.
 10. Accepting a parsed suggestion writes the proposed value into the draft account form.
 11. Dismissing a parsed suggestion opens a floating reason modal. The suggestion cannot be dismissed without a reason.

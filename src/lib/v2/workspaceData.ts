@@ -80,6 +80,16 @@ export const workspaceActionItems: WorkspaceActionItem[] = [
     status: "pending",
   },
   {
+    id: "act-emirates-scope",
+    accountId: "acc-emirates",
+    accountName: "Emirates",
+    title: "Lock scope-change governance",
+    details: "Confirm passenger dashboard scope decisions, change-control owner, and next milestone acceptance criteria.",
+    type: "Meeting",
+    date: "2026-06-10",
+    status: "pending",
+  },
+  {
     id: "act-bp-commercial",
     accountId: "acc-bp",
     accountName: "BP",
