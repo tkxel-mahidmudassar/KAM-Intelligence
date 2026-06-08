@@ -20,6 +20,13 @@ export interface V2CammieInput {
   message: string;
   activeAccount?: V2CammieAccountContext | null;
   accounts: V2CammieAccountContext[];
+  attachments?: Array<{
+    fileName: string;
+    type: string;
+    preview?: string;
+    extractedText?: string;
+    parseError?: string;
+  }>;
   conversation: Array<{
     role: "user" | "assistant";
     content: string;
@@ -75,6 +82,11 @@ function moneyLabel(value: string) {
   return value || "ARR not available";
 }
 
+function scoreOutOfFiveLabel(score: number) {
+  const value = Math.max(0, Math.min(5, score <= 5 ? score : score / 20));
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function findNamedAccount(input: V2CammieInput) {
   const message = input.message.toLowerCase();
   return input.accounts.find((account) => message.includes(account.name.toLowerCase())) ?? input.activeAccount ?? null;
@@ -95,16 +107,16 @@ function localFallback(input: V2CammieInput, error: unknown): V2CammieOutput {
   if (asksForDocument) {
     intent = "document_request";
     reply = namedAccount
-      ? `I can prepare a first draft for ${namedAccount.name} once the live document agent is reachable. Available context: ${moneyLabel(namedAccount.arr)} ARR, ${namedAccount.healthScore}/100 score, ${namedAccount.health} health, renewal in ${namedAccount.renewalDays} days.`
+      ? `I can prepare a first draft for ${namedAccount.name} once the live document agent is reachable. Available context: ${moneyLabel(namedAccount.arr)} ARR, ${scoreOutOfFiveLabel(namedAccount.healthScore)}/5 score, ${namedAccount.health} health, renewal in ${namedAccount.renewalDays} days.`
       : "I can prepare the requested document once the live document agent is reachable. If it is account-specific, name the account so I can ground the draft.";
   } else if (namedAccount) {
     intent = "account_question";
-    reply = `${namedAccount.name}: ${namedAccount.healthScore}/100 score, ${namedAccount.health} health, ${moneyLabel(namedAccount.arr)} ARR, renewal in ${namedAccount.renewalDays} days. KAM: ${namedAccount.kamOwner}. Associate: ${namedAccount.associateOwner}.`;
+    reply = `${namedAccount.name}: ${scoreOutOfFiveLabel(namedAccount.healthScore)}/5 score, ${namedAccount.health} health, ${moneyLabel(namedAccount.arr)} ARR, renewal in ${namedAccount.renewalDays} days. KAM: ${namedAccount.kamOwner}. Associate: ${namedAccount.associateOwner}.`;
   } else if (message.includes("risk") || message.includes("critical") || message.includes("worst") || message.includes("lowest")) {
     intent = "portfolio_question";
     reply =
       sortedRisk.length > 0
-        ? `Lowest-score accounts right now: ${sortedRisk.map((account) => `${account.name} (${account.healthScore}/100, ${account.health})`).join(", ")}.`
+        ? `Lowest-score accounts right now: ${sortedRisk.map((account) => `${account.name} (${scoreOutOfFiveLabel(account.healthScore)}/5, ${account.health})`).join(", ")}.`
         : "I do not have any visible account risk data in this view.";
   } else if (message.includes("portfolio") || message.includes("summary") || message.includes("accounts") || message.includes("health")) {
     intent = "portfolio_question";
@@ -155,6 +167,9 @@ ${JSON.stringify(input.accounts.slice(0, 30), null, 2)}
 Recent conversation:
 ${JSON.stringify(input.conversation.slice(-8), null, 2)}
 
+Attached documents for this message:
+${JSON.stringify((input.attachments ?? []).slice(0, 5), null, 2)}
+
 User message:
 ${input.message}
 
@@ -178,6 +193,7 @@ Rules:
 - If the question is about one account and no active account is supplied, infer by name only if the message clearly names one.
 - If the user asks to search the web, research current external context, look up recent news, or verify an external fact, classify as web_research. Do not say you cannot browse; the route can call the V2 web research helper.
 - For document requests, Cammie can generate any reasonable KAM/account-management document type by calling the V2 document-generation agent.
+- If attachments are supplied, use their extracted text/preview as current-message context and mention when a conclusion came from an attachment.
 - Set canGenerate to true when the supplied context is enough to create a useful first draft, even if some sections must be marked To be confirmed.
 - Only list missingInputs when the user request is impossible to satisfy without that input, such as asking for a named account that is not in context.`,
         },

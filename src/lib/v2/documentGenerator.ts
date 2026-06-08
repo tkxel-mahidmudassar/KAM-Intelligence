@@ -1,6 +1,4 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import { join } from "path";
 import { complete } from "@/lib/ai";
 import type { V2CammieAccountContext } from "@/lib/v2/cammieAgent";
 
@@ -10,6 +8,13 @@ export interface V2DocumentGenerationInput {
   role: string;
   activeAccount?: V2CammieAccountContext | null;
   accounts: V2CammieAccountContext[];
+  attachments?: Array<{
+    fileName: string;
+    type: string;
+    preview?: string;
+    extractedText?: string;
+    parseError?: string;
+  }>;
   conversation: Array<{
     role: "user" | "assistant";
     content: string;
@@ -32,6 +37,10 @@ function slugify(value: string) {
 function parseJson(content: string): { title?: string; summary?: string; markdown?: string } {
   const raw = content.replace(/```json|```/g, "").trim();
   return JSON.parse(raw);
+}
+
+function markdownDataUrl(markdown: string) {
+  return `data:text/markdown;charset=utf-8;base64,${Buffer.from(markdown, "utf-8").toString("base64")}`;
 }
 
 export async function generateV2Document(input: V2DocumentGenerationInput): Promise<V2GeneratedDocument> {
@@ -65,6 +74,9 @@ ${JSON.stringify(input.activeAccount ?? null, null, 2)}
 Visible portfolio accounts:
 ${JSON.stringify(input.accounts.slice(0, 30), null, 2)}
 
+Attached documents:
+${JSON.stringify((input.attachments ?? []).slice(0, 5), null, 2)}
+
 Recent conversation:
 ${JSON.stringify(input.conversation.slice(-8), null, 2)}
 
@@ -80,6 +92,7 @@ Rules:
 - If the requested document needs data that is not present, include a clear "To be confirmed" section instead of fabricating.
 - If the user asks for an email, write it as a send-ready email draft with subject, recipients if known, and body.
 - If the user asks for slides but no PPT-specific route is being invoked, create a slide-by-slide Markdown outline with speaker notes.
+- If attached documents are supplied, use their extracted text/preview as evidence and cite the attachment name inline where relevant.
 - Use concise headings and practical account-management language.
 - Keep the output grounded in supplied account and portfolio context.`,
       },
@@ -91,15 +104,12 @@ Rules:
   const markdown = String(parsed.markdown || `# ${title}\n\nTo be confirmed.`);
   const summary = String(parsed.summary || `Generated ${input.documentType}.`).slice(0, 180);
   const fileName = `${slugify(title)}-${randomUUID().slice(0, 8)}.md`;
-  const outputDir = join(process.cwd(), "public", "generated-documents", "v2-cammie");
-  await mkdir(outputDir, { recursive: true });
-  await writeFile(join(outputDir, fileName), markdown, "utf-8");
 
   return {
     title,
     documentType: input.documentType,
     fileName,
-    fileUrl: `/generated-documents/v2-cammie/${fileName}`,
+    fileUrl: markdownDataUrl(markdown),
     format: "Markdown",
     summary,
   };

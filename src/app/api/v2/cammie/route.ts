@@ -27,6 +27,17 @@ function normalizeAccount(account: unknown) {
   };
 }
 
+function normalizeAttachment(attachment: unknown) {
+  if (!isObject(attachment)) return null;
+  return {
+    fileName: String(attachment.fileName || "Attached document"),
+    type: String(attachment.type || "Document"),
+    preview: attachment.preview ? String(attachment.preview).slice(0, 2400) : undefined,
+    extractedText: attachment.extractedText ? String(attachment.extractedText).slice(0, 6000) : undefined,
+    parseError: attachment.parseError ? String(attachment.parseError).slice(0, 240) : undefined,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -41,6 +52,9 @@ export async function POST(req: NextRequest) {
       activeAccount,
       accounts: Array.isArray(body.accounts)
         ? body.accounts.map(normalizeAccount).filter((account): account is NonNullable<ReturnType<typeof normalizeAccount>> => Boolean(account))
+        : [],
+      attachments: Array.isArray(body.attachments)
+        ? body.attachments.map(normalizeAttachment).filter((attachment): attachment is NonNullable<ReturnType<typeof normalizeAttachment>> => Boolean(attachment))
         : [],
       conversation: Array.isArray(body.conversation)
         ? body.conversation
@@ -77,6 +91,7 @@ export async function POST(req: NextRequest) {
       role: input.role,
       activeAccount: input.activeAccount,
       accounts: input.accounts,
+      attachments: input.attachments,
       conversation: input.conversation,
     });
 
