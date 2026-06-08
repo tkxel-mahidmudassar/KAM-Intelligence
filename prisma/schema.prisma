@@ -130,6 +130,7 @@ model User {
   kycVersions     KycVersion[]   @relation("KycAuthor")
   activityLogs    ActivityLog[]
   playbooks       Playbook[]     @relation("PlaybookUploader")
+  notifications   Notification[]
 
   @@map("users")
 }
@@ -182,11 +183,36 @@ model Account {
   playbookExclusions     AccountPlaybookExclusion[]
   ruleSuppression        AccountRuleSuppression[]
   feedbacks              RecommendationFeedback[]
+  notifications          Notification[]
 
   @@map("accounts")
 }
 
 // ─── Account Contact ──────────────────────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String?
+  role        Role?
+  accountId   String?
+  title       String
+  detail      String   @db.Text
+  href        String
+  source      String
+  severity    String   @default("info")
+  isRead      Boolean  @default(false)
+  isDismissed Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isDismissed, createdAt])
+  @@index([role, isDismissed, createdAt])
+  @@index([accountId])
+  @@map("notifications")
+}
 
 model AccountContact {
   id        String   @id @default(uuid())

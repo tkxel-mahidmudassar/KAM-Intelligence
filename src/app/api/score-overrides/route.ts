@@ -80,6 +80,28 @@ export async function POST(req: NextRequest) {
       ? await createApprovedOverrideScoreSnapshot(accountId, kpiKey, Number(requestedValue))
       : null;
 
+    if (!canDirectApprove) {
+      await prisma.notification.upsert({
+        where: { id: `score-override-request-${override.id}` },
+        create: {
+          id: `score-override-request-${override.id}`,
+          role: "KAM",
+          accountId,
+          title: `${override.account.name} score change requested`,
+          detail: "An Associate submitted a score update for KAM review.",
+          href: `/portfolio?focus=score-override&target=${accountId}`,
+          source: "score-override",
+          severity: "warning",
+        },
+        update: {
+          isRead: false,
+          isDismissed: false,
+          detail: "An Associate submitted a score update for KAM review.",
+          href: `/portfolio?focus=score-override&target=${accountId}`,
+        },
+      });
+    }
+
     await logAudit({
       role, accountId,
       action:   canDirectApprove ? "score_override.applied" : "score_override.requested",

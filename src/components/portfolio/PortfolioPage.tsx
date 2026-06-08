@@ -4818,7 +4818,8 @@ function AccountModal({
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Score change request could not be submitted");
-      const created = payload.data as Record<string, unknown>;
+      const responseData = payload.data as Record<string, unknown>;
+      const created = (responseData.override ?? responseData) as Record<string, unknown>;
 
       setOverrideRequests((requests) => ({
         ...requests,
@@ -4839,6 +4840,7 @@ function AccountModal({
         href: `/portfolio?focus=score-override&target=${account.id}`,
         source: "score-override",
         severity: "warning",
+        targetRole: "KAM",
       });
     } catch (error) {
       setScoreOverrideError(error instanceof Error ? error.message : "Score change request could not be submitted");
@@ -7323,22 +7325,10 @@ export function PortfolioPage() {
         href: "/portfolio?focus=pending-account-draft",
         source: "account-creation-approval",
         severity: "warning",
-        createdAt: "Today",
+        targetRole: "KAM",
       });
     }
 
-    const watchedAccount = roleAccounts.find((account) => account.name.toLowerCase() === "maersk");
-    if (watchedAccount && watchedAccount.health !== "HEALTHY") {
-      fireNotification({
-        id: `score-drop-${watchedAccount.id}`,
-        title: `${watchedAccount.name} risk score fell`,
-        detail: `Score ${scoreOutOfFiveLabel(watchedAccount.healthScore)}/5. Review the proposed mitigation task.`,
-        href: `/portfolio?focus=risk-score&target=${watchedAccount.id}`,
-        source: "score-monitor",
-        severity: "warning",
-        createdAt: "Today",
-      });
-    }
   }, [accountCreationRequests, fireNotification, role, roleAccounts]);
 
   useEffect(() => {
@@ -7783,6 +7773,7 @@ export function PortfolioPage() {
       href: "/portfolio?focus=pending-account-draft",
       source: "kyc-approval",
       severity: "warning",
+      targetRole: "KAM",
     });
   }
 
@@ -7921,6 +7912,7 @@ export function PortfolioPage() {
       href: "/portfolio?focus=pending-account-draft",
       source: "account-onboarding",
       severity: "warning",
+      targetRole: "KAM",
     });
     setOnboardingOpen(false);
     setPendingAccountReviewOpen(true);
