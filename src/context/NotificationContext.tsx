@@ -46,6 +46,11 @@ function portfolioHrefForAccountName(accountName: string, _tab: "overview" | "pr
   return account ? `/portfolio?${params.toString()}` : "/portfolio";
 }
 
+function scoreOutOfFiveLabel(score: number) {
+  const value = Math.max(0, Math.min(5, score <= 5 ? score : score / 20));
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function baselineNotifications(): AppNotification[] {
   const criticalAccounts = portfolioAccounts
     .filter((account) => account.health === "CRITICAL")
@@ -76,7 +81,7 @@ function baselineNotifications(): AppNotification[] {
     notifications.push({
       id: `critical-account-${account.id}`,
       title: `${account.name} is critical`,
-      detail: `Score ${account.healthScore}/100. Review the weakest KPI and recovery task.`,
+      detail: `Score ${scoreOutOfFiveLabel(account.healthScore)}/5. Review the weakest KPI and recovery task.`,
       href: `/portfolio?target=${account.id}&focus=score-monitor`,
       source: "score-monitor",
       severity: "warning",
@@ -89,7 +94,7 @@ function baselineNotifications(): AppNotification[] {
     notifications.push({
       id: `renewal-risk-${account.id}`,
       title: `${account.name} renewal risk needs attention`,
-      detail: `${account.renewalDays} days to renewal with score ${account.healthScore}/100.`,
+      detail: `${account.renewalDays} days to renewal with score ${scoreOutOfFiveLabel(account.healthScore)}/5.`,
       href: `/portfolio?target=${account.id}&focus=renewal-monitor`,
       source: "renewal-monitor",
       severity: "warning",

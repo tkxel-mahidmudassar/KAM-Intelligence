@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, BriefcaseBusiness, Home, LogOut, Settings, UserRound, X } from "lucide-react";
+import { CammiePanel } from "@/components/layout/CammiePanel";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 
@@ -218,6 +219,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         {children}
+        <CammiePanel />
       </div>
     </div>
   );

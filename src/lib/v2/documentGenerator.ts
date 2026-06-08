@@ -8,6 +8,13 @@ export interface V2DocumentGenerationInput {
   role: string;
   activeAccount?: V2CammieAccountContext | null;
   accounts: V2CammieAccountContext[];
+  attachments?: Array<{
+    fileName: string;
+    type: string;
+    preview?: string;
+    extractedText?: string;
+    parseError?: string;
+  }>;
   conversation: Array<{
     role: "user" | "assistant";
     content: string;
@@ -67,6 +74,9 @@ ${JSON.stringify(input.activeAccount ?? null, null, 2)}
 Visible portfolio accounts:
 ${JSON.stringify(input.accounts.slice(0, 30), null, 2)}
 
+Attached documents:
+${JSON.stringify((input.attachments ?? []).slice(0, 5), null, 2)}
+
 Recent conversation:
 ${JSON.stringify(input.conversation.slice(-8), null, 2)}
 
@@ -82,6 +92,7 @@ Rules:
 - If the requested document needs data that is not present, include a clear "To be confirmed" section instead of fabricating.
 - If the user asks for an email, write it as a send-ready email draft with subject, recipients if known, and body.
 - If the user asks for slides but no PPT-specific route is being invoked, create a slide-by-slide Markdown outline with speaker notes.
+- If attached documents are supplied, use their extracted text/preview as evidence and cite the attachment name inline where relevant.
 - Use concise headings and practical account-management language.
 - Keep the output grounded in supplied account and portfolio context.`,
       },

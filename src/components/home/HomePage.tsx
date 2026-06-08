@@ -88,6 +88,16 @@ function accountScore(account: ApiAccount, health: WorkspaceHealth) {
   return 82;
 }
 
+function scoreOutOfFive(score: number) {
+  const normalized = score <= 5 ? score : score / 20;
+  return Math.max(0, Math.min(5, normalized));
+}
+
+function scoreOutOfFiveLabel(score: number) {
+  const value = scoreOutOfFive(score);
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function mapApiAccount(account: ApiAccount): WorkspaceAccount {
   const health = accountHealth(account.health);
   return {
@@ -140,7 +150,7 @@ function buildAccountActions(accounts: WorkspaceAccount[], apiAccounts: ApiAccou
       accountId: account.id,
       accountName: account.name,
       title: account.health === "critical" ? "Recovery plan review" : "Risk mitigation checkpoint",
-      details: `Current score is ${account.score}/100. Review the latest health drivers and confirm an owner.`,
+      details: `Current score is ${scoreOutOfFiveLabel(account.score)}/5. Review the latest health drivers and confirm an owner.`,
       type: account.health === "critical" ? "Meeting" : "To-do",
       date: addDaysIso(index + 2),
       status: "pending",
@@ -278,7 +288,7 @@ export function HomePage() {
                           className="flex w-full items-center justify-between rounded-2xl bg-white/72 px-3 py-2 text-[12px] font-bold transition hover:bg-[#25352E] hover:text-[#FFF9EF]"
                         >
                           <span>{account.name}</span>
-                          <span>{account.score}/100</span>
+                          <span>{scoreOutOfFiveLabel(account.score)}/5</span>
                         </button>
                       ))}
                     </div>

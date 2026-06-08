@@ -3,16 +3,54 @@ import type { V2CammieInput, V2CammieOutput } from "./cammieAgent";
 
 const DEFAULT_MODEL = "gpt-5.4-mini";
 
+function scoreOutOfFiveLabel(score: number) {
+  const value = Math.max(0, Math.min(5, score <= 5 ? score : score / 20));
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 function activeAccountLabel(input: V2CammieInput) {
   if (!input.activeAccount) return "No active account selected.";
-  return `${input.activeAccount.name} (${input.activeAccount.industry}, ${input.activeAccount.country}, ${input.activeAccount.arr} ARR, score ${input.activeAccount.healthScore}/100, ${input.activeAccount.health})`;
+  return `${input.activeAccount.name} (${input.activeAccount.industry}, ${input.activeAccount.country}, ${input.activeAccount.arr} ARR, score ${scoreOutOfFiveLabel(input.activeAccount.healthScore)}/5, ${input.activeAccount.health})`;
 }
 
 function portfolioLabel(input: V2CammieInput) {
   return input.accounts
     .slice(0, 30)
-    .map((account) => `${account.name}: ${account.industry}, ${account.country}, ${account.arr}, score ${account.healthScore}/100, ${account.health}, renewal in ${account.renewalDays} days`)
+    .map((account) => `${account.name}: ${account.industry}, ${account.country}, ${account.arr}, score ${scoreOutOfFiveLabel(account.healthScore)}/5, ${account.health}, renewal in ${account.renewalDays} days`)
     .join("\n");
+}
+
+function attachmentLabel(input: V2CammieInput) {
+  const attachments = input.attachments ?? [];
+  if (attachments.length === 0) return "No documents attached to this message.";
+  return attachments
+    .slice(0, 5)
+    .map((attachment) => {
+      const content = attachment.extractedText || attachment.preview || "";
+      return `File: ${attachment.fileName}
+Type: ${attachment.type}
+Content preview:
+${content.slice(0, 3000)}${attachment.parseError ? `\nParse note: ${attachment.parseError}` : ""}`;
+    })
+    .join("\n\n---\n\n");
+}
+
+function formatWebReply(raw: string) {
+  const text = raw.trim();
+  if (!text) return "I searched the web but could not produce a useful answer from the available results.";
+  if (/^#{1,3}\s/m.test(text) || /\n[-*]\s/.test(text) || /\n\d+\.\s/.test(text)) return text;
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const answer = sentences.slice(0, 2).join(" ");
+  const details = sentences.slice(2, 6);
+  const rest = sentences.slice(6).join(" ");
+  return [
+    "### Answer",
+    answer || text,
+    details.length > 0 ? "\n### What matters" : "",
+    ...details.map((sentence) => `- ${sentence}`),
+    rest ? "\n### Notes" : "",
+    rest,
+  ].filter(Boolean).join("\n");
 }
 
 export function shouldUseCammieWebResearch(message: string) {
@@ -38,7 +76,7 @@ export async function runV2CammieWebResearch(input: V2CammieInput): Promise<V2Ca
       model,
       tools: [{ type: "web_search_preview" }],
       instructions:
-        "You are Cammie, Tkxel's KAM portfolio assistant. Use web search when external facts are needed. Combine web findings with the supplied portfolio/account context. Be concise, useful, and explicit about which facts came from web research. Include source names and URLs when available. Do not invent sources. If sources disagree or are thin, say that.",
+        "You are Cammie, Tkxel's KAM portfolio assistant. Use web search when external facts are needed. Combine web findings with the supplied portfolio/account context and any attached document context. Be concise, useful, and explicit about which facts came from web research versus supplied account/document context. Do not invent sources. If sources disagree or are thin, say that. Format every response in clean Markdown with these sections when applicable: ### Answer, ### Account implication, ### Sources. Put source names and URLs as bullets under Sources.",
       input: `User role:
 ${input.role}
 
@@ -47,6 +85,9 @@ ${activeAccountLabel(input)}
 
 Visible portfolio context:
 ${portfolioLabel(input)}
+
+Attached documents for this message:
+${attachmentLabel(input)}
 
 Recent conversation:
 ${JSON.stringify(input.conversation.slice(-8), null, 2)}
@@ -58,7 +99,7 @@ Return a direct answer. If this is account-specific, tie the web finding back to
     });
 
     return {
-      reply: response.output_text || "I searched the web but could not produce a useful answer from the available results.",
+      reply: formatWebReply(response.output_text || ""),
       intent: "web_research",
       usedWeb: true,
       degraded: false,

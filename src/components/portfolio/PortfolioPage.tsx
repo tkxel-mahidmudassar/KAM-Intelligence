@@ -1565,6 +1565,16 @@ function mapApiAccountsToPortfolioAccounts(accounts: Array<Record<string, unknow
   return accounts.map(mapApiAccountToPortfolioAccount);
 }
 
+function scoreOutOfFive(score: number) {
+  const normalized = score <= 5 ? score : score / 20;
+  return Math.max(0, Math.min(5, normalized));
+}
+
+function scoreOutOfFiveLabel(score: number) {
+  const value = scoreOutOfFive(score);
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 const taskTypeTone: Record<TaskType, string> = {
   Meeting: "border-[#B7D8C3] bg-[#EEF8F1] text-[#23633E]",
   QBR: "border-[#DEC997] bg-[#FFF7E4] text-[#8A5C16]",
@@ -1632,9 +1642,9 @@ function AccountLogo({ account, size = "md" }: { account: PortfolioAccount; size
 
 function ScoreNumber({ account }: { account: PortfolioAccount }) {
   return (
-    <div className="shrink-0 text-right" aria-label={`${healthLabel[account.health]} score ${account.healthScore} out of 100`}>
-      <p className={`text-[18px] font-black leading-none tracking-[-0.04em] ${scoreTone[account.health]}`}>{account.healthScore}</p>
-      <p className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted)]">/100</p>
+    <div className="shrink-0 text-right" aria-label={`${healthLabel[account.health]} score ${scoreOutOfFiveLabel(account.healthScore)} out of 5`}>
+      <p className={`text-[18px] font-black leading-none tracking-[-0.04em] ${scoreTone[account.health]}`}>{scoreOutOfFiveLabel(account.healthScore)}</p>
+      <p className="mt-0.5 text-[10px] font-semibold text-[var(--text-muted)]">/5</p>
     </div>
   );
 }
@@ -4747,7 +4757,7 @@ function AccountModal({
             ) : null}
 
             <div className="relative z-10 mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <SummaryItem label="Score" value={<span className={scoreTone[account.health]}>{account.healthScore}/100</span>} />
+              <SummaryItem label="Score" value={<span className={scoreTone[account.health]}>{scoreOutOfFiveLabel(account.healthScore)}/5</span>} />
               <SummaryItem label="ARR" value={money(account.arr)} />
               <SummaryItem label="Contract renewal" value={renewalDate(account.renewalDays)} />
               <SummaryItem label="Industry" value={account.industry} />
@@ -6837,7 +6847,7 @@ export function PortfolioPage() {
       fireNotification({
         id: `score-drop-${watchedAccount.id}`,
         title: `${watchedAccount.name} risk score fell`,
-        detail: `Score ${watchedAccount.healthScore}/100. Review the proposed mitigation task.`,
+        detail: `Score ${scoreOutOfFiveLabel(watchedAccount.healthScore)}/5. Review the proposed mitigation task.`,
         href: `/portfolio?focus=risk-score&target=${watchedAccount.id}`,
         source: "score-monitor",
         severity: "warning",
@@ -7443,7 +7453,7 @@ export function PortfolioPage() {
           </div>
         </div>
 
-        {role === "KAM" || role === "ASSOCIATE" ? (
+        {(role === "KAM" || role === "ASSOCIATE") && visibleAccountCreationRequests.length > 0 ? (
           <section className="rounded-[1.5rem] border border-[#E5DACD] bg-[#FFF9EF]/78 p-4 shadow-[0_18px_46px_-34px_rgba(55,43,28,0.58)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Pending account creations</h2>
@@ -7484,11 +7494,6 @@ export function PortfolioPage() {
                 </button>
               ))}
             </div>
-            {visibleAccountCreationRequests.length === 0 ? (
-              <div className="mt-3 rounded-2xl border border-dashed border-[#D8CAB9] bg-white/50 p-4 text-[13px] font-bold text-[#7D6E5F]">
-                No account drafts or Associate submissions are waiting for review.
-              </div>
-            ) : null}
           </section>
         ) : null}
 
@@ -7545,7 +7550,6 @@ export function PortfolioPage() {
           </div>
         </section>
       </section>
-      <CammiePanel role={role} accounts={accountHydrationPending ? [] : visibleAccounts} activeAccount={selectedAccount} />
       <PendingAccountCreationDialog
         open={pendingReviewDialogOpen}
         request={selectedAccountCreationRequest}
