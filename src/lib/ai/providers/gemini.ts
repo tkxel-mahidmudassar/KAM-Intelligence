@@ -3,6 +3,10 @@ import type { LLMProvider, LLMRequest, LLMResponse } from "../provider.interface
 
 const MODEL = "gemini-2.0-flash";
 
+function getGeminiApiKey(): string | undefined {
+  return process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+}
+
 export class GeminiProvider implements LLMProvider {
   readonly provider = "gemini" as const;
   readonly model = MODEL;
@@ -10,10 +14,11 @@ export class GeminiProvider implements LLMProvider {
   private client: GoogleGenerativeAI;
 
   constructor() {
-    if (!process.env.GOOGLE_AI_API_KEY) {
-      throw new Error("GOOGLE_AI_API_KEY is not set");
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      throw new Error("GOOGLE_AI_API_KEY, GEMINI_API_KEY, or GOOGLE_API_KEY is not set");
     }
-    this.client = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
+    this.client = new GoogleGenerativeAI(apiKey);
   }
 
   async complete(request: LLMRequest): Promise<LLMResponse> {

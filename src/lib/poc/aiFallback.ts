@@ -16,10 +16,10 @@ export interface PocLLMResponse extends LLMResponse {
 
 const VALID_PROVIDERS: AiProvider[] = ["openai", "gemini", "claude"];
 
-const KEY_ENV: Record<AiProvider, string> = {
-  openai: "OPENAI_API_KEY",
-  gemini: "GOOGLE_AI_API_KEY",
-  claude: "ANTHROPIC_API_KEY",
+const KEY_ENV: Record<AiProvider, string[]> = {
+  openai: ["OPENAI_API_KEY"],
+  gemini: ["GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  claude: ["ANTHROPIC_API_KEY"],
 };
 
 function normalizeProvider(value: string | undefined): AiProvider | null {
@@ -47,7 +47,15 @@ function providerOrder(): AiProvider[] {
 }
 
 function hasKey(provider: AiProvider): boolean {
-  return Boolean(process.env[KEY_ENV[provider]]?.trim());
+  return KEY_ENV[provider].some((key) => Boolean(process.env[key]?.trim()));
+}
+
+function keyLabel(provider: AiProvider): string {
+  return KEY_ENV[provider].join(" or ");
+}
+
+function compactMessage(message: string): string {
+  return message.replace(/\s+/g, " ").trim().slice(0, 320);
 }
 
 function createProvider(provider: AiProvider): LLMProvider {
@@ -64,7 +72,7 @@ export async function completePocWithFallback(request: LLMRequest): Promise<PocL
       trace.push({
         provider: providerName,
         status: "skipped",
-        message: `${KEY_ENV[providerName]} is not set`,
+        message: `${keyLabel(providerName)} is not set`,
       });
       continue;
     }
@@ -83,6 +91,9 @@ export async function completePocWithFallback(request: LLMRequest): Promise<PocL
     }
   }
 
-  const summary = trace.map((item) => `${item.provider}:${item.status}`).join(", ");
+  const summary = trace.map((item) => {
+    const status = `${item.provider}:${item.status}`;
+    return item.message ? `${status} - ${compactMessage(item.message)}` : status;
+  }).join("; ");
   throw new Error(`No POC AI provider succeeded (${summary || "no providers configured"})`);
 }
