@@ -1,0 +1,32 @@
+Account: NexaCloud AI Labs
+Industry: Cloud infrastructure and AI platforms
+Region: North America
+ARR: $2.4M
+Contract start: 2025-02-01
+Contract end / renewal: 2027-01-31
+Executive sponsor: Alex Thornton, Chief Technology Officer
+Primary contact: Priya Desai, VP Platform Engineering
+
+Relationship context:
+Tkxel has weekly delivery syncs, monthly steering committee meetings, and quarterly executive reviews with the CTO. The relationship has strong technical and executive coverage. The VP Platform Engineering is an active champion and has introduced Tkxel to the AI product team and cloud operations group.
+
+Contract context:
+The agreement runs for two years with a 90-day notice period. It has annual price review language, a clear renewal process, and a defined expansion SOW mechanism. There is no immediate termination clause.
+
+Delivery and project context:
+The cloud automation roadmap is ahead of schedule. Sprint velocity has stayed above 90% for the past three sprints. There are no active escalations, and backlog visibility is more than six months because the client has already approved the next AI module roadmap.
+
+Customer success:
+Latest CSAT is 4.7 out of 5. The CTO praised Tkxel's delivery communication during the most recent executive review. Issue resolution is fast and proactive.
+
+Resource health:
+The team is stable, fully staffed, and has backup coverage for architecture, DevOps, and QA automation. No single critical dependency is visible.
+
+Financial health:
+Invoices are paid on time. There is no outstanding exposure. Revenue utilization is growing because the client is increasing cloud automation usage.
+
+Whitespace and growth:
+There is strong whitespace for AI observability, managed cloud cost optimization, and automated security compliance. The client has requested an expansion workshop for Q3.
+
+Known risks:
+No major risk is currently visible. The main dependency is keeping executive alignment active while expansion scope is finalized.

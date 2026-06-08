@@ -1,0 +1,30 @@
+Account: SummitCare
+Industry: Healthcare technology
+Region: EMEA
+
+Relationship context:
+The customer has a warm relationship with the product team, but executive sponsor information is not available in the current source. Meeting cadence appears monthly.
+
+Contract context:
+The renewal date is not listed in this document. Notice period and termination protection are also not available.
+
+Delivery and project context:
+The integration project has minor delays, mostly around SSO configuration and data export validation.
+
+Customer success:
+Customer confidence is moderate. CSAT or NPS score is not available.
+
+Financial health:
+ARR and invoice status are not available in this source.
+
+Whitespace and growth:
+There may be an opportunity around analytics dashboards, but buying appetite is not confirmed.
+
+Known risks:
+Missing commercial information, missing executive sponsor, and limited evidence about financial health.
+
+Suggested correction prompts to test:
+ARR should be $950K.
+Executive sponsor is Dr. Nadia Laurent, Chief Digital Officer.
+Renewal date is 2026-12-20.
+Primary contact should be Omar Khan, Director of Integrations.

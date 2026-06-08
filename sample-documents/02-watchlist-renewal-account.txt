@@ -1,0 +1,32 @@
+Account: Orion Retail Group
+Industry: Retail technology and digital commerce
+Region: North America
+ARR: $1.8M
+Contract start: 2025-01-15
+Contract end / renewal: 2026-09-30
+Executive sponsor: Dana Walsh, Chief Digital Officer
+Primary contact: Marcus Reed, VP Ecommerce Platforms
+
+Relationship context:
+Tkxel has monthly steering calls with the VP Ecommerce Platforms and quarterly executive reviews with the CDO. The relationship is broader than one stakeholder, but procurement is not mapped and the CIO has not attended the last two reviews.
+
+Contract context:
+The SOW has a 60-day notice period, annual price review language, and a manual renewal path. There is no auto-renewal clause.
+
+Delivery and project context:
+The mobile checkout modernization project is mostly on track. Two sprint commitments slipped in May because of payment gateway defects. The client said communication improved after the new delivery lead joined.
+
+Customer success:
+Latest CSAT is 4.1 out of 5. The customer is satisfied with roadmap alignment but warned that unresolved checkout defects must close before renewal.
+
+Resource health:
+The delivery lead change improved communication, but payment gateway knowledge is concentrated in two senior engineers. Backup readiness is partial.
+
+Financial health:
+Invoices are current and billing is aligned with the SOW. Revenue is stable but not yet expanding.
+
+Whitespace and growth:
+The client is exploring loyalty analytics, personalization, and managed QA automation. Expansion readiness is moderate because renewal confidence depends on defect closure.
+
+Known risks:
+A competing digital commerce vendor is running a discovery workshop with the client. Procurement and CIO coverage need attention before renewal.

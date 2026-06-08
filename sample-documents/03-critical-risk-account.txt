@@ -1,0 +1,32 @@
+Account: Helix Payments
+Industry: Embedded finance and payment processing
+Region: United States
+ARR: $3.1M
+Contract start: 2024-08-01
+Contract end / renewal: 2026-08-15
+Executive sponsor: Jordan Walsh, Chief Technology Officer
+Primary contact: Erin Moore, Director of Payment Operations
+
+Relationship context:
+The account is currently single-threaded through the Director of Payment Operations. The CTO has not joined an executive review for five months. Procurement has started asking for vendor replacement information. No active customer champion is confirmed.
+
+Contract context:
+The agreement has only a 30-day notice period and no auto-renewal clause. Price uplift language is weak and requires manual negotiation. Renewal confidence is low because the client has asked for a remediation plan before discussing commercial terms.
+
+Delivery and project context:
+The gateway migration is unstable. There are 42 open support tickets, 8 critical issues, and two active escalations. The last two sprint commitments were missed because defect resolution is slower than expected.
+
+Customer success:
+Latest CSAT is 2.1 out of 5. The client is dissatisfied with issue resolution speed and has raised repeated concerns about communication gaps.
+
+Resource health:
+Two critical engineers hold most gateway knowledge. Backup readiness is weak and onboarding for replacement coverage has not started. Team attrition risk is high.
+
+Financial health:
+Invoices worth $210K are 75 days overdue because the client is holding payment until stabilization work is complete. Revenue utilization is declining.
+
+Whitespace and growth:
+No immediate expansion opportunity is realistic until delivery confidence and stakeholder trust recover.
+
+Known risks:
+Active competitor threat from Stripe Treasury and Adyen Embedded Finance. Vendor displacement risk is high. Immediate executive intervention is required.

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { complete } from "@/lib/ai";
+import { completePocWithFallback } from "@/lib/poc/aiFallback";
 import { normalizePocResult } from "@/lib/poc/result";
 import type { PocExtractionResult, PocSourceMeta } from "@/lib/poc/scoringFramework";
 
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const aiResponse = await complete({
+      const aiResponse = await completePocWithFallback({
         task: "poc-correction",
         jsonMode: true,
         temperature: 0,
@@ -141,7 +141,7 @@ Return JSON only:
       const rawResult = parsed.result ?? parsed;
       const normalized = normalizePocResult(rawResult, {
         source: sourceFromCurrent(current),
-        model: aiResponse.model,
+        model: `${aiResponse.provider}:${aiResponse.model}`,
         latencyMs: aiResponse.latencyMs,
       });
 
@@ -149,6 +149,7 @@ Return JSON only:
         ...normalized,
         assistantSummary: String(parsed.assistantReply || normalized.assistantSummary),
         changeLog: Array.isArray(parsed.changeLog) ? parsed.changeLog.map(String).slice(0, 8) : [],
+        providerTrace: aiResponse.providerTrace,
       });
     } catch (aiError) {
       return NextResponse.json(applyLocalCorrection(current, instruction));

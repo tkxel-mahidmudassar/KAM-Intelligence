@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { complete } from "@/lib/ai";
 import { parsePlaybookFile } from "@/lib/playbooks/parser";
 import { POC_KPI_DIMENSIONS } from "@/lib/poc/scoringFramework";
+import { completePocWithFallback } from "@/lib/poc/aiFallback";
 import { buildFallbackPocResult, normalizePocResult } from "@/lib/poc/result";
 import type { PocSourceMeta } from "@/lib/poc/scoringFramework";
 
@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const aiResponse = await complete({
+      const aiResponse = await completePocWithFallback({
         task: "poc-document-extraction",
         jsonMode: true,
         temperature: 0,
@@ -170,11 +170,14 @@ export async function POST(req: NextRequest) {
       });
 
       const parsed = parseJsonObject(aiResponse.content);
-      return NextResponse.json(normalizePocResult(parsed, {
-        source,
-        model: aiResponse.model,
-        latencyMs: aiResponse.latencyMs,
-      }));
+      return NextResponse.json({
+        ...normalizePocResult(parsed, {
+          source,
+          model: `${aiResponse.provider}:${aiResponse.model}`,
+          latencyMs: aiResponse.latencyMs,
+        }),
+        providerTrace: aiResponse.providerTrace,
+      });
     } catch (aiError) {
       const message = aiError instanceof Error ? aiError.message : "AI extraction failed";
       return NextResponse.json(buildFallbackPocResult(sourceText, source, message));
