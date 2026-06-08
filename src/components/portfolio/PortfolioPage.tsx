@@ -60,6 +60,23 @@ interface KpiOverviewRow {
   dueInDays?: number;
 }
 
+interface ApiKpiDriver {
+  label?: string;
+  value?: string;
+  score?: number;
+}
+
+interface ApiKpiBreakdown {
+  key?: string;
+  label?: string;
+  rationale?: string;
+  score?: number;
+  weight?: number;
+  drivers?: ApiKpiDriver[];
+  formula?: string;
+  fallback?: string;
+}
+
 interface ActiveTask {
   id: string;
   kpiName: string;
@@ -998,6 +1015,10 @@ const scoreDimensionByRowId: Record<string, keyof NonNullable<PortfolioAccount["
   whitespace: "whitespace",
 };
 
+const rowIdByScoreDimension: Record<string, string> = Object.fromEntries(
+  Object.entries(scoreDimensionByRowId).map(([rowId, dimension]) => [dimension, rowId]),
+);
+
 function percentToFrameworkScore(value: number | null | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return clampFrameworkScore(Math.round(value / 20));
@@ -1053,6 +1074,88 @@ function buildAccountKpiRows(account: PortfolioAccount | null): KpiOverviewRow[]
   }
 
   removeUnneededActions(rows, account);
+  return rows;
+}
+
+function kpiRowFromApiBreakdown(
+  row: KpiOverviewRow,
+  breakdown: ApiKpiBreakdown,
+  account: PortfolioAccount,
+): KpiOverviewRow {
+  const rowScore = percentToFrameworkScore(typeof breakdown.score === "number" ? breakdown.score : null) ?? row.score;
+  const drivers = Array.isArray(breakdown.drivers) ? breakdown.drivers : [];
+  const subParameters = drivers.length > 0
+    ? drivers.map((driver, index) => {
+        const score = percentToFrameworkScore(typeof driver.score === "number" ? driver.score : breakdown.score) ?? rowScore;
+        const label = String(driver.label ?? `Driver ${index + 1}`);
+        const value = driver.value ? String(driver.value) : breakdown.formula ?? breakdown.rationale ?? "DB-backed score driver";
+        return {
+          name: label,
+          score,
+          rationale: value,
+          trend: accountTrend(score),
+          fallingWhy: score <= 3
+            ? {
+                summary: `${label} is below the healthy band in the latest DB-backed score calculation for ${account.name}.`,
+                sources: ["KPI dimension data", "Adapter score inputs"],
+              }
+            : undefined,
+        };
+      })
+    : row.subParameters.map((parameter) => ({
+        ...parameter,
+        score: rowScore,
+        rationale: breakdown.rationale ?? parameter.rationale,
+        trend: accountTrend(rowScore),
+      }));
+
+  const nextRow: KpiOverviewRow = {
+    ...row,
+    name: String(breakdown.label ?? row.name),
+    weight: `${typeof breakdown.weight === "number" ? breakdown.weight : parseWeightValue(row.weight)}%`,
+    rationale: String(breakdown.rationale ?? row.rationale),
+    score: rowScore,
+    trend: accountTrend(rowScore),
+    subParameters,
+    why: rowScore < 4 ? String(breakdown.rationale ?? row.why ?? `${row.name} needs review based on the latest score calculation.`) : undefined,
+    task: rowScore < 4 ? `Review ${String(breakdown.label ?? row.name).toLowerCase()} drivers and confirm the recovery action.` : undefined,
+    taskType: rowScore < 4 ? "To-do" : undefined,
+    dueInDays: rowScore < 3 ? 3 : 7,
+  };
+
+  return nextRow;
+}
+
+function mapKpiBreakdownToOverviewRows(
+  breakdown: Record<string, ApiKpiBreakdown>,
+  account: PortfolioAccount,
+): KpiOverviewRow[] {
+  const baseRows = cloneKpiRows();
+  const rows = baseRows.map((row) => {
+    const dimension = scoreDimensionByRowId[row.id];
+    const apiRow = dimension ? breakdown[dimension] : undefined;
+    return apiRow ? kpiRowFromApiBreakdown(row, apiRow, account) : row;
+  });
+
+  for (const [dimension, apiRow] of Object.entries(breakdown)) {
+    if (rowIdByScoreDimension[dimension]) continue;
+    const score = percentToFrameworkScore(typeof apiRow.score === "number" ? apiRow.score : null) ?? 3;
+    rows.push({
+      id: `db-${dimension}`,
+      name: String(apiRow.label ?? dimension),
+      weight: `${typeof apiRow.weight === "number" ? apiRow.weight : 0}%`,
+      rationale: String(apiRow.rationale ?? "DB-backed score dimension"),
+      score,
+      trend: accountTrend(score),
+      subParameters: (apiRow.drivers ?? []).map((driver, index) => ({
+        name: String(driver.label ?? `Driver ${index + 1}`),
+        score: percentToFrameworkScore(typeof driver.score === "number" ? driver.score : apiRow.score) ?? score,
+        rationale: String(driver.value ?? apiRow.formula ?? "DB-backed score driver"),
+        trend: accountTrend(percentToFrameworkScore(typeof driver.score === "number" ? driver.score : apiRow.score) ?? score),
+      })),
+    });
+  }
+
   return rows;
 }
 
@@ -2252,6 +2355,8 @@ function withEffectiveKpiScores(kpiRows: KpiOverviewRow[], scoreOverrides: Recor
 
 function OverviewTab({
   kpiRows,
+  isLoadingKpis,
+  kpiRowsError,
   activeTasks,
   acceptedTaskIds,
   pendingDenials,
@@ -2283,6 +2388,8 @@ function OverviewTab({
   onDenyWeightRequest,
 }: {
   kpiRows: KpiOverviewRow[];
+  isLoadingKpis: boolean;
+  kpiRowsError: string;
   activeTasks: ActiveTask[];
   acceptedTaskIds: Set<string>;
   pendingDenials: Record<string, string>;
@@ -2331,6 +2438,16 @@ function OverviewTab({
 
   return (
     <div className="space-y-3">
+      {isLoadingKpis ? (
+        <div className="rounded-2xl border border-dashed border-[#D8CAB9] bg-[#FFF9EF]/70 p-4 text-[13px] font-bold text-[#7D6E5F]">
+          Loading DB-backed score breakdown...
+        </div>
+      ) : null}
+      {kpiRowsError ? (
+        <div className="rounded-2xl border border-[#E8B8B0] bg-[#FFF0ED] p-4 text-[13px] font-bold text-[#B33D32]">
+          {kpiRowsError}. Showing fallback framework rows until the score API is available.
+        </div>
+      ) : null}
       <div className="rounded-2xl border border-[#E5DACD] bg-white/55">
         <div className="flex items-center gap-3 border-b border-[#E9DED0] px-4 py-2">
           <div className="grid flex-1 grid-cols-[1.2fr_0.35fr_0.35fr_1fr] gap-3 text-[11px] font-bold text-[#8A7A69] max-lg:hidden">
@@ -2350,6 +2467,11 @@ function OverviewTab({
         </div>
 
         <div className="divide-y divide-[#E9DED0]">
+          {!isLoadingKpis && kpiRows.length === 0 ? (
+            <div className="p-4 text-[13px] font-bold text-[#7D6E5F]">
+              No score breakdown is available for this account yet.
+            </div>
+          ) : null}
           {sortedKpiRows.map((row) => {
             const currentScore = row.score;
             const currentWeight = kpiWeights[row.id] ?? parseWeightValue(row.weight);
@@ -4432,6 +4554,9 @@ function AccountModal({
   const [scoreOverrides, setScoreOverrides] = useState<Record<string, ScoreOverride>>({});
   const [scoreOverrideMessage, setScoreOverrideMessage] = useState("");
   const [scoreOverrideError, setScoreOverrideError] = useState("");
+  const [dbKpiRows, setDbKpiRows] = useState<KpiOverviewRow[] | null>(null);
+  const [kpiRowsLoading, setKpiRowsLoading] = useState(false);
+  const [kpiRowsError, setKpiRowsError] = useState("");
   const [kpiWeights, setKpiWeights] = useState<Record<string, number>>({});
   const [weightDrafts, setWeightDrafts] = useState<Record<string, { weight: string }>>({});
   const [weightReason, setWeightReason] = useState("");
@@ -4441,7 +4566,8 @@ function AccountModal({
   const [kycRegenerationError, setKycRegenerationError] = useState("");
 
   const acceptedTaskIds = useMemo(() => new Set(activeTasks.map((task) => task.id)), [activeTasks]);
-  const kpiRows = useMemo(() => buildAccountKpiRows(account), [account]);
+  const fallbackKpiRows = useMemo(() => buildAccountKpiRows(account), [account]);
+  const kpiRows = useMemo(() => dbKpiRows ?? (kpiRowsError && !kpiRowsLoading ? fallbackKpiRows : []), [dbKpiRows, fallbackKpiRows, kpiRowsError, kpiRowsLoading]);
   const pendingOverrideRequests = useMemo(() => Object.values(overrideRequests).filter((request) => request.status === "Pending"), [overrideRequests]);
   const overrideRequestLabels = useMemo(() => {
     const labels: Record<string, string> = {};
@@ -4490,11 +4616,49 @@ function AccountModal({
       setKycRegenerationError("");
       setScoreOverrideMessage("");
       setScoreOverrideError("");
+      setDbKpiRows(null);
+      setKpiRowsError("");
+      setKpiRowsLoading(true);
       setOverrideDrafts({});
       setOverrideRequests({});
       setScoreOverrides({});
     }
   }, [account?.id, initialTab, open]);
+
+  useEffect(() => {
+    if (!open || !account?.id) return;
+    const currentAccount = account;
+    let cancelled = false;
+    setDbKpiRows(null);
+    setKpiRowsError("");
+    setKpiRowsLoading(true);
+
+    async function loadKpiBreakdown() {
+      try {
+        const response = await fetch(`/api/accounts/${currentAccount.id}/kpi-breakdown`, {
+          headers: {
+            "x-role": role,
+            ...(userId ? { "x-user-id": userId } : {}),
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Score breakdown could not be loaded");
+        const breakdown = payload.data && typeof payload.data === "object"
+          ? payload.data as Record<string, ApiKpiBreakdown>
+          : {};
+        if (!cancelled) setDbKpiRows(mapKpiBreakdownToOverviewRows(breakdown, currentAccount));
+      } catch (error) {
+        if (!cancelled) setKpiRowsError(error instanceof Error ? error.message : "Score breakdown could not be loaded");
+      } finally {
+        if (!cancelled) setKpiRowsLoading(false);
+      }
+    }
+
+    void loadKpiBreakdown();
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.id, open, role, userId]);
 
   useEffect(() => {
     if (!open || !account?.id) return;
@@ -4998,6 +5162,8 @@ function AccountModal({
                 ) : null}
                 <OverviewTab
                   kpiRows={kpiRows}
+                  isLoadingKpis={kpiRowsLoading}
+                  kpiRowsError={kpiRowsError}
                   activeTasks={activeTasks}
                   acceptedTaskIds={acceptedTaskIds}
                   pendingDenials={pendingDenials}
