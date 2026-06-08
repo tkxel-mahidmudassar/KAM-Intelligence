@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { LLMProvider, LLMRequest, LLMResponse } from "../provider.interface";
 
-const MODEL = "gemini-2.0-flash";
+const DEFAULT_MODEL = "gemini-2.0-flash";
 
 function getGeminiApiKey(): string | undefined {
   return process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -9,7 +9,7 @@ function getGeminiApiKey(): string | undefined {
 
 export class GeminiProvider implements LLMProvider {
   readonly provider = "gemini" as const;
-  readonly model = MODEL;
+  readonly model = process.env.GEMINI_MODEL || process.env.GOOGLE_AI_MODEL || DEFAULT_MODEL;
 
   private client: GoogleGenerativeAI;
 
@@ -29,7 +29,7 @@ export class GeminiProvider implements LLMProvider {
     const conversationMsgs = request.messages.filter((m) => m.role !== "system");
 
     const genModel = this.client.getGenerativeModel({
-      model: MODEL,
+      model: this.model,
       ...(systemMsg ? { systemInstruction: systemMsg.content } : {}),
       generationConfig: {
         maxOutputTokens: request.maxTokens ?? 1024,
@@ -61,7 +61,7 @@ export class GeminiProvider implements LLMProvider {
 
     return {
       content: text,
-      model: MODEL,
+      model: this.model,
       provider: "gemini",
       promptTokens: estimatedPromptTokens,
       outputTokens: estimatedOutputTokens,
