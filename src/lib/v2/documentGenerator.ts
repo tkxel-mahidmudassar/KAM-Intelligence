@@ -1,6 +1,4 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import { join } from "path";
 import { complete } from "@/lib/ai";
 import type { V2CammieAccountContext } from "@/lib/v2/cammieAgent";
 
@@ -32,6 +30,10 @@ function slugify(value: string) {
 function parseJson(content: string): { title?: string; summary?: string; markdown?: string } {
   const raw = content.replace(/```json|```/g, "").trim();
   return JSON.parse(raw);
+}
+
+function markdownDataUrl(markdown: string) {
+  return `data:text/markdown;charset=utf-8;base64,${Buffer.from(markdown, "utf-8").toString("base64")}`;
 }
 
 export async function generateV2Document(input: V2DocumentGenerationInput): Promise<V2GeneratedDocument> {
@@ -91,15 +93,12 @@ Rules:
   const markdown = String(parsed.markdown || `# ${title}\n\nTo be confirmed.`);
   const summary = String(parsed.summary || `Generated ${input.documentType}.`).slice(0, 180);
   const fileName = `${slugify(title)}-${randomUUID().slice(0, 8)}.md`;
-  const outputDir = join(process.cwd(), "public", "generated-documents", "v2-cammie");
-  await mkdir(outputDir, { recursive: true });
-  await writeFile(join(outputDir, fileName), markdown, "utf-8");
 
   return {
     title,
     documentType: input.documentType,
     fileName,
-    fileUrl: `/generated-documents/v2-cammie/${fileName}`,
+    fileUrl: markdownDataUrl(markdown),
     format: "Markdown",
     summary,
   };

@@ -6019,7 +6019,7 @@ function AccountOnboardingWorkspace({
             <div className="mt-3 rounded-2xl border border-[#E5DACD] bg-[#FFF9EF]/80 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <a href={generatedKycDocument.fileUrl} target="_blank" rel="noreferrer" className="text-[15px] font-black text-[#25352E] underline-offset-4 hover:underline">
+                  <a href={generatedKycDocument.fileUrl} target="_blank" rel="noreferrer" download={generatedKycDocument.fileName} className="text-[15px] font-black text-[#25352E] underline-offset-4 hover:underline">
                     {generatedKycDocument.title}
                   </a>
                   <p className="mt-1 text-[12px] font-bold text-[#6F6254]">{generatedKycDocument.summary}</p>
@@ -6552,6 +6552,7 @@ function CammiePanel({
                         href={item.artifact.fileUrl}
                         target="_blank"
                         rel="noreferrer"
+                        download={`${item.artifact.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "generated-document"}.md`}
                         className="mt-3 block rounded-xl border border-[#D8CAB9] bg-[#FFF9EF] px-3 py-2 text-[#25352E] hover:bg-white"
                       >
                         <span className="block text-[12px] font-black">{item.artifact.title}</span>
