@@ -10,6 +10,16 @@ export interface PortfolioAccount {
   arr: number;
   health: PortfolioHealth;
   healthScore: number;
+  scoreDimensions?: {
+    csat?: number | null;
+    relationship?: number | null;
+    risk?: number | null;
+    contractHealth?: number | null;
+    projectHealth?: number | null;
+    resourceHealth?: number | null;
+    financial?: number | null;
+    whitespace?: number | null;
+  };
   renewalDays: number;
   kamOwner: string;
   associateOwner: string;
@@ -52,6 +62,20 @@ export interface PortfolioAccount {
     status: string;
     url: string;
   }>;
+  kycVersion?: {
+    id: string;
+    version: number;
+    status: string;
+    executiveSummary?: string | null;
+    businessModel?: string | null;
+    keyStakeholders?: string | null;
+    strategicGoals?: string | null;
+    riskFactors?: string | null;
+    expansionOpportunity?: string | null;
+    csatHistory?: string | null;
+    competitiveLandscape?: string | null;
+    financialOverview?: string | null;
+  };
 }
 
 const kamOwner = "Sarah Chen";

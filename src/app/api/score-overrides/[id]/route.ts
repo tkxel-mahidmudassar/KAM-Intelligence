@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRoleFromRequest, ok, badRequest, notFound, forbidden, serverError, guard } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
+import { createApprovedOverrideScoreSnapshot } from "@/lib/scoring/scoreOverrideSnapshot";
 
 // PATCH /api/score-overrides/[id]  — approve or decline
 export async function PATCH(
@@ -43,6 +44,9 @@ export async function PATCH(
       },
       include: { account: { select: { id: true, name: true } } },
     });
+    const scoreSnapshot = action === "APPROVE"
+      ? await createApprovedOverrideScoreSnapshot(existing.accountId, existing.kpiKey, existing.requestedValue)
+      : null;
 
     await logAudit({
       role,
@@ -59,7 +63,7 @@ export async function PATCH(
       },
     });
 
-    return ok(updated);
+    return ok({ override: updated, score: scoreSnapshot });
   } catch (err) {
     return serverError(err);
   }

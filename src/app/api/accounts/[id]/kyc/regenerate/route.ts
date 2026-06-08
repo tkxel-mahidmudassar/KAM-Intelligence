@@ -69,12 +69,12 @@ function fallbackKyc(account: { name: string; industry: string | null; arr: numb
 }
 
 async function generateWithOpenAiWebSearch(prompt: string): Promise<{ payload: KycDraftPayload; model: string; webSearchUsed: boolean }> {
-  if (process.env.AI_PROVIDER !== "openai" || !process.env.OPENAI_API_KEY) {
-    throw new Error("OpenAI web search is not configured");
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OpenAI web search is not configured because OPENAI_API_KEY is missing");
   }
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const model = process.env.OPENAI_WEB_SEARCH_MODEL || "gpt-5";
+  const model = process.env.OPENAI_WEB_SEARCH_MODEL || process.env.OPENAI_MODEL || process.env.AI_MODEL || "gpt-5.4-mini";
   const response = await client.responses.create({
     model,
     tools: [{ type: "web_search_preview" }],
@@ -126,7 +126,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       where: { id },
       include: {
         contacts: true,
-        documents: { orderBy: { createdAt: "desc" }, take: 12 },
+        documents: { orderBy: { createdAt: "desc" } },
+        resources: { orderBy: { createdAt: "asc" } },
+        journeyItems: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
         kycVersions: { orderBy: { version: "desc" }, take: 1 },
         touchpoints: { orderBy: { date: "desc" }, take: 10 },
         recommendations: { where: { status: { not: "DISMISSED" } }, orderBy: { createdAt: "desc" }, take: 10 },
@@ -150,7 +152,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     const accountSegment = (account as { segment?: string | null }).segment;
     const prompt = `Return JSON only with these keys: executiveSummary, businessModel, keyStakeholders, strategicGoals, riskFactors, expansionOpportunity, csatHistory, competitiveLandscape, financialOverview, citations.
 
-Create a fresh KYC version for this account. Use local account profile, uploaded document extracted text, accepted document findings, recent touchpoints, and web search where available. Keep citations as [{ "title": "...", "url": "..." }].
+Create a fresh KYC version for this account. Use all linked account documents, local account profile, contacts, Tkxel resources, account journey, accepted document findings, recent touchpoints, latest scores, and web search where available.
+
+Rules:
+- Return the requested JSON object only.
+- Populate every field with concrete KYC text where evidence exists.
+- Use uploaded document text for account-specific history, project context, risks, stakeholders, and Tkxel delivery context.
+- Use web search for current public company context, competitive landscape, business model, financial/public market context, and recent external signals.
+- Do not invent facts. If a field is under-evidenced, say what is missing.
+- Keep citations as [{ "title": "...", "url": "..." }] for web-backed claims.
 
 Account context:
 ${JSON.stringify({
@@ -167,6 +177,8 @@ ${JSON.stringify({
     health: account.health,
   },
   contacts: account.contacts,
+  resources: account.resources,
+  journeyItems: account.journeyItems,
   recentScores: account.kamScores,
   recentTouchpoints: account.touchpoints,
   activeRecommendations: account.recommendations,
@@ -174,7 +186,9 @@ ${JSON.stringify({
   documents: account.documents.map((document) => ({
     name: document.name,
     type: document.type,
-    extractedText: document.extractedText?.slice(0, 3500) ?? "",
+    createdAt: document.createdAt,
+    signalStatus: document.signalStatus,
+    extractedText: document.extractedText?.slice(0, 3000) ?? "",
     affectedScores: document.affectedScores,
     affectedKycSections: document.affectedKycSections,
   })),

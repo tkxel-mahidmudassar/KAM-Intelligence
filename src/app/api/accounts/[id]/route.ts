@@ -98,12 +98,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { id } = await params;
     const body = await req.json();
-    const resolvedKamId = await resolveKamId(body.kamId, body.kamOwnerName);
-    const resolvedAssociateOwnerId = await resolveUserId({
+    const hasKamOwnerInput = body.kamId !== undefined || body.kamOwnerName !== undefined;
+    const hasAssociateOwnerInput = body.associateOwnerId !== undefined || body.associateOwnerName !== undefined;
+    const resolvedKamId = hasKamOwnerInput ? await resolveKamId(body.kamId, body.kamOwnerName) : undefined;
+    const resolvedAssociateOwnerId = hasAssociateOwnerInput ? await resolveUserId({
       userId: body.associateOwnerId,
       userName: body.associateOwnerName,
       role: "ASSOCIATE",
-    });
+    }) : undefined;
 
     const account = await prisma.account.update({
       where: { id },

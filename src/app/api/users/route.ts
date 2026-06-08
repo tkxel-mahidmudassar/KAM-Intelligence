@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
         email:     true,
         role:      true,
         avatarUrl: true,
+        managerId: true,
         createdAt: true,
         _count: { select: { managedAccounts: true } },
       },
@@ -37,11 +38,12 @@ export async function POST(req: NextRequest) {
     if (denied) return denied;
 
     const body = await req.json();
-    const { name, email, role: userRole, avatarUrl } = body;
+    const { name, email, role: userRole, avatarUrl, initialPassword, managerId } = body;
 
     if (!name?.trim() || !email?.trim()) return badRequest("name and email are required");
-    const validRoles = ["KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
+    const validRoles = ["ASSOCIATE", "KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
     if (userRole && !validRoles.includes(userRole)) return badRequest("Invalid role");
+    if (initialPassword !== undefined && !String(initialPassword).trim()) return badRequest("Initial password cannot be empty");
 
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (existing) return badRequest("A user with this email already exists");
@@ -52,6 +54,8 @@ export async function POST(req: NextRequest) {
         email:     email.toLowerCase().trim(),
         role:      userRole ?? "KAM",
         avatarUrl: avatarUrl ?? null,
+        initialPassword: initialPassword ? String(initialPassword).trim() : null,
+        managerId: managerId ?? null,
       },
     });
 

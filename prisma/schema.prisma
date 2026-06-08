@@ -113,6 +113,7 @@ model User {
   name               String
   role               Role     @default(KAM)
   avatarUrl          String?
+  initialPassword    String?
   phone              String?
   jobTitle           String?
   managerId          String?  // For ASSOCIATE: their supervising KAM; for KAM: their MANAGER
@@ -591,6 +592,7 @@ model AppConfig {
   scoreWeights        Json?
   // Notification preferences — per-event toggles, frequency, channels
   notificationPrefs   Json?
+  integrationSettings Json?
   updatedAt           DateTime @updatedAt
   updatedBy           String?
 

@@ -1,49 +1,141 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { FileText, Link2, Plus, ShieldAlert, Trash2, Upload, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Archive, FileText, Link2, ShieldAlert, Trash2, Upload, UserPlus } from "lucide-react";
 import { defaultKpiWeights, integrationMocks } from "@/lib/v2/workspaceData";
-import { portfolioAccounts } from "@/lib/v2/portfolioData";
+import { useAccountCache } from "@/context/AccountCacheContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
+import type { Role } from "@/types";
 
-const initialAssociates = ["Aisha Khan", "Omar Farooq"];
-const ruleLog = [
-  "Do not suggest executive escalation if the user dismissed the same recommendation because the sponsor is already engaged.",
-  "When project health drops from delivery cadence, prefer pod-level recovery tasks before commercial escalation.",
-  "If a KAM denies a document-derived ARR update because finance has not confirmed it, wait for invoice evidence.",
-];
+type SettingsWeight = { id: string; name: string; weight: number };
+type TeamUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  managerId?: string | null;
+  _count?: { managedAccounts?: number };
+};
+type PlaybookRow = {
+  id: string;
+  title: string;
+  fileType: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  status: string;
+  ruleCount: number;
+  processingError?: string | null;
+};
+
+const scoreKeyBySettingId: Record<string, string> = {
+  relationship: "relationship",
+  "contract-health": "contractHealth",
+  "customer-success": "csat",
+  risk: "risk",
+  "resource-health": "resourceHealth",
+  "project-health": "projectHealth",
+  "financial-health": "financial",
+  whitespace: "whitespace",
+};
+
+const settingIdByScoreKey = Object.fromEntries(Object.entries(scoreKeyBySettingId).map(([id, key]) => [key, id]));
+
+function userHeaders(role: Role, userId: string | null) {
+  return {
+    "x-role": role,
+    ...(userId ? { "x-user-id": userId } : {}),
+  };
+}
+
+function toSettingsWeights(scoreWeights: Record<string, number>): SettingsWeight[] {
+  return defaultKpiWeights.map((item) => ({
+    ...item,
+    weight: scoreWeights[scoreKeyBySettingId[item.id]] ?? item.weight,
+  }));
+}
+
+function toScoreWeights(weights: SettingsWeight[]) {
+  return weights.reduce<Record<string, number>>((acc, item) => {
+    acc[scoreKeyBySettingId[item.id] ?? item.id] = item.weight;
+    return acc;
+  }, {});
+}
+
+function accountName(account: Record<string, unknown>) {
+  return String(account.name ?? "Account");
+}
 
 export function SettingsPage() {
-  const { role, userName } = useRole();
+  const { role, userId, userName } = useRole();
+  const { accounts, refreshAccounts, upsertAccount } = useAccountCache();
   const { fireNotification } = useNotifications();
-  const [weights, setWeights] = useState(defaultKpiWeights);
-  const [associates, setAssociates] = useState(initialAssociates);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [weights, setWeights] = useState<SettingsWeight[]>(defaultKpiWeights);
+  const [team, setTeam] = useState<TeamUser[]>([]);
+  const [newUser, setNewUser] = useState({ name: "", email: "", role: "ASSOCIATE" as Role, initialPassword: "" });
   const [status, setStatus] = useState("");
-  const [customRules, setCustomRules] = useState<string[]>([]);
-  const [ruleDraft, setRuleDraft] = useState("");
-  const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [savingWeights, setSavingWeights] = useState(false);
+  const [allocationSaving, setAllocationSaving] = useState<Record<string, boolean>>({});
   const [integrationStatuses, setIntegrationStatuses] = useState<Record<string, "connected" | "needs setup">>(
     Object.fromEntries(integrationMocks.map((name, index) => [name, index < 2 ? "connected" : "needs setup"])),
   );
-  const [allocations, setAllocations] = useState<Record<string, string>>(
-    Object.fromEntries(
-      portfolioAccounts.map((account, index) => [
-        account.id,
-        initialAssociates.includes(account.associateOwner) ? account.associateOwner : initialAssociates[index % initialAssociates.length],
-      ]),
-    ),
-  );
-  const [playbooks, setPlaybooks] = useState<Record<string, string>>({});
+  const [playbooks, setPlaybooks] = useState<PlaybookRow[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [playbookUploading, setPlaybookUploading] = useState(false);
 
-  const totalWeight = useMemo(() => weights.reduce((sum, item) => sum + item.weight, 0), [weights]);
-  const allocatedCount = useMemo(() => Object.values(allocations).filter(Boolean).length, [allocations]);
-  const uploadedPlaybooks = useMemo(() => Object.values(playbooks).filter(Boolean).length, [playbooks]);
-  const connectedIntegrations = useMemo(() => Object.values(integrationStatuses).filter((status) => status === "connected").length, [integrationStatuses]);
-  const canSaveWeights = totalWeight === 100;
-  const actionLabel = role === "ASSOCIATE" ? "Request weight changes" : "Save weights";
   const canAccessSettings = role === "KAM" || role === "ADMIN";
+  const associates = useMemo(() => team.filter((user) => user.role === "ASSOCIATE"), [team]);
+  const kams = useMemo(() => team.filter((user) => user.role === "KAM"), [team]);
+  const totalWeight = useMemo(() => weights.reduce((sum, item) => sum + item.weight, 0), [weights]);
+  const allocatedCount = useMemo(() => accounts.filter((account) => {
+    const associateOwner = account.associateOwner as { id?: string } | undefined;
+    return Boolean(associateOwner?.id);
+  }).length, [accounts]);
+  const connectedIntegrations = useMemo(() => Object.values(integrationStatuses).filter((item) => item === "connected").length, [integrationStatuses]);
+  const canSaveWeights = totalWeight === 100 && !savingWeights;
+
+  useEffect(() => {
+    if (!canAccessSettings || !userId) return;
+    let cancelled = false;
+
+    async function loadSettings() {
+      setLoading(true);
+      setError("");
+      try {
+        const headers = userHeaders(role, userId);
+        const [settingsResponse, usersResponse, playbooksResponse] = await Promise.all([
+          fetch("/api/settings", { headers }),
+          fetch("/api/users", { headers }),
+          fetch(`/api/playbooks?includeArchived=${showArchived ? "true" : "false"}`, { headers }),
+        ]);
+        const settingsPayload = await settingsResponse.json();
+        const usersPayload = await usersResponse.json();
+        const playbooksPayload = await playbooksResponse.json();
+        if (!settingsResponse.ok) throw new Error(settingsPayload.error || "Settings could not be loaded");
+        if (!usersResponse.ok) throw new Error(usersPayload.error || "Users could not be loaded");
+        if (!playbooksResponse.ok) throw new Error(playbooksPayload.error || "Playbooks could not be loaded");
+        if (cancelled) return;
+        setWeights(toSettingsWeights(settingsPayload.data.scoreWeights ?? {}));
+        if (settingsPayload.data.integrationSettings && typeof settingsPayload.data.integrationSettings === "object") {
+          setIntegrationStatuses(settingsPayload.data.integrationSettings as Record<string, "connected" | "needs setup">);
+        }
+        setTeam((usersPayload.data?.users ?? []) as TeamUser[]);
+        setPlaybooks((playbooksPayload.data ?? []) as PlaybookRow[]);
+      } catch (loadError) {
+        if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Settings could not be loaded");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadSettings();
+    void refreshAccounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [canAccessSettings, refreshAccounts, role, showArchived, userId]);
 
   if (!canAccessSettings) {
     return (
@@ -68,147 +160,229 @@ export function SettingsPage() {
     setWeights((current) => current.map((item) => (item.id === id ? { ...item, weight: value } : item)));
   }
 
-  function inviteAssociate() {
-    const name = inviteEmail.split("@")[0]?.replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()).trim();
-    if (!name) return;
-    setAssociates((current) => [...current, name]);
-    setInviteEmail("");
-    setStatus(`${name} has been added to the associate list.`);
-    fireNotification({
-      id: `associate-invited-${name}`,
-      title: "Associate invited",
-      detail: `${name} can now be assigned accounts.`,
-      href: "/settings",
-      source: "settings",
-      severity: "info",
-    });
-  }
-
-  function saveWeights() {
+  async function saveWeights() {
     if (!canSaveWeights) return;
-    setStatus(role === "ASSOCIATE" ? "KPI weight changes have been sent to the KAM for approval." : "Default KPI weights have been saved.");
-    fireNotification({
-      id: `kpi-weights-${Date.now()}`,
-      title: role === "ASSOCIATE" ? "KPI weight request submitted" : "KPI weights saved",
-      detail: `The current KPI weight total is ${totalWeight}%.`,
-      href: "/settings",
-      source: "settings",
-      severity: "info",
-    });
+    setSavingWeights(true);
+    setError("");
+    setStatus("");
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...userHeaders(role, userId) },
+        body: JSON.stringify({ scoreWeights: toScoreWeights(weights) }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Weights could not be saved");
+      setWeights(toSettingsWeights(payload.data.scoreWeights ?? {}));
+      setStatus("Default KPI weights saved to the database.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Weights could not be saved");
+    } finally {
+      setSavingWeights(false);
+    }
   }
 
-  function updateAllocation(accountId: string, associate: string) {
-    const account = portfolioAccounts.find((item) => item.id === accountId);
-    setAllocations((current) => ({ ...current, [accountId]: associate }));
-    setStatus(`${account?.name ?? "Account"} is now ${associate ? `allocated to ${associate}` : "unallocated"}.`);
+  async function createUser() {
+    const name = newUser.name.trim() || newUser.email.split("@")[0]?.replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()).trim();
+    if (!name || !newUser.email.trim() || !newUser.initialPassword.trim()) {
+      setError("Name, email, and initial password are required.");
+      return;
+    }
+    setError("");
+    setStatus("");
+    try {
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...userHeaders(role, userId) },
+        body: JSON.stringify({
+          name,
+          email: newUser.email,
+          role: newUser.role,
+          initialPassword: newUser.initialPassword,
+          managerId: newUser.role === "ASSOCIATE" ? userId : null,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "User could not be created");
+      setTeam((current) => [payload.data as TeamUser, ...current]);
+      setNewUser({ name: "", email: "", role: "ASSOCIATE", initialPassword: "" });
+      setStatus(`${name} was added with an initial password.`);
+      fireNotification({
+        id: `user-created-${payload.data.id}`,
+        title: "User added",
+        detail: `${name} can now sign in and be assigned accounts.`,
+        href: "/settings",
+        source: "settings",
+        severity: "info",
+      });
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "User could not be created");
+    }
   }
 
-  function removeAssociate(associate: string) {
-    setAssociates((current) => current.filter((item) => item !== associate));
-    setAllocations((current) => Object.fromEntries(Object.entries(current).map(([accountId, owner]) => [accountId, owner === associate ? "" : owner])));
-    setStatus(`${associate} has been removed and their accounts are now unallocated.`);
+  async function deleteUser(user: TeamUser) {
+    setError("");
+    setStatus("");
+    try {
+      const response = await fetch(`/api/users/${user.id}`, {
+        method: "DELETE",
+        headers: userHeaders(role, userId),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "User could not be removed");
+      }
+      setTeam((current) => current.filter((item) => item.id !== user.id));
+      setStatus(`${user.name} was removed from the database.`);
+      void refreshAccounts();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "User could not be removed");
+    }
   }
 
-  function addRule() {
-    const trimmed = ruleDraft.trim();
-    if (!trimmed) return;
-    setCustomRules((current) => [trimmed, ...current]);
-    setRuleDraft("");
-    setRuleEditorOpen(false);
-    setStatus("AI rule added to the learning playbook.");
+  async function updateAllocation(account: Record<string, unknown>, associateOwnerId: string) {
+    const accountId = String(account.id ?? "");
+    if (!accountId) return;
+    setAllocationSaving((current) => ({ ...current, [accountId]: true }));
+    setError("");
+    setStatus("");
+    try {
+      const response = await fetch(`/api/accounts/${accountId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...userHeaders(role, userId) },
+        body: JSON.stringify({ associateOwnerId: associateOwnerId || null }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Allocation could not be saved");
+      upsertAccount(payload.data as Record<string, unknown>);
+      const associate = associates.find((item) => item.id === associateOwnerId);
+      setStatus(`${accountName(account)} is now ${associate ? `allocated to ${associate.name}` : "unallocated"}.`);
+    } catch (allocationError) {
+      setError(allocationError instanceof Error ? allocationError.message : "Allocation could not be saved");
+    } finally {
+      setAllocationSaving((current) => ({ ...current, [accountId]: false }));
+    }
   }
 
-  function toggleIntegration(name: string) {
-    setIntegrationStatuses((current) => {
-      const nextStatus = current[name] === "connected" ? "needs setup" : "connected";
-      setStatus(`${name} marked as ${nextStatus}.`);
-      return { ...current, [name]: nextStatus };
-    });
+  async function toggleIntegration(name: string) {
+    const nextStatuses = {
+      ...integrationStatuses,
+      [name]: integrationStatuses[name] === "connected" ? "needs setup" as const : "connected" as const,
+    };
+    setIntegrationStatuses(nextStatuses);
+    setError("");
+    setStatus("");
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...userHeaders(role, userId) },
+        body: JSON.stringify({ integrationSettings: nextStatuses }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Integration settings could not be saved");
+      setIntegrationStatuses(payload.data.integrationSettings as Record<string, "connected" | "needs setup">);
+      setStatus(`${name} marked as ${nextStatuses[name]}.`);
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : "Integration settings could not be saved");
+    }
+  }
+
+  async function uploadPlaybook(file: File) {
+    setPlaybookUploading(true);
+    setError("");
+    setStatus("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/playbooks/upload", {
+        method: "POST",
+        headers: userHeaders(role, userId),
+        body: form,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Playbook could not be uploaded");
+      setStatus(`${file.name} uploaded and parsed.`);
+      const next = await fetch(`/api/playbooks?includeArchived=${showArchived ? "true" : "false"}`, { headers: userHeaders(role, userId) });
+      const nextPayload = await next.json();
+      if (next.ok) setPlaybooks((nextPayload.data ?? []) as PlaybookRow[]);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Playbook could not be uploaded");
+    } finally {
+      setPlaybookUploading(false);
+    }
+  }
+
+  async function archivePlaybook(playbook: PlaybookRow) {
+    setError("");
+    setStatus("");
+    try {
+      const response = await fetch(`/api/playbooks/${playbook.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...userHeaders(role, userId) },
+        body: JSON.stringify({ status: "ARCHIVED" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Playbook could not be archived");
+      setPlaybooks((current) => current.filter((item) => item.id !== playbook.id));
+      setStatus(`${playbook.title} archived.`);
+    } catch (archiveError) {
+      setError(archiveError instanceof Error ? archiveError.message : "Playbook could not be archived");
+    }
   }
 
   return (
     <main className="min-h-screen px-5 py-5">
       <section className="mx-auto max-w-[1500px] space-y-4">
-        <div className="rounded-[30px] border border-[#E4D5C4] bg-[linear-gradient(135deg,#FFF9EF_0%,#F6F0E5_55%,#EAF4EA_100%)] p-5 shadow-[0_24px_70px_-58px_rgba(32,38,32,0.58)]">
+        <div className="rounded-[30px] border border-[#E4D5C4] bg-[#FFF9EF] p-5 shadow-[0_24px_70px_-58px_rgba(32,38,32,0.58)]">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-[clamp(40px,5vw,64px)] font-black leading-none tracking-[-0.06em] text-[#1F2722]">Settings</h1>
+              <h1 className="text-[clamp(36px,4vw,56px)] font-black leading-none tracking-[-0.05em] text-[#1F2722]">Settings</h1>
+              <p className="mt-2 text-[13px] font-bold text-[#75685A]">DB-backed configuration for users, account ownership, scoring, and global playbooks.</p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-2xl border border-[#D8C7B4] bg-[#FFFCF6]/75 px-4 py-3">
-                <p className="text-[12px] font-bold text-[#75685A]">Weights</p>
-                <p className="text-2xl font-black text-[#25352E]">{totalWeight}%</p>
-              </div>
-              <div className="rounded-2xl border border-[#D8C7B4] bg-[#FFFCF6]/75 px-4 py-3">
-                <p className="text-[12px] font-bold text-[#75685A]">Allocated</p>
-                <p className="text-2xl font-black text-[#25352E]">{allocatedCount}</p>
-              </div>
-              <div className="rounded-2xl border border-[#D8C7B4] bg-[#FFFCF6]/75 px-4 py-3">
-                <p className="text-[12px] font-bold text-[#75685A]">Playbooks</p>
-                <p className="text-2xl font-black text-[#25352E]">{uploadedPlaybooks}/{weights.length}</p>
-              </div>
-              <div className="rounded-2xl border border-[#D8C7B4] bg-[#FFFCF6]/75 px-4 py-3">
-                <p className="text-[12px] font-bold text-[#75685A]">Signed in</p>
-                <p className="max-w-28 truncate text-lg font-black text-[#25352E]">{userName || "Sarah Chen"}</p>
-              </div>
+              <Stat label="Weights" value={`${totalWeight}%`} />
+              <Stat label="Users" value={String(team.length)} />
+              <Stat label="Allocated" value={String(allocatedCount)} />
+              <Stat label="Signed in" value={userName || "KAM"} />
             </div>
           </div>
-          {status ? (
-            <div className="mt-4 rounded-2xl border border-[#CFE2D3] bg-[#F3FAF1] px-4 py-3 text-[13px] font-black text-[#245D3A]">
-              {status}
-            </div>
-          ) : null}
+          {loading ? <Status tone="neutral">Loading settings from database...</Status> : null}
+          {status ? <Status tone="success">{status}</Status> : null}
+          {error ? <Status tone="error">{error}</Status> : null}
         </div>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
-          <div className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-[20px] font-black text-[#25352E]">Default KPI weights</h2>
-              <div className="flex items-center gap-2">
-                <span className={`rounded-full border px-3 py-1 text-[12px] font-black ${canSaveWeights ? "border-[#BFD9C6] bg-[#F2FAF1] text-[#1F6C42]" : "border-[#EAB3A9] bg-[#FFF1EE] text-[#A63F33]"}`}>
-                  Total {totalWeight}%
-                </span>
-                <button
-                  type="button"
-                  disabled={!canSaveWeights}
-                  onClick={saveWeights}
-                  className="rounded-full bg-[#25352E] px-4 py-2 text-[12px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
-                >
-                  {actionLabel}
-                </button>
-              </div>
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <Panel title="Default KPI weights" aside={`Total ${totalWeight}%`}>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                disabled={!canSaveWeights}
+                onClick={saveWeights}
+                className="rounded-full bg-[#25352E] px-4 py-2 text-[12px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
+              >
+                {savingWeights ? "Saving..." : "Save weights"}
+              </button>
             </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
               {weights.map((item) => (
                 <label key={item.id} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-[13px] font-black text-[#25352E]">{item.name}</span>
                     <span className="rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-2.5 py-1 text-[11px] font-black text-[#25352E]">{item.weight}%</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="40"
-                    value={item.weight}
-                    onChange={(event) => updateWeight(item.id, Number(event.target.value))}
-                    className="mt-2 h-2 w-full accent-[#25352E]"
-                  />
+                  <input type="range" min="0" max="40" value={item.weight} onChange={(event) => updateWeight(item.id, Number(event.target.value))} className="mt-2 h-2 w-full accent-[#25352E]" />
                 </label>
               ))}
             </div>
-          </div>
+          </Panel>
 
-          <div className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-[20px] font-black text-[#25352E]">Integrations</h2>
-              <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{connectedIntegrations}/{integrationMocks.length} connected</span>
-            </div>
-            <div className="mt-3 grid gap-2">
+          <Panel title="Integrations" aside={`${connectedIntegrations}/${integrationMocks.length} connected`}>
+            <div className="grid gap-2">
               {integrationMocks.map((name) => (
                 <button
                   key={name}
                   type="button"
-                  onClick={() => toggleIntegration(name)}
+                  onClick={() => void toggleIntegration(name)}
                   className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] px-3 py-2 text-left transition hover:border-[#25352E]/45"
                 >
                   <span className="truncate text-[13px] font-black text-[#25352E]">{name}</span>
@@ -219,167 +393,159 @@ export function SettingsPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </Panel>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)]">
-          <div className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-[20px] font-black text-[#25352E]">Associates and allocations</h2>
-              <div className="flex rounded-full border border-[#E1D3C2] bg-[#FFF8ED] p-1">
-                <input
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="Associate email"
-                  className="w-48 bg-transparent px-3 text-[13px] font-bold outline-none"
-                />
-                <button type="button" onClick={inviteAssociate} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-black text-[#FFF9EF]">
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Invite
-                </button>
-              </div>
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,0.9fr)]">
+          <Panel title="Users and account allocation" aside={`${associates.length} associates`}>
+            <div className="grid gap-2 rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3 lg:grid-cols-[1fr_1fr_150px_160px_auto]">
+              <input value={newUser.name} onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))} placeholder="Full name" className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-bold outline-none" />
+              <input value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="Email" className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-bold outline-none" />
+              <select value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value as Role }))} className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-black outline-none">
+                <option value="ASSOCIATE">Associate</option>
+                <option value="KAM">KAM</option>
+                <option value="EXECUTIVE">Executive</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+              <input value={newUser.initialPassword} onChange={(event) => setNewUser((current) => ({ ...current, initialPassword: event.target.value }))} placeholder="Initial password" className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-bold outline-none" />
+              <button type="button" onClick={createUser} className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#25352E] px-4 text-[12px] font-black text-[#FFF9EF]">
+                <UserPlus className="h-3.5 w-3.5" />
+                Add
+              </button>
             </div>
 
             <div className="mt-4 grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
               <div className="max-h-[470px] space-y-2 overflow-y-auto pr-1">
-                {associates.map((associate) => {
-                  const ownedAccounts = portfolioAccounts.filter((account) => allocations[account.id] === associate);
-                  return (
-                    <div key={associate} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-[14px] font-black text-[#25352E]">{associate}</p>
-                          <p className="text-[12px] font-bold text-[#75685A]">{ownedAccounts.length} account{ownedAccounts.length === 1 ? "" : "s"}</p>
-                        </div>
-                        <button type="button" onClick={() => removeAssociate(associate)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#A04436]">
+                {team.map((person) => (
+                  <div key={person.id} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[14px] font-black text-[#25352E]">{person.name}</p>
+                        <p className="truncate text-[12px] font-bold text-[#75685A]">{person.email}</p>
+                        <p className="mt-1 text-[11px] font-black text-[#8A7563]">{person.role}</p>
+                      </div>
+                      {person.id !== userId ? (
+                        <button type="button" onClick={() => deleteUser(person)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#A04436]">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {ownedAccounts.slice(0, 4).map((account) => (
-                          <button key={account.id} type="button" onClick={() => updateAllocation(account.id, "")} className="rounded-full border border-[#D9C8B4] bg-[#FFFCF6] px-2 py-1 text-[11px] font-black text-[#6F6254]">
-                            {account.name}
-                          </button>
-                        ))}
-                        {ownedAccounts.length > 4 ? <span className="rounded-full border border-[#D9C8B4] px-2 py-1 text-[11px] font-black text-[#8A7563]">+{ownedAccounts.length - 4}</span> : null}
-                      </div>
+                      ) : null}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
 
               <div className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-[16px] font-black text-[#25352E]">Account allocation</h3>
-                  <span className="rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-3 py-1 text-[12px] font-black text-[#6F6254]">{portfolioAccounts.length} accounts</span>
+                  <span className="rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-3 py-1 text-[12px] font-black text-[#6F6254]">{accounts.length} accounts</span>
                 </div>
                 <div className="mt-3 max-h-[415px] space-y-2 overflow-y-auto pr-1">
-                  {portfolioAccounts.map((account) => (
-                    <div key={account.id} className="grid gap-2 rounded-xl border border-[#E1D3C2] bg-[#FFFCF6] px-3 py-2 sm:grid-cols-[1fr_190px] sm:items-center">
-                      <div>
-                        <p className="text-[13px] font-black text-[#25352E]">{account.name}</p>
-                        <p className="text-[12px] font-bold text-[#75685A]">{account.industry}</p>
+                  {accounts.map((account) => {
+                    const associateOwner = account.associateOwner as { id?: string } | undefined;
+                    const accountId = String(account.id ?? "");
+                    return (
+                      <div key={accountId} className="grid gap-2 rounded-xl border border-[#E1D3C2] bg-[#FFFCF6] px-3 py-2 sm:grid-cols-[1fr_190px] sm:items-center">
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-black text-[#25352E]">{accountName(account)}</p>
+                          <p className="truncate text-[12px] font-bold text-[#75685A]">{String(account.industry ?? "Industry not set")}</p>
+                        </div>
+                        <select
+                          value={associateOwner?.id ?? ""}
+                          disabled={Boolean(allocationSaving[accountId])}
+                          onChange={(event) => updateAllocation(account, event.target.value)}
+                          className="h-9 rounded-full border border-[#D7C6B4] bg-[#FFF8ED] px-3 text-[12px] font-black text-[#25352E] outline-none disabled:opacity-60"
+                        >
+                          <option value="">Unallocated</option>
+                          {associates.map((associate) => (
+                            <option key={associate.id} value={associate.id}>{associate.name}</option>
+                          ))}
+                        </select>
                       </div>
-                      <select
-                        value={allocations[account.id] || ""}
-                        onChange={(event) => updateAllocation(account.id, event.target.value)}
-                        className="h-9 rounded-full border border-[#D7C6B4] bg-[#FFF8ED] px-3 text-[12px] font-black text-[#25352E] outline-none"
-                      >
-                        <option value="">Unallocated</option>
-                        {associates.map((associate) => (
-                          <option key={associate} value={associate}>
-                            {associate}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          </div>
+          </Panel>
 
-          <div className="grid gap-4">
-            <div id="playbooks" className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-[20px] font-black text-[#25352E]">Playbooks</h2>
-                <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{uploadedPlaybooks}/{weights.length} uploaded</span>
-              </div>
-              <div className="mt-3 max-h-[290px] space-y-2 overflow-y-auto pr-1">
-                {weights.map((item) => (
-                  <label key={item.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] px-3 py-2">
-                    <span className="truncate text-[13px] font-black text-[#25352E]">{item.name}</span>
-                    <span className="flex min-w-0 shrink-0 items-center gap-2">
-                      <span className="max-w-[160px] truncate text-[12px] font-bold text-[#75685A]">{playbooks[item.id] || "No file"}</span>
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#25352E] text-[#FFF9EF]">
-                        <Upload className="h-3.5 w-3.5" />
-                      </span>
-                    </span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) {
-                          setPlaybooks((current) => ({ ...current, [item.id]: file.name }));
-                          fireNotification({
-                            id: `playbook-uploaded-${item.id}-${file.name}`,
-                            title: `${item.name} playbook parsed`,
-                            detail: "Ready for score task suggestions.",
-                            href: "/settings?section=playbooks",
-                            source: "playbook-upload",
-                            severity: "info",
-                          });
-                        }
-                      }}
-                    />
-                  </label>
-                ))}
-              </div>
+          <Panel title="Global playbooks" aside={`${playbooks.length} shown`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-2 text-[12px] font-black text-[#25352E]">
+                <Upload className="h-3.5 w-3.5" />
+                {playbookUploading ? "Uploading..." : "Upload playbook"}
+                <input type="file" className="hidden" accept=".pdf,.doc,.docx,.txt,.md,.xls,.xlsx" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) void uploadPlaybook(file);
+                }} />
+              </label>
+              <label className="inline-flex items-center gap-2 text-[12px] font-black text-[#6F6254]">
+                <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} className="accent-[#25352E]" />
+                Show archived
+              </label>
             </div>
-
-            <div className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-[#25352E]" />
-                  <h2 className="text-[20px] font-black text-[#25352E]">AI rules playbook</h2>
+            <div className="mt-3 max-h-[520px] space-y-2 overflow-y-auto pr-1">
+              {playbooks.length === 0 ? (
+                <div className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3 text-[13px] font-bold text-[#75685A]">
+                  Upload PDF, DOCX, TXT, Markdown, XLS, or XLSX playbooks. Global playbooks apply to all accounts automatically.
                 </div>
-                {!ruleEditorOpen ? (
-                  <button type="button" onClick={() => setRuleEditorOpen(true)} className="inline-flex items-center gap-2 rounded-full border border-[#D9C8B4] bg-[#FFF8ED] px-3 py-2 text-[12px] font-black text-[#25352E]">
-                    <Plus className="h-4 w-4" />
-                    Add rule
-                  </button>
-                ) : null}
-              </div>
-              <div className="mt-3 max-h-[270px] space-y-2 overflow-y-auto pr-1">
-                {ruleEditorOpen ? (
-                  <div className="rounded-2xl border border-[#CDBDAA] bg-[#FFFCF6] p-3">
-                    <textarea
-                      value={ruleDraft}
-                      onChange={(event) => setRuleDraft(event.target.value)}
-                      placeholder="Add a learning rule from a dismissal, denial, or correction..."
-                      className="min-h-20 w-full resize-none rounded-xl border border-[#E1D3C2] bg-[#FFF8ED] p-3 text-[13px] font-bold text-[#25352E] outline-none"
-                    />
-                    <div className="mt-3 flex justify-end gap-2">
-                      <button type="button" onClick={() => setRuleEditorOpen(false)} className="rounded-full border border-[#D9C8B4] px-4 py-2 text-[12px] font-black text-[#6F6254]">
-                        Cancel
-                      </button>
-                      <button type="button" onClick={addRule} disabled={!ruleDraft.trim()} className="rounded-full bg-[#25352E] px-4 py-2 text-[12px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]">
-                        Save rule
-                      </button>
+              ) : null}
+              {playbooks.map((playbook) => (
+                <div key={playbook.id} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-black text-[#25352E]">{playbook.title}</p>
+                      <p className="mt-1 text-[11px] font-bold text-[#75685A]">{playbook.fileType} - {playbook.ruleCount} rules - {playbook.uploadedBy}</p>
+                      {playbook.processingError ? <p className="mt-1 text-[11px] font-bold text-[#A63F33]">{playbook.processingError}</p> : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-2 py-1 text-[10px] font-black text-[#6F6254]">{playbook.status}</span>
+                      {playbook.status !== "ARCHIVED" ? (
+                        <button type="button" onClick={() => archivePlaybook(playbook)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#6F6254]">
+                          <Archive className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
-                ) : null}
-                {[...customRules, ...ruleLog].map((rule) => (
-                  <div key={rule} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3 text-[13px] font-bold leading-relaxed text-[#4E443B]">
-                    {rule}
-                  </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          </div>
+          </Panel>
         </section>
       </section>
     </main>
   );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[#D8C7B4] bg-[#FFFCF6]/75 px-4 py-3">
+      <p className="text-[12px] font-bold text-[#75685A]">{label}</p>
+      <p className="max-w-28 truncate text-2xl font-black text-[#25352E]">{value}</p>
+    </div>
+  );
+}
+
+function Panel({ title, aside, children }: { title: string; aside?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-[#25352E]" />
+          <h2 className="text-[20px] font-black text-[#25352E]">{title}</h2>
+        </div>
+        {aside ? <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{aside}</span> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Status({ tone, children }: { tone: "success" | "error" | "neutral"; children: React.ReactNode }) {
+  const styles = tone === "error"
+    ? "border-[#E8B8B0] bg-[#FFF0ED] text-[#B33D32]"
+    : tone === "success"
+      ? "border-[#CFE2D3] bg-[#F3FAF1] text-[#245D3A]"
+      : "border-[#E1D3C2] bg-[#FFF8ED] text-[#75685A]";
+  return <div className={`mt-4 rounded-2xl border px-4 py-3 text-[13px] font-black ${styles}`}>{children}</div>;
 }

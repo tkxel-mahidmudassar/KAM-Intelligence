@@ -205,7 +205,9 @@ const KAM_PERMISSIONS: Permission[] = [
 
   // Users — view and update team members
   "user:view",
+  "user:create",
   "user:update",
+  "user:delete",
 
   // Portfolio — full view
   "portfolio:view",

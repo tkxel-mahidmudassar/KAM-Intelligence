@@ -8,6 +8,7 @@ export const accountResponseInclude = {
   resources: { orderBy: [{ createdAt: "asc" as const }] },
   journeyItems: { orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }] },
   documents: { orderBy: { createdAt: "desc" as const }, take: 12 },
+  kycVersions: { orderBy: { version: "desc" as const }, take: 1 },
   kamScores: { orderBy: { computedAt: "desc" as const }, take: 8 },
   signals: { where: { isResolved: false }, orderBy: { detectedAt: "desc" as const }, take: 3 },
   _count: { select: { actions: true, documents: true } },

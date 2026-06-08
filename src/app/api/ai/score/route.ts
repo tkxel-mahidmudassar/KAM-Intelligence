@@ -10,6 +10,7 @@ import { runTriggerEngine } from "@/lib/scoring/triggers";
 import { expireRecommendationsForAccount } from "@/lib/scoring/expireRecommendations";
 import { DEFAULT_WEIGHTS, WEIGHT_KEYS } from "@/lib/scoring/weights";
 import { calculateKpiSubscores, clampScore, type KpiScoreKey } from "@/lib/scoring/kpi";
+import { applyCriteriaOverrideToDimension, scoreDimensionFromKey } from "@/lib/scoring/scoreOverrideMath";
 import { logAudit } from "@/lib/audit";
 import { runMasterOrchestrator } from "@/lib/ai/agents/masterOrchestrator";
 
@@ -148,13 +149,21 @@ export async function POST(req: NextRequest) {
       select: { kpiKey: true, approvedValue: true },
     });
 
-    const overrideMap: Record<string, number> = {};
+    const overrideMap: Record<string, Array<{ kpiKey: string; approvedValue: number }>> = {};
     for (const o of approvedOverrides) {
-      if (o.approvedValue !== null) overrideMap[o.kpiKey] = clampScore(o.approvedValue);
+      if (o.approvedValue === null) continue;
+      const dimension = scoreDimensionFromKey(o.kpiKey);
+      if (!dimension) continue;
+      overrideMap[dimension] = [
+        ...(overrideMap[dimension] ?? []),
+        { kpiKey: o.kpiKey, approvedValue: o.approvedValue },
+      ];
     }
 
     const applyOverride = (val: number, key: string): number =>
-      overrideMap[key] !== undefined ? overrideMap[key] : val;
+      (overrideMap[key] ?? []).reduce((score, override) => (
+        applyCriteriaOverrideToDimension(score, override.kpiKey, override.approvedValue)
+      ), val);
 
     const scoredCsat           = applyOverride(finalCsat,           "csat");
     const scoredRelationship   = applyOverride(finalRelationship,   "relationship");
@@ -180,7 +189,7 @@ export async function POST(req: NextRequest) {
 
     for (const key of Object.keys(scoredByKey) as KpiScoreKey[]) {
       const contributed = qCnt[key] ? `Questionnaire blend applied from ${qCnt[key]} response(s).` : null;
-      const overridden = overrideMap[key] !== undefined ? `Approved manual override applied: ${overrideMap[key]}.` : null;
+      const overridden = overrideMap[key] !== undefined ? `Approved manual override applied.` : null;
       scoreBreakdown[key] = {
         ...scoreBreakdown[key],
         score: scoredByKey[key],

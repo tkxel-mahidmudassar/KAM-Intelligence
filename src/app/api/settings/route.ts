@@ -19,6 +19,16 @@ const DEFAULT_NOTIFICATION_PREFS = {
   },
 };
 
+const DEFAULT_INTEGRATION_SETTINGS = {
+  Salesforce: "connected",
+  Gmail: "connected",
+  Jira: "needs setup",
+  Worksphere: "needs setup",
+  "Finance Invoice Tracking": "needs setup",
+  LLM: "needs setup",
+  "AI Note Taker": "needs setup",
+};
+
 async function getSettingsRole(req: NextRequest): Promise<Role | null> {
   const userId = getUserIdFromRequest(req);
   if (!userId) return null;
@@ -50,6 +60,7 @@ export async function GET(req: NextRequest) {
     // Load persisted config (fall back to defaults)
     const scoreWeights: Record<string, number> = { ...DEFAULT_WEIGHTS };
     let notificationPrefs = DEFAULT_NOTIFICATION_PREFS;
+    let integrationSettings = DEFAULT_INTEGRATION_SETTINGS;
     try {
       const cfg = await prisma.appConfig.findUnique({ where: { id: "global" } });
       if (cfg?.scoreWeights && typeof cfg.scoreWeights === "object") {
@@ -62,6 +73,12 @@ export async function GET(req: NextRequest) {
         notificationPrefs = {
           ...DEFAULT_NOTIFICATION_PREFS,
           ...(cfg.notificationPrefs as typeof DEFAULT_NOTIFICATION_PREFS),
+        };
+      }
+      if (cfg?.integrationSettings && typeof cfg.integrationSettings === "object") {
+        integrationSettings = {
+          ...DEFAULT_INTEGRATION_SETTINGS,
+          ...(cfg.integrationSettings as typeof DEFAULT_INTEGRATION_SETTINGS),
         };
       }
     } catch {
@@ -81,6 +98,7 @@ export async function GET(req: NextRequest) {
       },
       scoreWeights,
       notificationPrefs,
+      integrationSettings,
     });
   } catch (err) {
     return serverError(err);
@@ -107,9 +125,20 @@ export async function PUT(req: NextRequest) {
       return ok({ notificationPrefs: cfg.notificationPrefs });
     }
 
+    if (body.integrationSettings) {
+      const settings = body.integrationSettings;
+      const cfg = await prisma.appConfig.upsert({
+        where:  { id: "global" },
+        create: { id: "global", integrationSettings: settings, updatedBy: role },
+        update: { integrationSettings: settings, updatedBy: role },
+      });
+      await logAudit({ role, action: "settings.integrations_updated", entity: "AppConfig", entityId: "global", metadata: { role } });
+      return ok({ integrationSettings: cfg.integrationSettings });
+    }
+
     // Handle score weights update
     const weights = body.scoreWeights as Record<string, number> | undefined;
-    if (!weights || typeof weights !== "object") return badRequest("scoreWeights or notificationPrefs required");
+    if (!weights || typeof weights !== "object") return badRequest("scoreWeights, notificationPrefs, or integrationSettings required");
 
     // Validate: all 8 keys present, all non-negative integers, sum = 100
     for (const key of WEIGHT_KEYS) {

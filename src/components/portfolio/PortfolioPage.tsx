@@ -240,7 +240,14 @@ interface AccountProfileDraft {
 
 type OnboardingStage = "source-upload" | "workspace";
 type AccountOnboardingStep = "profile" | "kyc" | "journey" | "review";
-type AccountWorkspaceTab = "overview" | "profile" | "documents";
+type AccountWorkspaceTab = "overview" | "profile" | "documents" | "kyc";
+
+const accountWorkspaceTabs: Array<{ label: string; value: AccountWorkspaceTab }> = [
+  { label: "Overview", value: "overview" },
+  { label: "Profile", value: "profile" },
+  { label: "Docs & AI", value: "documents" },
+  { label: "KYC", value: "kyc" },
+];
 type OnboardingSuggestionStatus = "Pending" | "Accepted" | "Dismissed";
 const LS_ACCOUNT_CREATION_REQUESTS = "kam_v2_account_creation_requests";
 type OnboardingStepStatus = "Done" | "Active" | "Pending";
@@ -980,6 +987,36 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
   }
 }
 
+const scoreDimensionByRowId: Record<string, keyof NonNullable<PortfolioAccount["scoreDimensions"]>> = {
+  "customer-success": "csat",
+  relationship: "relationship",
+  risk: "risk",
+  "contract-health": "contractHealth",
+  "project-health": "projectHealth",
+  "resource-health": "resourceHealth",
+  "financial-health": "financial",
+  whitespace: "whitespace",
+};
+
+function percentToFrameworkScore(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return clampFrameworkScore(Math.round(value / 20));
+}
+
+function applyPersistedScoreDimensions(rows: KpiOverviewRow[], account: PortfolioAccount) {
+  const dimensions = account.scoreDimensions;
+  if (!dimensions) return;
+
+  rows.forEach((row) => {
+    const dimensionKey = scoreDimensionByRowId[row.id];
+    const score = percentToFrameworkScore(dimensionKey ? dimensions[dimensionKey] : null);
+    if (!score) return;
+
+    row.score = score;
+    row.trend = accountTrend(score);
+  });
+}
+
 function removeUnneededActions(rows: KpiOverviewRow[], account: PortfolioAccount) {
   rows.forEach((row) => {
     if (row.score >= 4 || (account.health === "HEALTHY" && row.score >= 3)) {
@@ -991,13 +1028,17 @@ function removeUnneededActions(rows: KpiOverviewRow[], account: PortfolioAccount
 function buildAccountKpiRows(account: PortfolioAccount | null): KpiOverviewRow[] {
   const rows = cloneKpiRows();
   if (!account) return rows;
+  const hasPersistedDimensions = Boolean(account.scoreDimensions && Object.values(account.scoreDimensions).some((value) => typeof value === "number"));
 
-  applyBaselineScores(rows, account);
-  applyIndustrySpecificScores(rows, account);
-  applyNamedAccountReality(rows, account);
+  if (!hasPersistedDimensions) {
+    applyBaselineScores(rows, account);
+    applyIndustrySpecificScores(rows, account);
+    applyNamedAccountReality(rows, account);
+  }
+  applyPersistedScoreDimensions(rows, account);
 
   if (account.health === "HEALTHY" && account.relationshipSignal.toLowerCase().includes("expansion")) {
-    setKpiScore(rows, "whitespace", 5, "up");
+    if (!account.scoreDimensions?.whitespace) setKpiScore(rows, "whitespace", 5, "up");
   }
 
   if (account.health !== "HEALTHY" && !findKpiRow(rows, "risk")?.task) {
@@ -1494,14 +1535,27 @@ function healthScoreFromAccount(account: Record<string, unknown>, health: Portfo
   return 82;
 }
 
+function latestKamScoreFromAccount(account: Record<string, unknown>) {
+  const scores = Array.isArray(account.kamScores) ? account.kamScores as Array<Record<string, unknown>> : [];
+  return scores[0];
+}
+
+function numericScoreField(score: Record<string, unknown> | undefined, field: string) {
+  const value = Number(score?.[field]);
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : null;
+}
+
 function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): PortfolioAccount {
   const health = String(account.health ?? "HEALTHY") as PortfolioHealth;
+  const latestScore = latestKamScoreFromAccount(account);
   const kam = account.kam as { name?: string } | undefined;
   const associateOwner = account.associateOwner as { name?: string } | undefined;
   const contacts = Array.isArray(account.contacts) ? account.contacts as Array<Record<string, unknown>> : [];
   const resources = Array.isArray(account.resources) ? account.resources as Array<Record<string, unknown>> : [];
   const journeyItems = Array.isArray(account.journeyItems) ? account.journeyItems as Array<Record<string, unknown>> : [];
   const documents = Array.isArray(account.documents) ? account.documents as Array<Record<string, unknown>> : [];
+  const kycVersions = Array.isArray(account.kycVersions) ? account.kycVersions as Array<Record<string, unknown>> : [];
+  const latestKyc = kycVersions[0];
   const metadata = getAccountRuntimeMetadata({
     id: String(account.id),
     name: String(account.name ?? "New account"),
@@ -1516,6 +1570,16 @@ function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): Port
     arr: Number(account.arr ?? 0),
     health,
     healthScore: healthScoreFromAccount(account, health),
+    scoreDimensions: {
+      csat: numericScoreField(latestScore, "csat"),
+      relationship: numericScoreField(latestScore, "relationship"),
+      risk: numericScoreField(latestScore, "risk"),
+      contractHealth: numericScoreField(latestScore, "contractHealth"),
+      projectHealth: numericScoreField(latestScore, "projectHealth"),
+      resourceHealth: numericScoreField(latestScore, "resourceHealth"),
+      financial: numericScoreField(latestScore, "financial"),
+      whitespace: numericScoreField(latestScore, "whitespace"),
+    },
     renewalDays: daysUntil(account.contractEnd as string | null | undefined),
     kamOwner: kam?.name ?? "KAM not set",
     associateOwner: associateOwner?.name ?? "Account owner not set",
@@ -1558,6 +1622,20 @@ function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): Port
       status: String(document.signalStatus ?? "Processed"),
       url: String(document.fileUrl ?? documentPreviewUrl(String(document.name ?? "Document"), String(document.type ?? "OTHER"))),
     })),
+    kycVersion: latestKyc ? {
+      id: String(latestKyc.id ?? ""),
+      version: Number(latestKyc.version ?? 1),
+      status: String(latestKyc.status ?? "DRAFT"),
+      executiveSummary: latestKyc.executiveSummary as string | null | undefined,
+      businessModel: latestKyc.businessModel as string | null | undefined,
+      keyStakeholders: latestKyc.keyStakeholders as string | null | undefined,
+      strategicGoals: latestKyc.strategicGoals as string | null | undefined,
+      riskFactors: latestKyc.riskFactors as string | null | undefined,
+      expansionOpportunity: latestKyc.expansionOpportunity as string | null | undefined,
+      csatHistory: latestKyc.csatHistory as string | null | undefined,
+      competitiveLandscape: latestKyc.competitiveLandscape as string | null | undefined,
+      financialOverview: latestKyc.financialOverview as string | null | undefined,
+    } : undefined,
   };
 }
 
@@ -2139,6 +2217,29 @@ function KpiWeightSettingsModal({
   );
 }
 
+function effectiveSubParameterScore(row: KpiOverviewRow, parameterName: string, scoreOverrides: Record<string, ScoreOverride>) {
+  const parameter = row.subParameters.find((item) => item.name === parameterName);
+  if (!parameter) return 1;
+  return scoreOverrides[subParameterKey(row.id, parameter.name)]?.score ?? parameter.score;
+}
+
+function effectiveKpiRowScore(row: KpiOverviewRow, scoreOverrides: Record<string, ScoreOverride>) {
+  if (row.subParameters.length === 0) return row.score;
+  const total = row.subParameters.reduce((sum, parameter) => sum + effectiveSubParameterScore(row, parameter.name, scoreOverrides), 0);
+  return clampFrameworkScore(Math.round(total / row.subParameters.length));
+}
+
+function withEffectiveKpiScores(kpiRows: KpiOverviewRow[], scoreOverrides: Record<string, ScoreOverride>) {
+  return kpiRows.map((row) => {
+    const score = effectiveKpiRowScore(row, scoreOverrides);
+    return {
+      ...row,
+      score,
+      trend: accountTrend(score),
+    };
+  });
+}
+
 function OverviewTab({
   kpiRows,
   activeTasks,
@@ -2206,7 +2307,8 @@ function OverviewTab({
   const [hoveredOverrideTargetId, setHoveredOverrideTargetId] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
   const [weightSettingsOpen, setWeightSettingsOpen] = useState(false);
-  const sortedKpiRows = [...kpiRows].sort((a, b) => a.score - b.score);
+  const effectiveKpiRows = useMemo(() => withEffectiveKpiScores(kpiRows, scoreOverrides), [kpiRows, scoreOverrides]);
+  const sortedKpiRows = [...effectiveKpiRows].sort((a, b) => a.score - b.score);
 
   function toggleRow(rowId: string) {
     setExpandedRows((rows) => {
@@ -2287,6 +2389,9 @@ function OverviewTab({
                     {row.subParameters.map((parameter) => {
                       const targetId = subParameterKey(row.id, parameter.name);
                       const parameterScore = scoreOverrides[targetId]?.score ?? parameter.score;
+                      const effectiveTrend: KpiTrend = scoreOverrides[targetId]
+                        ? parameterScore > parameter.score ? "up" : parameterScore < parameter.score ? "down" : "flat"
+                        : parameter.trend ?? row.trend;
                       return (
                         <div
                           key={parameter.name}
@@ -2297,9 +2402,11 @@ function OverviewTab({
                           <div className="flex h-7 items-center justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-2">
                               <p className="truncate text-[12px] font-black text-[#25352E]">{parameter.name}</p>
-                              {parameter.trend === "down" ? (
-                                <span className="inline-flex h-5 items-center rounded-full border border-[#F0BBB4] bg-[#FFF0ED] px-2 text-[10px] font-black text-[#B33D32]">
-                                  Falling
+                              {effectiveTrend !== "flat" ? (
+                                <span className={`inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-black ${
+                                  effectiveTrend === "up" ? "border-[#BFD9C6] bg-[#F2FAF1] text-[#1F6C42]" : "border-[#F0BBB4] bg-[#FFF0ED] text-[#B33D32]"
+                                }`}>
+                                  {effectiveTrend === "up" ? "Rising" : "Falling"}
                                 </span>
                               ) : null}
                               <button
@@ -2323,7 +2430,7 @@ function OverviewTab({
                             </span>
                           </div>
                           {scoreOverrides[targetId] ? <p className="mt-1 text-[11px] font-bold text-[#6F6254]">Override applied from {parameter.score}/5</p> : null}
-                          {parameter.trend === "down" && parameter.fallingWhy ? (
+                          {effectiveTrend === "down" && parameter.fallingWhy ? (
                             <div className="mt-2 rounded-xl border border-[#F0D1C9] bg-[#FFF8F5] px-2.5 py-2">
                               <p className="text-[11px] font-black text-[#B33D32]">Likely cause</p>
                               <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[#25352E]">{parameter.fallingWhy.summary}</p>
@@ -2408,7 +2515,7 @@ function OverviewTab({
       <KpiWeightSettingsModal
         open={weightSettingsOpen}
         onOpenChange={setWeightSettingsOpen}
-        kpiRows={kpiRows}
+        kpiRows={effectiveKpiRows}
         kpiWeights={kpiWeights}
         weightDrafts={weightDrafts}
         weightRequest={weightRequest}
@@ -3097,7 +3204,7 @@ function UploadDocumentDialog({
 }
 
 function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount; onAccountUpdate: (account: PortfolioAccount) => void }) {
-  const { role } = useRole();
+  const { role, userId } = useRole();
   const { upsertAccount } = useAccountCache();
   const accountMetadata = getAccountRuntimeMetadata(account);
   const accountDocuments = (account.documents ?? []).map((document, index): UploadedAccountDocument => ({
@@ -3438,6 +3545,20 @@ function DocumentsTab({ account, onAccountUpdate }: { account: PortfolioAccount;
 
   return (
     <div className="space-y-4">
+      <section className="rounded-3xl border border-[#E5DACD] bg-white/58 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">AI impact review</h3>
+            <p className="mt-1 max-w-3xl text-[12px] font-bold leading-relaxed text-[#7D6E5F]">
+              Uploaded account documents are parsed for profile, score, KYC, risk, opportunity, and action suggestions. Suggested changes stay in review until approved.
+            </p>
+          </div>
+          <span className="rounded-full border border-[#D8CAB9] bg-[#FFF9EF]/80 px-3 py-1 text-[11px] font-black text-[#6F6254]">
+            {signalProposals.filter((proposal) => proposal.status === "Needs review" || proposal.status === "Routed to KAM").length} pending
+          </span>
+        </div>
+      </section>
+
       <div className="flex justify-end gap-2">
         <button type="button" onClick={() => setUploadOpen(true)} disabled={documentUploading} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#25352E] disabled:opacity-60">
           {documentUploading ? "Uploading..." : "Upload"}
@@ -3575,7 +3696,7 @@ function ProfileTab({
   onAccountUpdate: (account: PortfolioAccount) => void;
   onResolveQueuedTask: (taskId: string) => void;
 }) {
-  const { role } = useRole();
+  const { role, userId } = useRole();
   const { upsertAccount } = useAccountCache();
   const canEditProfile = role !== "EXECUTIVE";
   const accountMetadata = getAccountRuntimeMetadata(account);
@@ -4291,6 +4412,7 @@ function AccountModal({
 }) {
   const { role, userId } = useRole();
   const { fireNotification } = useNotifications();
+  const { upsertAccount } = useAccountCache();
   const [activeTab, setActiveTab] = useState<AccountWorkspaceTab>(initialTab);
   const [activeTasks, setActiveTasks] = useState<ActiveTask[]>([]);
   const [pendingDenials, setPendingDenials] = useState<Record<string, string>>({});
@@ -4323,6 +4445,34 @@ function AccountModal({
   const isAssociate = role === "ASSOCIATE";
   const canOverrideDirectly = role === "KAM" || role === "ADMIN";
 
+  function applyApiAccountUpdate(rawAccount: Record<string, unknown>) {
+    upsertAccount(rawAccount as CachedApiAccount);
+    onAccountUpdate(mapApiAccountToPortfolioAccount(rawAccount));
+  }
+
+  function applyScoreSnapshotUpdate(rawScore: unknown) {
+    if (!account || !rawScore || typeof rawScore !== "object") return;
+    const score = rawScore as Record<string, unknown>;
+    const overall = Number(score.overall);
+    const nextHealth = String(score.health ?? account.health) as PortfolioHealth;
+    if (!Number.isFinite(overall)) return;
+    onAccountUpdate({
+      ...account,
+      health: nextHealth,
+      healthScore: Math.round(overall),
+      scoreDimensions: {
+        csat: numericScoreField(score, "csat"),
+        relationship: numericScoreField(score, "relationship"),
+        risk: numericScoreField(score, "risk"),
+        contractHealth: numericScoreField(score, "contractHealth"),
+        projectHealth: numericScoreField(score, "projectHealth"),
+        resourceHealth: numericScoreField(score, "resourceHealth"),
+        financial: numericScoreField(score, "financial"),
+        whitespace: numericScoreField(score, "whitespace"),
+      },
+    });
+  }
+
   useEffect(() => {
     if (open) {
       setActiveTab(initialTab);
@@ -4330,6 +4480,9 @@ function AccountModal({
       setKycRegenerationError("");
       setScoreOverrideMessage("");
       setScoreOverrideError("");
+      setOverrideDrafts({});
+      setOverrideRequests({});
+      setScoreOverrides({});
     }
   }, [account?.id, initialTab, open]);
 
@@ -4345,10 +4498,21 @@ function AccountModal({
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Score override requests could not be loaded");
+        let overrideItems = Array.isArray(payload.data) ? payload.data as Array<Record<string, unknown>> : [];
+        if (overrideItems.length === 0 && canOverrideDirectly && account?.name) {
+          const pendingResponse = await fetch("/api/score-overrides?status=PENDING", {
+            headers: { "x-role": role },
+          });
+          const pendingPayload = await pendingResponse.json();
+          if (pendingResponse.ok) {
+            overrideItems = ((Array.isArray(pendingPayload.data) ? pendingPayload.data : []) as Array<Record<string, unknown>>)
+              .filter((item) => String((item.account as { name?: string } | undefined)?.name ?? "").toLowerCase() === account.name.toLowerCase());
+          }
+        }
 
         const requests: Record<string, ScoreOverrideRequest> = {};
         const overrides: Record<string, ScoreOverride> = {};
-        for (const item of (payload.data ?? []) as Array<Record<string, unknown>>) {
+        for (const item of overrideItems) {
           const targetId = String(item.kpiKey ?? "");
           if (!targetId) continue;
           const status = String(item.status ?? "PENDING");
@@ -4384,7 +4548,7 @@ function AccountModal({
     return () => {
       cancelled = true;
     };
-  }, [account?.id, open, role]);
+  }, [account?.id, account?.name, canOverrideDirectly, open, role]);
 
   function acceptRecommendation(row: KpiOverviewRow) {
     if (!row.task || acceptedTaskIds.has(row.id)) return;
@@ -4508,18 +4672,61 @@ function AccountModal({
   }
 
   function applyScoreOverride(targetId: string) {
+    void applyScoreOverrideAsync(targetId);
+  }
+
+  async function applyScoreOverrideAsync(targetId: string) {
+    if (!account?.id) return;
     const draft = overrideDrafts[targetId] ?? { score: String(scoreOverrides[targetId]?.score ?? defaultScoreForOverrideTarget(targetId)), reason: "" };
     const reason = draft.reason.trim();
     if (!reason) return;
-    setScoreOverrides((overrides) => ({
-      ...overrides,
-      [targetId]: {
-        targetId,
-        score: clampKpiScore(draft.score),
-        reason,
-      },
-    }));
-    setOverrideDrafts((drafts) => ({ ...drafts, [targetId]: { score: draft.score, reason: "" } }));
+    setScoreOverrideMessage("");
+    setScoreOverrideError("");
+
+    try {
+      const score = clampKpiScore(draft.score);
+      const response = await fetch("/api/score-overrides", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-role": role,
+        },
+        body: JSON.stringify({
+          accountId: account.id,
+          kpiKey: targetId,
+          requestedValue: score,
+          reason,
+          requestedById: userId,
+          approvedById: userId,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Score override could not be saved");
+
+      setScoreOverrides((overrides) => ({
+        ...overrides,
+        [targetId]: {
+          targetId,
+          score,
+          reason,
+        },
+      }));
+      setOverrideDrafts((drafts) => ({ ...drafts, [targetId]: { score: draft.score, reason: "" } }));
+      applyScoreSnapshotUpdate(payload.data?.score);
+
+      const accountResponse = await fetch(`/api/accounts/${account.id}`, {
+        headers: {
+          "x-role": role,
+          ...(userId ? { "x-user-id": userId } : {}),
+        },
+      });
+      const accountPayload = await accountResponse.json();
+      if (accountResponse.ok) applyApiAccountUpdate(accountPayload.data as Record<string, unknown>);
+      const recalculated = payload.data?.score?.overall;
+      setScoreOverrideMessage(`Score override saved${typeof recalculated === "number" ? `; account score is now ${recalculated}/100` : ""}.`);
+    } catch (error) {
+      setScoreOverrideError(error instanceof Error ? error.message : "Score override could not be saved");
+    }
   }
 
   function approveOverrideRequest(targetId: string) {
@@ -4544,6 +4751,17 @@ function AccountModal({
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Score request could not be approved");
+        applyScoreSnapshotUpdate(payload.data?.score);
+      }
+      if (account?.id) {
+        const accountResponse = await fetch(`/api/accounts/${account.id}`, {
+          headers: {
+            "x-role": role,
+            ...(userId ? { "x-user-id": userId } : {}),
+          },
+        });
+        const accountPayload = await accountResponse.json();
+        if (accountResponse.ok) applyApiAccountUpdate(accountPayload.data as Record<string, unknown>);
       }
       setScoreOverrides((overrides) => ({
         ...overrides,
@@ -4677,6 +4895,15 @@ function AccountModal({
       const version = payload.data?.kyc?.version;
       const source = payload.data?.webSearchUsed ? "with web search" : "from account context";
       setKycRegenerationMessage(`KYC v${version ?? "new"} generated ${source}.`);
+      const accountResponse = await fetch(`/api/accounts/${account.id}`, {
+        headers: {
+          "x-role": role,
+          ...(userId ? { "x-user-id": userId } : {}),
+        },
+      });
+      const accountPayload = await accountResponse.json();
+      if (accountResponse.ok) applyApiAccountUpdate(accountPayload.data as Record<string, unknown>);
+      setActiveTab("kyc");
     } catch (error) {
       setKycRegenerationError(error instanceof Error ? error.message : "KYC regeneration failed");
     } finally {
@@ -4707,17 +4934,6 @@ function AccountModal({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {role !== "EXECUTIVE" ? (
-                  <button
-                    type="button"
-                    onClick={regenerateKyc}
-                    disabled={kycRegenerating}
-                    className="inline-flex items-center gap-2 rounded-full border border-[#D8CAB9] bg-[#FFF9EF]/80 px-3 py-2 text-[12px] font-bold text-[#25352E] disabled:opacity-60"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {kycRegenerating ? "Regenerating..." : "Regenerate KYC"}
-                  </button>
-                ) : null}
                 <Dialog.Close asChild>
                   <button
                     type="button"
@@ -4729,14 +4945,6 @@ function AccountModal({
                 </Dialog.Close>
               </div>
             </div>
-
-            {kycRegenerationMessage || kycRegenerationError ? (
-              <div className={`relative z-10 mt-3 rounded-2xl border p-3 text-[12px] font-bold ${
-                kycRegenerationError ? "border-[#E8B8B0] bg-[#FFF0ED] text-[#B33D32]" : "border-[#B7D8C3] bg-[#EEF8F1] text-[#23633E]"
-              }`}>
-                {kycRegenerationError || kycRegenerationMessage}
-              </div>
-            ) : null}
 
             {scoreOverrideMessage || scoreOverrideError ? (
               <div className={`relative z-10 mt-3 rounded-2xl border p-3 text-[12px] font-bold ${
@@ -4758,13 +4966,13 @@ function AccountModal({
 
           <Tabs.Root value={activeTab} onValueChange={(value) => setActiveTab(value as AccountWorkspaceTab)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <Tabs.List className="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-[#E5DACD] bg-[#FFF9EF]/90 px-4 py-2 [backdrop-filter:blur(14px)]">
-              {["Overview", "Profile", "Documents"].map((tab) => (
+              {accountWorkspaceTabs.map((tab) => (
                 <Tabs.Trigger
-                  key={tab}
-                  value={tab.toLowerCase()}
+                  key={tab.value}
+                  value={tab.value}
                   className="rounded-full px-3 py-1.5 text-[12px] font-bold text-[#6F6254] transition-colors hover:bg-[#F1E7D8] data-[state=active]:bg-[#25352E] data-[state=active]:text-[#FFF9EF]"
                 >
-                  {tab}
+                  {tab.label}
                 </Tabs.Trigger>
               ))}
             </Tabs.List>
@@ -4816,6 +5024,16 @@ function AccountModal({
               </Tabs.Content>
               <Tabs.Content value="documents" className="focus:outline-none">
                 <DocumentsTab account={account} onAccountUpdate={onAccountUpdate} />
+              </Tabs.Content>
+              <Tabs.Content value="kyc" className="focus:outline-none">
+                <KycTab
+                  account={account}
+                  canRegenerate={role !== "EXECUTIVE"}
+                  isRegenerating={kycRegenerating}
+                  regenerationMessage={kycRegenerationMessage}
+                  regenerationError={kycRegenerationError}
+                  onRegenerate={regenerateKyc}
+                />
               </Tabs.Content>
             </div>
           </Tabs.Root>
@@ -4879,6 +5097,107 @@ function PendingScoreOverrideReviewPanel({
               </div>
             </div>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function KycTab({
+  account,
+  canRegenerate,
+  isRegenerating,
+  regenerationMessage,
+  regenerationError,
+  onRegenerate,
+}: {
+  account: PortfolioAccount;
+  canRegenerate: boolean;
+  isRegenerating: boolean;
+  regenerationMessage: string;
+  regenerationError: string;
+  onRegenerate: () => void;
+}) {
+  const kyc = account.kycVersion;
+  const sections = kyc ? [
+    ["Executive summary", kyc.executiveSummary],
+    ["Business model", kyc.businessModel],
+    ["Key stakeholders", kyc.keyStakeholders],
+    ["Strategic goals", kyc.strategicGoals],
+    ["Risk factors", kyc.riskFactors],
+    ["Expansion opportunity", kyc.expansionOpportunity],
+    ["CSAT history", kyc.csatHistory],
+    ["Competitive landscape", kyc.competitiveLandscape],
+    ["Financial overview", kyc.financialOverview],
+  ] : [];
+
+  const regenerateControl = (
+    <div className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="max-w-3xl">
+          <p className="text-[14px] font-black text-[#25352E]">KYC regeneration</p>
+          <p className="mt-1 text-[12px] font-bold leading-relaxed text-[#75685A]">
+            Builds a new KYC version from profile data, all linked account documents, accepted document findings, contacts, resources, journey context, latest scores, and web-backed company research.
+          </p>
+        </div>
+        {canRegenerate ? (
+          <button
+            type="button"
+            onClick={onRegenerate}
+            disabled={isRegenerating}
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#25352E] px-4 text-[12px] font-black text-[#FFF9EF] transition-colors hover:bg-[#1B2922] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {isRegenerating ? "Regenerating..." : kyc ? "Regenerate KYC" : "Generate KYC"}
+          </button>
+        ) : (
+          <span className="rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-3 py-1 text-[11px] font-black text-[#6F6254]">Read only</span>
+        )}
+      </div>
+      {regenerationMessage || regenerationError ? (
+        <div className={`mt-3 rounded-2xl border p-3 text-[12px] font-bold ${
+          regenerationError ? "border-[#E8B8B0] bg-[#FFF0ED] text-[#B33D32]" : "border-[#B7D8C3] bg-[#EEF8F1] text-[#23633E]"
+        }`}>
+          {regenerationError || regenerationMessage}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (!kyc) {
+    return (
+      <div className="space-y-3">
+        {regenerateControl}
+        <div className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-4">
+          <p className="text-[14px] font-black text-[#25352E]">No KYC version yet</p>
+          <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#75685A]">
+            Generate a draft to populate the KYC fields for this account.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {regenerateControl}
+      <div className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[14px] font-black text-[#25352E]">KYC version {kyc.version}</p>
+            <p className="mt-1 text-[12px] font-bold text-[#75685A]">Latest generated draft for {account.name}</p>
+          </div>
+          <span className="rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-3 py-1 text-[11px] font-black text-[#6F6254]">{kyc.status}</span>
+        </div>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {sections.map(([title, value]) => (
+          <section key={title} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-4">
+            <h3 className="text-[13px] font-black text-[#25352E]">{title}</h3>
+            <p className="mt-2 whitespace-pre-line text-[12px] font-semibold leading-relaxed text-[#6F6254]">
+              {value || "Not available in current sources."}
+            </p>
+          </section>
         ))}
       </div>
     </div>
@@ -6612,7 +6931,7 @@ function CammiePanel({
 export function PortfolioPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { role } = useRole();
+  const { role, userId } = useRole();
   const { fireNotification } = useNotifications();
   const {
     accounts: apiAccountRecords,
@@ -6860,15 +7179,42 @@ export function PortfolioPage() {
       item.id === routeTarget ||
       item.name.toLowerCase().replace(/\s+/g, "-") === normalizedTarget
     ));
-    if (!account) return;
+    if (account) {
+      setQuery("");
+      setHealthFilter("ALL");
+      setSelectedAccountCreationRequestId(null);
+      setPendingAccountReviewOpen(false);
+      setSelectedAccountTab("overview");
+      setSelectedAccount(account);
+      return;
+    }
 
-    setQuery("");
-    setHealthFilter("ALL");
-    setSelectedAccountCreationRequestId(null);
-    setPendingAccountReviewOpen(false);
-    setSelectedAccountTab("overview");
-    setSelectedAccount(account);
-  }, [roleAccounts, routeFocus, routeTarget]);
+    let cancelled = false;
+    async function loadRouteAccount() {
+      try {
+        const response = await fetch(`/api/accounts/${routeTarget}`, {
+          headers: {
+            "x-role": role,
+            ...(userId ? { "x-user-id": userId } : {}),
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok || cancelled) return;
+        setQuery("");
+        setHealthFilter("ALL");
+        setSelectedAccountCreationRequestId(null);
+        setPendingAccountReviewOpen(false);
+        setSelectedAccountTab("overview");
+        setSelectedAccount(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
+      } catch {
+        // Route targets are optional deep links; leave the portfolio list intact on miss.
+      }
+    }
+    void loadRouteAccount();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, roleAccounts, routeFocus, routeTarget, userId]);
 
   useEffect(() => {
     function openFromNotification(event: Event) {

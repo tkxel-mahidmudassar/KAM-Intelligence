@@ -1,4 +1,4 @@
-const LS_API_ACCOUNTS_CACHE = "kam_v2_api_accounts_cache";
+const LS_API_ACCOUNTS_CACHE = "kam_v2_api_accounts_cache_v3";
 
 export type CachedApiAccount = Record<string, unknown>;
 

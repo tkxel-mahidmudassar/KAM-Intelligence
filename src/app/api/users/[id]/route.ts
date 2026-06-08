@@ -5,7 +5,7 @@ import { logAudit } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
-// PATCH /api/users/[id] — update name, role, avatarUrl (MANAGER+)
+// PATCH /api/users/[id] — update user access/profile fields (MANAGER+)
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const role = getRoleFromRequest(req);
@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) return notFound("User");
 
-    const validRoles = ["KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
+    const validRoles = ["ASSOCIATE", "KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
 
     const user = await prisma.user.update({
       where: { id },
@@ -26,6 +26,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         name:      body.name?.trim()      ?? existing.name,
         role:      (body.role && validRoles.includes(body.role)) ? body.role : existing.role,
         avatarUrl: body.avatarUrl !== undefined ? body.avatarUrl : existing.avatarUrl,
+        managerId: body.managerId !== undefined ? body.managerId : existing.managerId,
+        initialPassword: body.initialPassword !== undefined ? String(body.initialPassword || "").trim() || null : existing.initialPassword,
       },
     });
 

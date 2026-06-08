@@ -48,6 +48,16 @@ export function notFound(resource = "Resource"): NextResponse {
 export function serverError(err: unknown): NextResponse {
   const message = err instanceof Error ? err.message : "Internal server error";
   console.error("[api]", message, err);
+  if (
+    message.includes("Can't reach database server") ||
+    message.includes("Environment variable not found: DATABASE_URL") ||
+    message.includes("the URL must start with the protocol")
+  ) {
+    return NextResponse.json(
+      { error: "Database connection is temporarily unavailable. Please retry in a moment." },
+      { status: 503 },
+    );
+  }
   return NextResponse.json({ error: message }, { status: 500 });
 }
 
