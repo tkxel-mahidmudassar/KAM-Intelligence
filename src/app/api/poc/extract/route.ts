@@ -8,6 +8,8 @@ import type { PocSourceMeta } from "@/lib/poc/scoringFramework";
 export const runtime = "nodejs";
 
 const MAX_PROMPT_CHARS = 14000;
+const MAX_FILES = 8;
+const MAX_TOTAL_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 function parseJsonObject(content: string): unknown {
   const cleaned = content.replace(/```json|```/g, "").trim();
@@ -91,38 +93,86 @@ Rules:
 - Put correction-ready text in the KYC fields, not long essays.
 - Keep each evidence and recommendedAction under 220 characters.
 
-Source file: ${source.fileName}
-MIME type: ${source.mimeType}
+Source document(s): ${source.fileName}
+MIME type(s): ${source.mimeType}
 Text:
 ${sourceText.slice(0, MAX_PROMPT_CHARS)}`;
 }
 
+function isUploadedFile(value: FormDataEntryValue): value is File {
+  return typeof value === "object" && value !== null && "arrayBuffer" in value && "name" in value;
+}
+
+function locatorForChunk(chunk: Awaited<ReturnType<typeof parsePlaybookFile>>["chunks"][number], index: number): string {
+  if (chunk.sourceSheet && chunk.sourcePage) return `${chunk.sourceSheet}, block ${chunk.sourcePage}`;
+  if (chunk.sourceSheet) return chunk.sourceSheet;
+  if (chunk.sourcePage) return `Page ${chunk.sourcePage}`;
+  if (chunk.sourceSection) return chunk.sourceSection;
+  return `Chunk ${index + 1}`;
+}
+
+async function textFromUploadedFile(file: File, fileIndex: number): Promise<{ text: string; warning?: string }> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const parsed = await parsePlaybookFile(buffer, file.type || "application/octet-stream", file.name);
+  let text = parsed.chunks.map((chunk, index) => {
+    const locator = locatorForChunk(chunk, index);
+    return `[File ${fileIndex}: ${file.name} | ${locator}]\n${chunk.text}`;
+  }).join("\n\n");
+
+  if (!text.trim() && (file.type.startsWith("text/") || file.name.toLowerCase().endsWith(".txt"))) {
+    text = `[File ${fileIndex}: ${file.name}]\n${buffer.toString("utf-8")}`;
+  }
+
+  if (parsed.error && !text.trim()) {
+    throw new Error(`${file.name}: ${parsed.error}`);
+  }
+
+  return {
+    text: text.trim(),
+    warning: parsed.error ? `${file.name}: ${parsed.error}` : undefined,
+  };
+}
+
 async function textFromFormData(formData: FormData): Promise<{ sourceText: string; source: PocSourceMeta }> {
-  const file = formData.get("file") as File | null;
+  const uploadedFiles = [...formData.getAll("files"), ...formData.getAll("file")]
+    .filter(isUploadedFile)
+    .filter((file) => file.size > 0);
   const directText = String(formData.get("text") ?? "").trim();
   const directFileName = String(formData.get("fileName") ?? "Demo account brief.txt").trim();
 
-  if (file) {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await parsePlaybookFile(buffer, file.type || "application/octet-stream", file.name);
-    let sourceText = parsed.chunks.map((chunk, index) => {
-      const locator = chunk.sourcePage ? `Page ${chunk.sourcePage}` : chunk.sourceSection || chunk.sourceSheet || `Chunk ${index + 1}`;
-      return `[${locator}]\n${chunk.text}`;
-    }).join("\n\n");
-
-    if (!sourceText.trim() && (file.type.startsWith("text/") || file.name.toLowerCase().endsWith(".txt"))) {
-      sourceText = buffer.toString("utf-8");
+  if (uploadedFiles.length > 0) {
+    if (uploadedFiles.length > MAX_FILES) {
+      throw new Error(`Upload up to ${MAX_FILES} files for one account extraction.`);
     }
 
-    if (parsed.error && !sourceText.trim()) {
-      throw new Error(parsed.error);
+    const totalBytes = uploadedFiles.reduce((sum, file) => sum + file.size, 0);
+    if (totalBytes > MAX_TOTAL_UPLOAD_BYTES) {
+      throw new Error("Combined upload is too large. Keep all files under 25 MB total.");
     }
+
+    const parsedFiles: Array<{ text: string; warning?: string }> = [];
+    for (const [index, file] of uploadedFiles.entries()) {
+      parsedFiles.push(await textFromUploadedFile(file, index + 1));
+    }
+
+    const warnings = parsedFiles.map((item) => item.warning).filter(Boolean);
+    const sourceText = [
+      `The following ${uploadedFiles.length} source file(s) belong to one account. Extract one consolidated account profile from all documents.`,
+      ...parsedFiles.map((item) => item.text),
+      warnings.length ? `Parse warnings:\n${warnings.join("\n")}` : "",
+    ].filter(Boolean).join("\n\n---\n\n");
+
+    const names = uploadedFiles.map((file) => file.name);
+    const nameSummary = names.length === 1 ? names[0] : `${names.length} files: ${names.slice(0, 4).join(", ")}${names.length > 4 ? ", ..." : ""}`;
+    const mimeSummary = uploadedFiles.length === 1
+      ? uploadedFiles[0].type || "application/octet-stream"
+      : Array.from(new Set(uploadedFiles.map((file) => file.type || "application/octet-stream"))).join(", ");
 
     return {
       sourceText: sourceText.trim(),
       source: {
-        fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
+        fileName: nameSummary,
+        mimeType: mimeSummary,
         charCount: sourceText.length,
         textPreview: sourceText.slice(0, 700),
       },

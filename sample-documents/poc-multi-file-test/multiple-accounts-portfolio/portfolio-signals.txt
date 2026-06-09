@@ -1,0 +1,5 @@
+CHURN_RISK: Apex Manufacturing Cloud has a competitor assessment in progress.
+CONTRACT_EXPIRY: Apex renewal date is 2026-05-31 with only 30-day notice.
+UPSELL_OPPORTUNITY: BrightBank Digital asked for fraud analytics discovery.
+TICKET_SPIKE: Helio Health Systems opened 17 patient portal tickets in the last 30 days.
+NPS_DECLINE: Helio NPS moved from 21 to 8 quarter over quarter.

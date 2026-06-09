@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Portfolio Resource Notes</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    h1 { font-size: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #999; padding: 6px; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Portfolio Resource Notes</h1>
+  <table><tr><th>Apex Manufacturing Cloud</th><td>Two key engineers are rotating off; backup knowledge transfer is incomplete.</td></tr>
+<tr><th>BrightBank Digital</th><td>Team is stable with documented backups for fraud analytics and platform support.</td></tr>
+<tr><th>Helio Health Systems</th><td>Patient portal lead is overloaded; no fully onboarded backup exists.</td></tr></table>
+</body>
+</html>

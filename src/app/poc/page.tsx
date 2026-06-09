@@ -100,7 +100,7 @@ function ScoreBar({ value }: { value: number }) {
 }
 
 export default function PocPage() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [result, setResult] = useState<PocExtractionResult | null>(null);
   const [activeView, setActiveView] = useState<PocView>("account");
   const [loading, setLoading] = useState(false);
@@ -108,6 +108,7 @@ export default function PocPage() {
   const [error, setError] = useState("");
   const [correctionPrompt, setCorrectionPrompt] = useState("");
   const [changeLog, setChangeLog] = useState<string[]>([]);
+  const [recalculationNote, setRecalculationNote] = useState("");
 
   const lowestDimensions = useMemo(() => {
     if (!result) return [];
@@ -118,16 +119,17 @@ export default function PocPage() {
     setLoading(true);
     setError("");
     setChangeLog([]);
+    setRecalculationNote("");
 
     try {
       const formData = new FormData();
       if (useDemo) {
         formData.append("text", SAMPLE_BRIEF);
         formData.append("fileName", "Orion Retail Group demo brief.txt");
-      } else if (selectedFile) {
-        formData.append("file", selectedFile);
+      } else if (selectedFiles.length > 0) {
+        selectedFiles.forEach((file) => formData.append("files", file));
       } else {
-        setError("Select a document or use the demo brief.");
+        setError("Select one or more documents or use the demo brief.");
         return;
       }
 
@@ -161,6 +163,7 @@ export default function PocPage() {
       if (!response.ok || payload.error) throw new Error(payload.error || "Correction failed");
       setResult(payload);
       setChangeLog(payload.changeLog ?? []);
+      setRecalculationNote("");
       setCorrectionPrompt("");
     } catch (correctionError) {
       setError(correctionError instanceof Error ? correctionError.message : "Correction failed");
@@ -191,6 +194,15 @@ export default function PocPage() {
       };
       return recalculateResult(next);
     });
+    setRecalculationNote("");
+  }
+
+  function runManualRecalculation() {
+    if (!result) return;
+    const previousScore = result.scoring.overallScore;
+    const next = recalculateResult(result);
+    setResult(next);
+    setRecalculationNote(`Weighted score recalculated from ${previousScore.toFixed(2)} to ${next.scoring.overallScore.toFixed(2)} using the current dimension scores.`);
   }
 
   return (
@@ -222,18 +234,32 @@ export default function PocPage() {
               <label className="mt-4 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-surface-2)] px-4 py-5 text-center hover:border-[#0755E9]">
                 <input
                   type="file"
+                  multiple
                   accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
                   className="sr-only"
-                  onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                  onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
                 />
                 <FileSearch className="h-7 w-7 text-[var(--text-muted)]" />
                 <span className="mt-3 max-w-full truncate text-sm font-bold">
-                  {selectedFile ? selectedFile.name : "Select account file"}
+                  {selectedFiles.length === 0
+                    ? "Select account files"
+                    : selectedFiles.length === 1
+                      ? selectedFiles[0].name
+                      : `${selectedFiles.length} files selected`}
                 </span>
-                <span className="mt-1 text-[11px] font-medium text-[var(--text-muted)]">PDF, DOCX, TXT, XLSX</span>
+                <span className="mt-1 text-[11px] font-medium text-[var(--text-muted)]">PDF, DOCX, TXT, XLSX. Up to 8 files.</span>
               </label>
+              {selectedFiles.length > 1 ? (
+                <div className="mt-3 max-h-24 space-y-1 overflow-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-2)] px-3 py-2">
+                  {selectedFiles.map((file) => (
+                    <div key={`${file.name}-${file.size}`} className="truncate text-[11px] font-semibold text-[var(--text-secondary)]">
+                      {file.name}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <Button onClick={() => void runExtraction(false)} loading={loading} disabled={!selectedFile || loading}>
+                <Button onClick={() => void runExtraction(false)} loading={loading} disabled={selectedFiles.length === 0 || loading}>
                   <Sparkles className="h-4 w-4" />
                   Extract
                 </Button>
@@ -372,11 +398,16 @@ export default function PocPage() {
                         <Badge variant={statusVariant(result.scoring.status)}>{result.scoring.portfolioClassification}</Badge>
                         <p className="mt-3 text-sm font-semibold text-[var(--text-secondary)]">{result.scoring.recommendedAction}</p>
                       </div>
-                      <Button variant="outline" onClick={() => setResult(recalculateResult(result))}>
+                      <Button variant="outline" onClick={runManualRecalculation}>
                         <RotateCcw className="h-4 w-4" />
                         Recalculate
                       </Button>
                     </section>
+                    {recalculationNote ? (
+                      <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-2)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)]">
+                        {recalculationNote}
+                      </div>
+                    ) : null}
 
                     <div className="grid gap-3">
                       {result.scoring.dimensions.map((dimension) => (

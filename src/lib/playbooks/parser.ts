@@ -8,6 +8,8 @@
  * Server-only — never import in client components.
  */
 
+import { extractPdfPages } from "../pdfText";
+
 export interface ParsedChunk {
   text: string;
   sourcePage?: number;
@@ -24,26 +26,17 @@ export interface ParseResult {
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 
 async function parsePdf(buffer: Buffer): Promise<ParseResult> {
-  const pdfParse = require("pdf-parse");
-  const data = await pdfParse(buffer);
+  const pages = await extractPdfPages(buffer);
 
-  // Split by form-feed characters (page breaks) where available
-  const rawPages: string[] = data.text
-    .split(/\f/)
-    .map((p: string) => p.trim())
-    .filter((p: string) => p.length > 0);
-
-  const chunks: ParsedChunk[] = rawPages.map((text, i) => ({
-    text,
-    sourcePage: i + 1,
-  }));
-
-  // If no page breaks, fall back to splitting by blank lines into ~500 char chunks
-  if (chunks.length === 0) {
-    return splitIntoChunks(data.text);
+  if (pages.length > 0) {
+    const chunks = pages.map((pageText, index) => ({
+      text: pageText,
+      sourcePage: index + 1,
+    }));
+    return { chunks, totalChunks: chunks.length };
   }
 
-  return { chunks, totalChunks: chunks.length };
+  return splitIntoChunks("");
 }
 
 // ─── DOCX ─────────────────────────────────────────────────────────────────────
@@ -72,11 +65,63 @@ async function parseDocx(buffer: Buffer): Promise<ParseResult> {
   return { chunks, totalChunks: chunks.length };
 }
 
+function stripHtml(text: string): string {
+  return text
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<\/(p|div|tr|h[1-6]|li)>/gi, "\n")
+    .replace(/<\/(td|th)>/gi, " | ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripRtf(text: string): string {
+  return text
+    .replace(/\\'[0-9a-fA-F]{2}/g, " ")
+    .replace(/\\[a-zA-Z]+-?\d* ?/g, " ")
+    .replace(/[{}]/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function parseLegacyDoc(buffer: Buffer): ParseResult {
+  const raw = buffer.toString("utf-8");
+  const nullRatio = raw.length ? (raw.match(/\u0000/g)?.length ?? 0) / raw.length : 0;
+  if (nullRatio > 0.05) {
+    return {
+      chunks: [],
+      totalChunks: 0,
+      error: "Legacy binary .doc files are not supported by this POC parser. Use DOCX or a text-based Word .doc export.",
+    };
+  }
+
+  const text = /<html|<body|<table|<p/i.test(raw)
+    ? stripHtml(raw)
+    : /{\\rtf/i.test(raw)
+      ? stripRtf(raw)
+      : raw.trim();
+
+  return parseText(text);
+}
+
 // ─── Excel ────────────────────────────────────────────────────────────────────
 
 async function parseXlsx(buffer: Buffer): Promise<ParseResult> {
   const XLSX = require("xlsx");
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  let workbook;
+  try {
+    workbook = XLSX.read(buffer, { type: "buffer" });
+  } catch {
+    const text = stripHtml(buffer.toString("utf-8"));
+    return parseText(text);
+  }
 
   const chunks: ParsedChunk[] = [];
 
@@ -162,11 +207,13 @@ export async function parsePlaybookFile(
       return await parsePdf(buffer);
     }
 
+    if (mimeType === "application/msword" || ext === "doc") {
+      return parseLegacyDoc(buffer);
+    }
+
     if (
       mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-      mimeType === "application/msword" ||
-      ext === "docx" ||
-      ext === "doc"
+      ext === "docx"
     ) {
       return await parseDocx(buffer);
     }

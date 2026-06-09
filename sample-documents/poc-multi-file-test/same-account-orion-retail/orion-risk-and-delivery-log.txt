@@ -1,0 +1,7 @@
+Account: Orion Retail Group
+Delivery update: mobile checkout modernization is mostly on track.
+Open risks: unresolved payment gateway defects remain before renewal.
+Escalation: no active executive escalation, but client warned that unresolved defects must close before renewal.
+Competitive note: a competing digital commerce vendor is running a discovery workshop.
+Project health: two sprint commitments slipped in May; backlog is now replanned.
+Risk score context: risk is moderate because churn risk depends on defect closure and competitor activity.
