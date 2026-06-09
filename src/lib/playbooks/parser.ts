@@ -21,9 +21,29 @@ export interface ParseResult {
   error?: string;
 }
 
+function ensurePdfGeometryPolyfills(): void {
+  const globalScope = globalThis as typeof globalThis & {
+    DOMMatrix?: unknown;
+    ImageData?: unknown;
+    Path2D?: unknown;
+  };
+
+  if (globalScope.DOMMatrix && globalScope.ImageData && globalScope.Path2D) return;
+
+  try {
+    const canvas = require("@napi-rs/canvas");
+    globalScope.DOMMatrix ??= canvas.DOMMatrix;
+    globalScope.ImageData ??= canvas.ImageData;
+    globalScope.Path2D ??= canvas.Path2D;
+  } catch {
+    // pdf-parse can still work in runtimes that already provide these globals.
+  }
+}
+
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 
 async function parsePdf(buffer: Buffer): Promise<ParseResult> {
+  ensurePdfGeometryPolyfills();
   const pdfParse = require("pdf-parse");
   let text = "";
   let rawPages: string[] = [];
