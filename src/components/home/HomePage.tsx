@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Check, ChevronDown, Clock, ListChecks, X } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, ListChecks, X } from "lucide-react";
 import { useAccountCache } from "@/context/AccountCacheContext";
 import { money, type WorkspaceAccount, type WorkspaceActionItem, type WorkspaceHealth } from "@/lib/v2/workspaceData";
 
@@ -48,8 +48,11 @@ const statusTone: Record<WorkspaceActionItem["status"], string> = {
   dismissed: "border-[#EAB3A9] bg-[#FFF1EE] text-[#A63F33]",
 };
 
-function isoDate(day: number) {
-  return `2026-06-${String(day).padStart(2, "0")}`;
+function formatIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function todayIsoDate() {
@@ -63,8 +66,33 @@ function addDaysIso(days: number) {
 }
 
 function displayDate(date: string) {
-  const [, month, day] = date.split("-");
-  return `${month === "06" ? "Jun" : month} ${Number(day)}`;
+  const parsed = new Date(`${date}T00:00:00`);
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function displayMonth(date: string) {
+  const parsed = new Date(`${date}T00:00:00`);
+  return parsed.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function shiftMonth(date: string, direction: -1 | 1) {
+  const parsed = new Date(`${date}T00:00:00`);
+  parsed.setMonth(parsed.getMonth() + direction, 1);
+  return formatIsoDate(parsed);
+}
+
+function monthDays(monthAnchor: string) {
+  const parsed = new Date(`${monthAnchor}T00:00:00`);
+  const year = parsed.getFullYear();
+  const month = parsed.getMonth();
+  const days = new Date(year, month + 1, 0).getDate();
+  return Array.from({ length: days }, (_, index) => {
+    const day = index + 1;
+    return {
+      day,
+      date: formatIsoDate(new Date(year, month, day)),
+    };
+  });
 }
 
 function accountHealth(value?: string | null): WorkspaceHealth {
@@ -169,6 +197,8 @@ export function HomePage() {
   const router = useRouter();
   const { accounts: apiAccountRecords, loading, error: loadError } = useAccountCache();
   const [calendarView, setCalendarView] = useState<CalendarView>("timeline");
+  const [monthAnchor, setMonthAnchor] = useState(todayIsoDate());
+  const [timelineStartIndex, setTimelineStartIndex] = useState(0);
   const [expandedHealth, setExpandedHealth] = useState<WorkspaceHealth | "renewals" | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [items, setItems] = useState<WorkspaceActionItem[]>([]);
@@ -199,11 +229,30 @@ export function HomePage() {
 
   const renewalSoon = accounts.filter((account) => account.renewalDays < 90);
   const selectedItems = groupedByDate[selectedDate] || [];
-  const timelineDates = useMemo(() => {
+  const calendarMonthDays = useMemo(() => monthDays(monthAnchor), [monthAnchor]);
+  const timelineDatePool = useMemo(() => {
     const dates = Object.keys(groupedByDate).sort();
-    if (dates.length > 0) return dates.slice(0, 3);
+    if (dates.length > 0) return dates;
     return [todayIsoDate(), addDaysIso(1), addDaysIso(2)];
   }, [groupedByDate]);
+  const timelineDates = useMemo(() => {
+    const safeStart = Math.min(timelineStartIndex, Math.max(0, timelineDatePool.length - 3));
+    return timelineDatePool.slice(safeStart, safeStart + 3);
+  }, [timelineDatePool, timelineStartIndex]);
+  const monthHasVisibleItems = useMemo(() => {
+    const monthPrefix = monthAnchor.slice(0, 7);
+    return Object.keys(groupedByDate).some((date) => date.startsWith(monthPrefix));
+  }, [groupedByDate, monthAnchor]);
+
+  useEffect(() => {
+    setTimelineStartIndex((current) => Math.min(current, Math.max(0, timelineDatePool.length - 3)));
+  }, [timelineDatePool.length]);
+
+  useEffect(() => {
+    if (calendarView !== "month" || monthHasVisibleItems || timelineDatePool.length === 0) return;
+    setMonthAnchor(timelineDatePool[0]);
+    setSelectedDate(timelineDatePool[0]);
+  }, [calendarView, monthHasVisibleItems, timelineDatePool]);
 
   function submitReason() {
     if (!reasonTarget || !reason.trim()) return;
@@ -223,6 +272,26 @@ export function HomePage() {
 
   function openAccount(accountId: string) {
     router.push(`/portfolio?focus=home-account&target=${accountId}`);
+  }
+
+  function goToPreviousCalendarWindow() {
+    if (calendarView === "month") {
+      const previousMonth = shiftMonth(monthAnchor, -1);
+      setMonthAnchor(previousMonth);
+      setSelectedDate(previousMonth);
+      return;
+    }
+    setTimelineStartIndex((current) => Math.max(0, current - 3));
+  }
+
+  function goToNextCalendarWindow() {
+    if (calendarView === "month") {
+      const nextMonth = shiftMonth(monthAnchor, 1);
+      setMonthAnchor(nextMonth);
+      setSelectedDate(nextMonth);
+      return;
+    }
+    setTimelineStartIndex((current) => Math.min(Math.max(0, timelineDatePool.length - 3), current + 3));
   }
 
   return (
@@ -343,31 +412,58 @@ export function HomePage() {
               <CalendarDays className="h-5 w-5 text-[#25352E]" />
               <h2 className="text-xl font-black tracking-[-0.03em] text-[#25352E]">Calendar</h2>
             </div>
-            <div className="inline-flex rounded-full border border-[#E1D3C2] bg-[#F8F0E6] p-1">
-              {(["month", "timeline"] as CalendarView[]).map((view) => (
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-1 rounded-full border border-[#E1D3C2] bg-[#F8F0E6] p-1">
                 <button
-                  key={view}
                   type="button"
-                  onClick={() => setCalendarView(view)}
-                  className={`rounded-full px-4 py-2 text-[13px] font-black ${calendarView === view ? "bg-[#25352E] text-[#FFF9EF]" : "text-[#6F6254]"}`}
+                  onClick={goToPreviousCalendarWindow}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6F6254] transition hover:bg-[#FFF9EF] hover:text-[#25352E]"
+                  aria-label={calendarView === "month" ? "Previous month" : "Previous timeline days"}
                 >
-                  {view === "month" ? "Month" : "Timeline"}
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={goToNextCalendarWindow}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6F6254] transition hover:bg-[#FFF9EF] hover:text-[#25352E]"
+                  aria-label={calendarView === "month" ? "Next month" : "Next timeline days"}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="inline-flex rounded-full border border-[#E1D3C2] bg-[#F8F0E6] p-1">
+                {(["month", "timeline"] as CalendarView[]).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => {
+                      if (view === "month") {
+                        const anchorDate = timelineDates[0] || timelineDatePool[0] || selectedDate;
+                        setMonthAnchor(anchorDate);
+                        setSelectedDate(anchorDate);
+                      }
+                      setCalendarView(view);
+                    }}
+                    className={`rounded-full px-4 py-2 text-[13px] font-black ${calendarView === view ? "bg-[#25352E] text-[#FFF9EF]" : "text-[#6F6254]"}`}
+                  >
+                    {view === "month" ? "Month" : "Timeline"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           {calendarView === "month" ? (
             <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_360px]">
-              <div className="grid grid-cols-7 overflow-hidden rounded-3xl border border-[#E1D3C2] bg-[#FFF8ED]">
+              <div className="overflow-hidden rounded-3xl border border-[#E1D3C2] bg-[#FFF8ED]">
+                <div className="border-b border-[#E1D3C2] px-4 py-3 text-[15px] font-black text-[#25352E]">{displayMonth(monthAnchor)}</div>
+                <div className="grid grid-cols-7">
                 {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
                   <div key={day} className="border-b border-[#E1D3C2] px-3 py-2 text-[12px] font-black text-[#827365]">
                     {day}
                   </div>
                 ))}
-                {Array.from({ length: 30 }, (_, index) => {
-                  const day = index + 1;
-                  const date = isoDate(day);
+                {calendarMonthDays.map(({ day, date }) => {
                   const dayItems = groupedByDate[date] || [];
                   const active = selectedDate === date;
                   return (
@@ -391,6 +487,7 @@ export function HomePage() {
                     </button>
                   );
                 })}
+                </div>
               </div>
 
               <DayPanel date={selectedDate} items={selectedItems} onAction={(id, status) => setReasonTarget({ id, status })} />

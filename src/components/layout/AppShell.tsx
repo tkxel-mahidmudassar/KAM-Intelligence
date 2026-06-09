@@ -3,14 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, BriefcaseBusiness, Home, LogOut, Settings, UserRound, X } from "lucide-react";
+import { Bell, BriefcaseBusiness, FileText, Home, ListChecks, LogOut, Settings, UserRound, X } from "lucide-react";
 import { CammiePanel } from "@/components/layout/CammiePanel";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
+import { primeAmbientMusicOnInteraction, startAmbientMusic, stopAmbientMusic } from "@/lib/client/ambientMusic";
 
 const navItems = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
+  { href: "/templates", label: "Templates", icon: FileText },
+  { href: "/account-journey-configuration", label: "Journey", icon: ListChecks },
 ];
 
 function isAuthRoute(pathname: string) {
@@ -41,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { notifications, unreadCount, markRead, markAllRead, dismissNotification } = useNotifications();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const canAccessSettings = role === "KAM" || role === "ADMIN";
+  const canAccessSettings = role === "KAM" || role === "EXECUTIVE" || role === "ADMIN";
   const hasLegacyDemoSession = Boolean(userId?.startsWith("demo-"));
 
   useEffect(() => {
@@ -55,10 +58,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }, [clearUser, hasLegacyDemoSession, hydrated, router]);
 
+  useEffect(() => {
+    if (!hydrated || !userId || hasLegacyDemoSession || isAuthRoute(pathname)) return;
+    startAmbientMusic();
+    primeAmbientMusicOnInteraction();
+  }, [hasLegacyDemoSession, hydrated, pathname, userId]);
+
   if (isAuthRoute(pathname)) return <>{children}</>;
   if (!hydrated || !userId || hasLegacyDemoSession) return null;
 
   function logout() {
+    stopAmbientMusic();
     clearUser();
     router.push("/login");
   }

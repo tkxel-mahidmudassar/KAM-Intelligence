@@ -53,13 +53,13 @@ contains 28 real-world company names, with 14 assigned to the associate view and
 - The KAM account creation review modal includes a separate floating setup assistant chat, including an attachment control for adding more source files during review.
 - Notification items route into the relevant work surface instead of acting as inert list items.
 - Current notification routes open either the pending account creation review modal or the relevant account workspace. Document-review notifications open the account workspace directly on the Documents tab.
-- Cammie is a bottom-right chat widget. The launcher stays anchored in the lower-right corner and the conversation window opens above it like a standard support/assistant chat surface.
-- Cammie is backed by `POST /api/v2/cammie` and receives the active role, visible portfolio account context, active account context when available, and recent conversation turns.
-- Cammie can answer grounded portfolio/account questions and generate general business documents as openable Markdown artifacts when the request is clear enough.
-- Cammie document generation is intentionally generic rather than QBR-only. It can create first drafts for QBR outlines, KYC drafts, account briefs, renewal plans, risk memos, meeting briefs, escalation notes, action plans, stakeholder summaries, onboarding notes, email drafts, and similar KAM documents.
-- Cammie can run web-backed research through the OpenAI Responses API web search tool when the user asks to search, look up, verify, research, or find recent/current external context.
+- Kammie is a bottom-right chat widget. The launcher stays anchored in the lower-right corner and the conversation window opens above it like a standard support/assistant chat surface.
+- Kammie is backed by `POST /api/v2/cammie` and receives the active role, visible portfolio account context, active account context when available, and recent conversation turns.
+- Kammie can answer grounded portfolio/account questions and generate general business documents as openable Markdown artifacts when the request is clear enough.
+- Kammie document generation is intentionally generic rather than QBR-only. It can create first drafts for QBR outlines, KYC drafts, account briefs, renewal plans, risk memos, meeting briefs, escalation notes, action plans, stakeholder summaries, onboarding notes, email drafts, and similar KAM documents.
+- Kammie can run web-backed research through the OpenAI Responses API web search tool when the user asks to search, look up, verify, research, or find recent/current external context.
 - Web research responses receive the same role, visible portfolio, active account, and recent conversation context so external findings can be tied back to KAM implications.
-- If the live AI provider fails, Cammie returns a degraded but grounded response using the visible portfolio/account context instead of showing an inert "endpoint not wired" style fallback.
+- If the live AI provider fails, Kammie returns a degraded but grounded response using the visible portfolio/account context instead of showing an inert "endpoint not wired" style fallback.
 - Search/filter controls and account cards live inside one scrollable portfolio
   panel.
 - The search/filter rail is sticky at the top of that panel, so it remains
@@ -100,7 +100,7 @@ signal.
 
 ## AI Involvement
 
-Cammie is the AI-enabled element in this module. Portfolio filtering, account
+Kammie is the AI-enabled element in this module. Portfolio filtering, account
 cards, account workspace layout, and account creation UI remain deterministic
 application UI.
 
@@ -108,7 +108,7 @@ Reasoning:
 
 - Portfolio filtering, role scope, status display, and summary stats are
   deterministic.
-- Cammie handles ad hoc portfolio-level synthesis, account questions, workflow
+- Kammie handles ad hoc portfolio-level synthesis, account questions, workflow
   guidance, web-backed research, and document generation through dedicated V2
   routes.
 

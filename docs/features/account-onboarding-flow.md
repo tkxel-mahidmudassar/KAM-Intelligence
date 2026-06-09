@@ -14,6 +14,7 @@ The portfolio `+ Account` button opens a V2 onboarding flow instead of creating 
 6. The setup workspace is step-based instead of showing every setup task at once.
 7. The setup workspace stages are:
    - Profile
+   - Scoring
    - KYC draft
    - Journey
    - Review
@@ -83,6 +84,8 @@ Generated KYC behavior:
 - The generated KYC artifact is saved under `public/generated-documents/v2-kyc`.
 - Associate users can submit the generated KYC to the KAM.
 - KAM users can approve the generated KYC directly.
+- The generator must ask for missing material inputs before final generation instead of writing unknown, TBD, or placeholder language.
+- The assistant can revise individual KYC sections without wiping unrelated sections.
 - Current approval state is local UI state; database persistence is still a follow-up.
 
 ## Role behavior
@@ -102,8 +105,10 @@ The assistant route:
 
 - uses the configured OpenAI provider through `src/lib/ai`
 - does not use old KYC or playbook agents
+- follows the shared V2 agent behavior contract in `src/lib/v2/agentBehavior.ts`
 - accepts source filenames, extracted document text, current draft fields, support-document metadata, journey items, role, and the user's assistant message
 - returns assistant replies, missing-information questions, profile suggestions, KYC section drafts, and suggested journey items
+- returns `proposedValue`, `source`, `confidence`, `reasoningSummary`, and `approvalState` for proposed profile changes
 - is instructed to use the new 1-5 account scoring framework and the eight KPI
   dimensions: Relationship Health, Contract Health, Customer Success, Risk
   Score, Resource Health, Project Health, Financial Health, and Whitespace
@@ -130,19 +135,34 @@ The journey agent:
 - can generate a complete recommended account journey
 - can enhance the current journey using the setup prompt
 - returns Meeting, QBR, and To-do items with due dates and recurrence
+- returns proposal metadata for journey changes so the UI can show source, confidence, reasoning, and approval state
 - replaces the editable journey list with the generated/enhanced output
 - writes an assistant note after successful updates
 - uses the Standard Account Journey Template as the baseline before applying
   account-specific evidence or user instructions
+- suggests diffs before applying journey configuration changes unless the user explicitly instructs it to apply the change
+
+## Shared agent behavior
+
+The canonical V2 agent rules are documented in `docs/features/v2-agent-behavior.md` and implemented in `src/lib/v2/agentBehavior.ts`.
+
+Key rules:
+
+- Evidence priority is Salesforce mock data, then prior account data, then uploaded documents, then user-entered data.
+- Approved user values override all other candidates.
+- Values below 85% confidence ask for user confirmation before filling.
+- Associates request changes; KAMs can directly save or approve changes.
+- Web research only runs when explicitly requested or when Kammie asks and the user approves.
+- ARR, contract dates, stakeholders, legal/commercial terms, financial commitments, and scores cannot be silently invented.
 
 ## Related surfaces
 
 - The notifications panel routes selected notifications into the relevant surface. Current routes include pending account creation review and account workspace opening for account-specific notifications.
-- Cammie is available as a bottom-right chat widget. The launcher remains anchored while the chat window opens above it.
-- Cammie is wired to `POST /api/v2/cammie`, which uses the configured OpenAI provider through `src/lib/ai`.
-- Cammie receives role, visible portfolio account context, active account context when available, and recent conversation turns.
-- Cammie can generate general business documents through the V2 document-generation agent when the request is clear enough.
-- Cammie can also run web-backed account or market research through the V2 Cammie web-research route when the user asks to search, verify, research, or look up current external context.
-- Supported Cammie document requests are intentionally open-ended: QBR outlines, KYC drafts, account briefs, renewal plans, risk memos, meeting briefs, escalation notes, action plans, stakeholder summaries, onboarding notes, and email drafts can all be generated from supplied portfolio/account context.
-- Generated Cammie documents are saved as Markdown artifacts under `public/generated-documents/v2-cammie` and returned as openable links in the chat.
-- If Cammie cannot generate because a required account or core input is missing, it returns the missing input instead of fabricating.
+- Kammie is available as a bottom-right chat widget. The launcher remains anchored while the chat window opens above it.
+- Kammie is wired to `POST /api/v2/cammie`, which uses the configured OpenAI provider through `src/lib/ai`.
+- Kammie receives role, visible portfolio account context, active account context when available, and recent conversation turns.
+- Kammie can generate general business documents through the V2 document-generation agent when the request is clear enough.
+- Kammie can also run web-backed account or market research through the V2 Kammie web-research route when the user asks to search, verify, research, or look up current external context.
+- Supported Kammie document requests are intentionally open-ended: QBR outlines, KYC drafts, account briefs, renewal plans, risk memos, meeting briefs, escalation notes, action plans, stakeholder summaries, onboarding notes, and email drafts can all be generated from supplied portfolio/account context.
+- Generated Kammie documents are saved as Markdown artifacts under `public/generated-documents/v2-cammie` and returned as openable links in the chat.
+- If Kammie cannot generate because a required account or core input is missing, it returns the missing input instead of fabricating.

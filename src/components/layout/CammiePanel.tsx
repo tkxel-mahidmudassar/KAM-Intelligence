@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { FileText, Loader2, Paperclip, Sparkles, X } from "lucide-react";
+import { FileText, Loader2, Maximize2, Minimize2, Paperclip, Sparkles, X } from "lucide-react";
 import { useAccountCache } from "@/context/AccountCacheContext";
 import { useRole } from "@/context/RoleContext";
 import type { CachedApiAccount } from "@/lib/v2/accountCache";
@@ -12,6 +12,7 @@ interface CammieMessage {
   content: string;
   artifact?: {
     title: string;
+    fileName?: string;
     fileUrl: string;
     format: string;
     summary: string;
@@ -25,6 +26,15 @@ interface CammieAttachment {
   extractedText?: string;
   parseError?: string;
 }
+
+interface PendingDocumentRequest {
+  type: string;
+  targetAccount?: string;
+  missingInputs: string[];
+}
+
+type TManMood = "laptop" | "greeting" | "thinking" | "answering" | "eager";
+const T_MAN_SPRITE = "/7377de14-db2b-49b2-b3bf-5bc8692d1f2d.png";
 
 function money(value: number) {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -68,8 +78,20 @@ function accountPayload(account: CachedApiAccount) {
   };
 }
 
-function fileNameForArtifact(title: string) {
-  return `${title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "generated-document"}.md`;
+function fileNameForArtifact(title: string, format?: string) {
+  const normalizedFormat = String(format || "docx").toLowerCase();
+  const extension = normalizedFormat.includes("ppt") ? "pptx" : normalizedFormat.includes("xls") || normalizedFormat.includes("excel") ? "xlsx" : normalizedFormat.includes("pdf") ? "pdf" : normalizedFormat.includes("markdown") ? "md" : "docx";
+  return `${title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "generated-document"}.${extension}`;
+}
+
+function storedDocumentTemplates() {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem("kamazing:document-templates") || window.localStorage.getItem("dotkam:document-templates") || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function renderFormattedMessage(content: string) {
@@ -107,18 +129,54 @@ function renderFormattedMessage(content: string) {
   });
 }
 
+function TManAvatar({ mood, size = "md" }: { mood: TManMood; size?: "sm" | "md" | "lg" }) {
+  const sizeClass = size === "lg" ? "h-44 w-[8rem]" : size === "sm" ? "h-16 w-12" : "h-24 w-[4.75rem]";
+  const pose = {
+    laptop: { x: "100%", y: "0%", scale: 1.14, label: "T Man with laptop" },
+    greeting: { x: "100%", y: "100%", scale: 1.12, label: "T Man greeting" },
+    thinking: { x: "50%", y: "100%", scale: 1.12, label: "T Man thinking" },
+    answering: { x: "0%", y: "0%", scale: 1.12, label: "T Man answering" },
+    eager: { x: "50%", y: "0%", scale: 1.12, label: "T Man eager" },
+  }[mood];
+  const motion = {
+    laptop: "animate-[tman-eager_4.8s_ease-in-out_infinite]",
+    greeting: "animate-[tman-stage-in_620ms_cubic-bezier(0.2,0.8,0.2,1)_both]",
+    thinking: "animate-[tman-thinking_1.05s_ease-in-out_infinite]",
+    answering: "animate-[tman-answering_820ms_cubic-bezier(0.2,0.8,0.2,1)_both]",
+    eager: "animate-[tman-eager_1.8s_ease-in-out_infinite]",
+  }[mood];
+
+  return (
+    <div key={mood} aria-label={pose.label} className={`pointer-events-none relative shrink-0 overflow-hidden ${sizeClass} ${motion}`} role="img">
+      <span
+        className="absolute inset-0 bg-no-repeat"
+        style={{
+          backgroundImage: `url(${T_MAN_SPRITE})`,
+          backgroundPosition: `${pose.x} ${pose.y}`,
+          backgroundSize: "300% 200%",
+          transform: `scale(${pose.scale})`,
+          transformOrigin: "center bottom",
+        }}
+      />
+    </div>
+  );
+}
+
 export function CammiePanel() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { role } = useRole();
   const { accounts, loading } = useAccountCache();
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [message, setMessage] = useState("");
   const [thread, setThread] = useState<CammieMessage[]>([
-    { role: "assistant", content: "Cammie is ready for portfolio, account, document, and web research questions." },
+    { role: "assistant", content: "Hey, T Man here, what're we working on today?" },
   ]);
+  const [avatarMood, setAvatarMood] = useState<TManMood>("greeting");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachments, setAttachments] = useState<CammieAttachment[]>([]);
+  const [pendingDocumentRequest, setPendingDocumentRequest] = useState<PendingDocumentRequest | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -131,6 +189,12 @@ export function CammiePanel() {
 
   const visibleAccounts = loading ? [] : accounts;
 
+  useEffect(() => {
+    if (avatarMood !== "answering") return;
+    const timer = window.setTimeout(() => setAvatarMood("eager"), 1400);
+    return () => window.clearTimeout(timer);
+  }, [avatarMood]);
+
   async function attachFiles(files: FileList | null) {
     const selectedFiles = Array.from(files ?? []);
     if (selectedFiles.length === 0) return;
@@ -139,7 +203,7 @@ export function CammiePanel() {
     try {
       const formData = new FormData();
       selectedFiles.forEach((file) => formData.append("files", file));
-      formData.append("type", "Cammie attachment");
+      formData.append("type", "T Man attachment");
       const response = await fetch("/api/v2/onboarding/documents/upload", {
         method: "POST",
         body: formData,
@@ -165,16 +229,22 @@ export function CammiePanel() {
   }
 
   async function sendMessage() {
-    const value = message.trim() || (attachments.length > 0 ? "Review the attached document(s)." : "");
+    const rawValue = message.trim() || (attachments.length > 0 ? "Review the attached document(s)." : "");
+    const value = pendingDocumentRequest && rawValue
+      ? `For the pending ${pendingDocumentRequest.type}${pendingDocumentRequest.targetAccount ? ` for ${pendingDocumentRequest.targetAccount}` : ""}, here are the missing details: ${rawValue}. Generate the document now if these details answer the open questions.`
+      : rawValue;
     if (!value || sending || uploadingAttachment) return;
     const messageAttachments = attachments;
     const attachmentNote = messageAttachments.length > 0
       ? `\n\nAttached: ${messageAttachments.map((attachment) => attachment.fileName).join(", ")}`
       : "";
-    const nextThread: CammieMessage[] = [...thread, { role: "user", content: `${value}${attachmentNote}` }];
+    const visibleUserContent = rawValue || value;
+    const nextThread: CammieMessage[] = [...thread, { role: "user", content: `${visibleUserContent}${attachmentNote}` }];
     setThread(nextThread);
     setMessage("");
     setAttachments([]);
+    setPendingDocumentRequest(null);
+    setAvatarMood("thinking");
     setSending(true);
     setError("");
     try {
@@ -187,25 +257,34 @@ export function CammiePanel() {
           activeAccount: activeAccount ? accountPayload(activeAccount) : null,
           accounts: visibleAccounts.map(accountPayload),
           attachments: messageAttachments,
+          templates: storedDocumentTemplates(),
           conversation: nextThread.slice(-8),
           page: pathname,
         }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Cammie could not respond");
-      const documentNote = payload.generatedDocument
-        ? ""
-        : payload.intent === "document_request" && payload.documentRequest?.nextAction
-          ? `\n\nDocument route: ${payload.documentRequest.nextAction}`
-          : "";
+      if (!response.ok) throw new Error(payload.error || "T Man could not respond");
+      if (
+        payload.intent === "document_request" &&
+        payload.documentRequest &&
+        Array.isArray(payload.documentRequest.missingInputs) &&
+        payload.documentRequest.missingInputs.length > 0
+      ) {
+        setPendingDocumentRequest({
+          type: String(payload.documentRequest.type || "document"),
+          targetAccount: payload.documentRequest.targetAccount ? String(payload.documentRequest.targetAccount) : undefined,
+          missingInputs: payload.documentRequest.missingInputs.map(String),
+        });
+      }
       setThread((items) => [
         ...items,
         {
           role: "assistant",
-          content: `${String(payload.reply || "I reviewed the current context.")}${documentNote}`,
+          content: String(payload.reply || "I reviewed the current context."),
           artifact: payload.generatedDocument
             ? {
                 title: String(payload.generatedDocument.title || "Generated document"),
+                fileName: String(payload.generatedDocument.fileName || ""),
                 fileUrl: String(payload.generatedDocument.fileUrl || ""),
                 format: String(payload.generatedDocument.format || "Document"),
                 summary: String(payload.generatedDocument.summary || ""),
@@ -213,36 +292,40 @@ export function CammiePanel() {
             : undefined,
         },
       ]);
+      setAvatarMood("answering");
     } catch (caught) {
-      const messageText = caught instanceof Error ? caught.message : "Cammie could not respond";
+      const messageText = caught instanceof Error ? caught.message : "T Man could not respond";
       setError(messageText);
       setThread((items) => [...items, { role: "assistant", content: "I could not reach the V2 assistant route. Try again after the server is ready." }]);
+      setAvatarMood("eager");
     } finally {
       setSending(false);
     }
   }
 
+  const launcherMood: TManMood = open ? (sending ? "thinking" : avatarMood) : "laptop";
+
   return (
-    <div className="fixed bottom-5 right-5 z-[45] flex flex-col items-end">
+    <div className="fixed bottom-5 right-5 z-[45] flex items-end gap-3">
       {open ? (
-        <div className="mb-3 flex h-[min(620px,calc(100vh-7rem))] w-[min(92vw,390px)] flex-col overflow-hidden rounded-[1.75rem] border border-[#D8CAB9] bg-[#FFF9EF] shadow-[0_30px_90px_-42px_rgba(31,39,34,0.72)]">
+        <div className={`flex flex-col overflow-hidden rounded-[1.75rem] border border-[#D8CAB9] bg-[#FFF9EF] shadow-[0_30px_90px_-42px_rgba(31,39,34,0.72)] ${
+          expanded ? "h-[min(820px,calc(100vh-5.5rem))] w-[min(calc(100vw-11rem),980px)]" : "h-[min(620px,calc(100vh-7rem))] w-[min(calc(100vw-10rem),390px)]"
+        }`}>
           <div className="relative overflow-hidden border-b border-[#E5DACD] bg-[#F7F1E7] px-4 py-4">
             <div className="pointer-events-none absolute right-[-4rem] top-[-5rem] h-36 w-36 rounded-full bg-[#A7C7B4]/45 blur-2xl" />
             <div className="relative z-10 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="relative h-11 w-11 rounded-2xl border border-[#D8CAB9] bg-[#25352E] shadow-[0_14px_26px_-20px_rgba(37,53,46,0.9)]">
-                  <div className="absolute left-2 top-2 h-5 w-5 rounded-full bg-[#FFF9EF]" />
-                  <div className="absolute bottom-2 right-2 h-4 w-4 rounded-full bg-[#E8BE86]" />
-                  <div className="absolute left-4 top-4 h-4 w-4 rounded-full bg-[#A7C7B4]" />
-                </div>
-                <div>
-                  <h3 className="text-[18px] font-black tracking-[-0.05em] text-[#1F2722]">Cammie</h3>
-                  <p className="text-[12px] font-bold text-[#7D6E5F]">Portfolio and research assistant</p>
-                </div>
+              <div>
+                <h3 className="text-[18px] font-black tracking-[-0.05em] text-[#1F2722]">T Man</h3>
+                <p className="text-[12px] font-bold text-[#7D6E5F]">Kamazing assistant</p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254]" aria-label="Close Cammie">
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setExpanded((current) => !current)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]" aria-label={expanded ? "Restore T Man" : "Expand T Man"}>
+                  {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </button>
+                <button type="button" onClick={() => setOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]" aria-label="Close T Man">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
@@ -259,7 +342,7 @@ export function CammiePanel() {
                         href={item.artifact.fileUrl}
                         target="_blank"
                         rel="noreferrer"
-                        download={fileNameForArtifact(item.artifact.title)}
+                        download={item.artifact.fileName || fileNameForArtifact(item.artifact.title, item.artifact.format)}
                         className="mt-3 block rounded-xl border border-[#D8CAB9] bg-[#FFF9EF] px-3 py-2 text-[#25352E] hover:bg-white"
                       >
                         <span className="block text-[12px] font-black">{item.artifact.title}</span>
@@ -283,6 +366,11 @@ export function CammiePanel() {
             ) : null}
           </div>
           <div className="border-t border-[#E5DACD] bg-[#FFF9EF]/92 p-3">
+            {pendingDocumentRequest ? (
+              <div className="mb-2 rounded-2xl border border-[#DEC997] bg-[#FFF7E4] px-3 py-2 text-[11px] font-bold leading-relaxed text-[#7A5A18]">
+                Answering questions for: {pendingDocumentRequest.type}
+              </div>
+            ) : null}
             {attachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachments.map((attachment) => (
@@ -315,7 +403,7 @@ export function CammiePanel() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || uploadingAttachment}
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#6F6254] hover:bg-[#F7F1E7] disabled:cursor-not-allowed disabled:opacity-55"
-                aria-label="Attach file for Cammie"
+                aria-label="Attach file for T Man"
               >
                 {uploadingAttachment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
               </button>
@@ -328,7 +416,7 @@ export function CammiePanel() {
                 className="h-10 min-w-0 flex-1 bg-transparent px-3 text-[13px] font-bold text-[#25352E] outline-none placeholder:text-[#A69A8B]"
                 placeholder="Ask about accounts, documents, or the web"
               />
-              <button type="button" onClick={sendMessage} disabled={sending || uploadingAttachment || (!message.trim() && attachments.length === 0)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send Cammie message">
+              <button type="button" onClick={sendMessage} disabled={sending || uploadingAttachment || (!message.trim() && attachments.length === 0)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send T Man message">
                 <Sparkles className="h-4 w-4" />
               </button>
             </div>
@@ -337,16 +425,19 @@ export function CammiePanel() {
       ) : null}
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="group inline-flex h-14 items-center gap-3 rounded-full border border-[#D8CAB9] bg-[#FFF9EF] pl-3 pr-5 text-[#25352E] shadow-[0_18px_42px_-24px_rgba(31,39,34,0.82)] transition-transform hover:-translate-y-0.5"
-        aria-label="Open Cammie"
+        onClick={() => {
+          setOpen((current) => {
+            if (!current) setAvatarMood("greeting");
+            return !current;
+          });
+        }}
+        className="group flex flex-col items-center gap-0 px-2 py-1 text-[#25352E] transition-transform hover:-translate-y-1"
+        aria-label="Open T Man"
       >
-        <span className="relative h-9 w-9 rounded-2xl bg-[#25352E]">
-          <span className="absolute left-1.5 top-1.5 h-4 w-4 rounded-full bg-[#FFF9EF]" />
-          <span className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 rounded-full bg-[#E8BE86]" />
-          <span className="absolute left-3 top-3 h-3.5 w-3.5 rounded-full bg-[#A7C7B4]" />
+        <TManAvatar mood={launcherMood} size="lg" />
+        <span className="-mt-3 rounded-full border border-[#D8CAB9] bg-[#FFF9EF]/95 px-3 py-1 text-[12px] font-black tracking-[-0.02em] shadow-[0_14px_30px_-24px_rgba(31,39,34,0.7)] backdrop-blur">
+          Ask T Man
         </span>
-        <span className="text-[13px] font-black tracking-[-0.02em]">Ask Cammie</span>
       </button>
     </div>
   );

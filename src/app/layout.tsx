@@ -7,8 +7,8 @@ import { RoleProvider } from "@/context/RoleContext";
 import "../styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "DotKAM",
-  description: "Key account management intelligence by Tkxel",
+  title: "Kamazing",
+  description: "Key account workspace by Tkxel",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

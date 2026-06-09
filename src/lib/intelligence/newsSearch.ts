@@ -84,7 +84,7 @@ async function fetchReddit(query: string, maxItems = 4): Promise<NewsItem[]> {
   try {
     const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=new&limit=${maxItems}&type=link`;
     const res  = await fetchWithTimeout(url, {
-      headers: { "User-Agent": "KAMIntelligence/1.0 (POC research tool)" },
+      headers: { "User-Agent": "Kamazing/1.0 (POC research tool)" },
     });
     if (!res.ok) return [];
     const json = await res.json() as { data?: { children?: { data: { title: string; selftext: string; url: string; subreddit: string; created_utc: number } }[] } };

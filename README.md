@@ -1,6 +1,6 @@
-# KAM Intelligence V2 Enhanced
+# Kamazing V2 Enhanced
 
-Fresh rebuild workspace for the enhanced KAM Intelligence product.
+Fresh rebuild workspace for the enhanced Kamazing product.
 
 ## Foundation copied from V1
 

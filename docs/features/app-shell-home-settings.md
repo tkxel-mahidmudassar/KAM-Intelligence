@@ -6,10 +6,14 @@ The V2 app now uses a persistent shell around authenticated screens.
 
 Built in:
 
-- Left sidebar navigation for Home, Portfolio, and Settings.
+- Left sidebar navigation for Home, Portfolio, Templates, Account Journey
+  Configuration, and Settings.
+- Settings navigation is available to KAM, C-Level/Executive, and Admin users.
 - Compact role switcher in the top bar.
 - Top-right notification bell with route-aware notifications.
 - Avatar dropdown with My profile and Log out. My profile routes to a dedicated `/profile` page, not the general Settings page.
+- Kammie is available from the authenticated shell, including Home, Portfolio,
+  Templates, Journey Configuration, Settings, and Profile.
 - Login and forgot-password screens render without the dashboard shell.
 
 Notifications currently route to the relevant module using client navigation:
@@ -59,7 +63,8 @@ Built in:
   Analysis 5%.
 - Weight total validation. Save/request is disabled unless weights equal 100%.
 - Weight save/request updates local UI state and fires a settings notification.
-- Associate invite and removal UI.
+- KAM users can invite and remove Associates.
+- C-Level/Executive and Admin users can invite and remove KAM users.
 - Account allocation and unallocation controls across the full V2 portfolio account list.
 - Account allocation list is scrollable inside the settings card.
 - Playbook upload controls per KPI.
@@ -78,7 +83,7 @@ The prototype includes basic auth screens.
 Built in:
 
 - Login page with email and password fields.
-- Login branding uses DotKAM with the Tkxel logo.
+- Login branding uses Kamazing with the Tkxel logo.
 - Demo account type shortcuts for Associate, KAM, and C-Level set the active demo user and route into Home.
 - Login sets the active demo user in role context and routes to Home.
 - Forgot password flow collects an email and shows non-revealing success copy.

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRole } from "@/context/RoleContext";
+import { startAmbientMusic } from "@/lib/client/ambientMusic";
 import type { Role } from "@/types";
 
 const demoAccounts: Array<{ label: string; email: string; password: string; role: Role }> = [
@@ -13,6 +14,30 @@ const demoAccounts: Array<{ label: string; email: string; password: string; role
 ];
 
 type LoginUser = { id: string; name: string; email: string; role: Role };
+
+function playLoginJingle() {
+  if (typeof window === "undefined") return;
+  const muted = window.localStorage.getItem("kamazing:login-jingle-muted") ?? window.localStorage.getItem("dotkam:login-jingle-muted");
+  if (muted === "true") return;
+  const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextClass) return;
+  const context = new AudioContextClass();
+  const now = context.currentTime;
+  const notes = [523.25, 659.25, 783.99];
+  notes.forEach((frequency, index) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = frequency;
+    gain.gain.setValueAtTime(0, now + index * 0.08);
+    gain.gain.linearRampToValueAtTime(0.08, now + index * 0.08 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + index * 0.08 + 0.22);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now + index * 0.08);
+    oscillator.stop(now + index * 0.08 + 0.24);
+  });
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,6 +65,8 @@ export default function LoginPage() {
       throw new Error("Sign in failed because the user record was incomplete.");
     }
     setUser(user.id, user.name, user.email, user.role);
+    playLoginJingle();
+    startAmbientMusic();
     router.push("/home");
   }
 
@@ -73,7 +100,7 @@ export default function LoginPage() {
       <section className="grid w-full max-w-5xl overflow-hidden rounded-[36px] border border-[#E1D3C2] bg-[#FFF9EF] shadow-[0_28px_90px_-56px_rgba(31,39,34,0.72)] lg:grid-cols-[1fr_0.85fr]">
         <div className="bg-[radial-gradient(circle_at_20%_20%,rgba(236,194,128,0.28),transparent_32%),radial-gradient(circle_at_90%_10%,rgba(165,197,177,0.35),transparent_34%),#FFF3E0] p-8">
           <img src="/tkxel-logo.svg" alt="Tkxel" className="h-12 w-12 rounded-2xl object-contain shadow-[0_18px_36px_-24px_rgba(7,85,233,0.86)]" />
-          <h1 className="mt-8 text-[clamp(54px,8vw,96px)] font-black leading-none tracking-[-0.08em]">DotKAM</h1>
+          <h1 className="mt-8 text-[clamp(54px,8vw,96px)] font-black leading-none tracking-[-0.08em]">Kamazing</h1>
         </div>
         <form onSubmit={submit} className="p-6 sm:p-8">
           <h2 className="text-3xl font-black tracking-[-0.04em] text-[#25352E]">Sign in</h2>

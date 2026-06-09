@@ -38,11 +38,20 @@ function normalizeAttachment(attachment: unknown) {
   };
 }
 
+function normalizeTemplate(template: unknown) {
+  if (!isObject(template)) return null;
+  return {
+    name: String(template.name || "Template"),
+    tag: String(template.tag || "Document"),
+    format: String(template.format || "file"),
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     if (!isObject(body)) {
-      return NextResponse.json({ error: "Invalid Cammie payload" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid T Man payload" }, { status: 400 });
     }
 
     const activeAccount = normalizeAccount(body.activeAccount);
@@ -55,6 +64,9 @@ export async function POST(req: NextRequest) {
         : [],
       attachments: Array.isArray(body.attachments)
         ? body.attachments.map(normalizeAttachment).filter((attachment): attachment is NonNullable<ReturnType<typeof normalizeAttachment>> => Boolean(attachment))
+        : [],
+      templates: Array.isArray(body.templates)
+        ? body.templates.map(normalizeTemplate).filter((template): template is NonNullable<ReturnType<typeof normalizeTemplate>> => Boolean(template))
         : [],
       conversation: Array.isArray(body.conversation)
         ? body.conversation
@@ -85,15 +97,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(result);
     }
 
-    const generatedDocument = await generateV2Document({
-      documentType: result.documentRequest.type,
-      userRequest: input.message,
-      role: input.role,
-      activeAccount: input.activeAccount,
-      accounts: input.accounts,
-      attachments: input.attachments,
-      conversation: input.conversation,
-    });
+    let generatedDocument;
+    try {
+      generatedDocument = await generateV2Document({
+        documentType: result.documentRequest.type,
+        userRequest: input.message,
+        role: input.role,
+        activeAccount: input.activeAccount,
+        accounts: input.accounts,
+        attachments: input.attachments,
+        templates: input.templates,
+        conversation: input.conversation,
+      });
+    } catch (generationError) {
+      return NextResponse.json({
+        ...result,
+        generatedDocument: undefined,
+        documentRequest: {
+          ...result.documentRequest,
+          missingInputs: ["Additional source detail or user direction"],
+          nextAction: "Ask the user for the remaining detail before generating a final document.",
+          canGenerate: false,
+        },
+        reply: "I need a little more detail before I can generate a complete document without placeholder sections. Please provide the missing source detail, audience, objective, or decision context for this document.",
+        error: generationError instanceof Error ? generationError.message : "Document generation needs more input",
+      });
+    }
 
     return NextResponse.json({
       ...result,
@@ -103,7 +132,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Cammie failed",
+        error: error instanceof Error ? error.message : "T Man failed",
       },
       { status: 500 },
     );

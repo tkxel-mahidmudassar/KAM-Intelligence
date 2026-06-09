@@ -1,4 +1,5 @@
 import { complete } from "@/lib/ai";
+import { approvalStateForRole, v2AgentBehaviorPrompt, type V2ApprovalState } from "@/lib/v2/agentBehavior";
 
 export interface V2JourneyAgentInput {
   role: string;
@@ -26,6 +27,11 @@ export interface V2JourneyAgentOutput {
     title: string;
     dueDate: string;
     recurrence: string;
+    proposedValue?: string;
+    source?: string;
+    confidence?: number;
+    reasoningSummary?: string;
+    approvalState?: V2ApprovalState;
   }>;
 }
 
@@ -34,19 +40,29 @@ function parseJson(content: string): V2JourneyAgentOutput {
   return JSON.parse(raw);
 }
 
-function normalizeOutput(output: Partial<V2JourneyAgentOutput>): V2JourneyAgentOutput {
+function normalizeOutput(output: Partial<V2JourneyAgentOutput>, role: string): V2JourneyAgentOutput {
   return {
     assistantReply: String(output.assistantReply || "I updated the account journey.").slice(0, 300),
     journeyItems: Array.isArray(output.journeyItems)
       ? output.journeyItems
           .filter((item) => item.title && item.dueDate)
           .slice(0, 12)
-          .map((item) => ({
-            type: item.type === "Meeting" || item.type === "QBR" ? item.type : "To-do",
-            title: String(item.title).slice(0, 140),
-            dueDate: String(item.dueDate).slice(0, 30),
-            recurrence: String(item.recurrence || "Once").slice(0, 40),
-          }))
+          .map((item) => {
+            const title = String(item.title).slice(0, 140);
+            const dueDate = String(item.dueDate).slice(0, 30);
+            const confidence = typeof item.confidence === "number" ? Math.max(0, Math.min(1, item.confidence)) : 0.7;
+            return {
+              type: item.type === "Meeting" || item.type === "QBR" ? item.type : "To-do",
+              title,
+              dueDate,
+              recurrence: String(item.recurrence || "Once").slice(0, 40),
+              proposedValue: String(item.proposedValue || `${title} due ${dueDate}`).slice(0, 220),
+              source: String(item.source || "V2 journey agent").slice(0, 140),
+              confidence,
+              reasoningSummary: String(item.reasoningSummary || "Suggested from the account journey context.").slice(0, 220),
+              approvalState: item.approvalState || approvalStateForRole(role, confidence),
+            };
+          })
       : [],
   };
 }
@@ -93,14 +109,23 @@ Return JSON:
       "type": "Meeting, QBR, or To-do",
       "title": "item title",
       "dueDate": "YYYY-MM-DD",
-      "recurrence": "Once, Weekly, Monthly, Quarterly, etc."
+      "recurrence": "Once, Weekly, Monthly, Quarterly, etc.",
+      "proposedValue": "specific journey item change being proposed",
+      "source": "source file, prior account journey, Salesforce mock, or user instruction",
+      "confidence": 0.85,
+      "reasoningSummary": "short explanation for the journey change",
+      "approvalState": "draft | proposed | needs_user_confirmation | associate_requested | kam_review | approved | denied | dismissed"
     }
   ]
 }
 
 Rules:
+${v2AgentBehaviorPrompt}
+
+Journey-specific rules:
 - If mode is generate, return a complete recommended journey.
 - If mode is enhance, preserve useful existing cadence but improve gaps, dates, recurrence, and titles based on the instruction.
+- For configuration-style requests, suggest diffs first unless the user explicitly instructs you to apply the change.
 - Use only Meeting, QBR, and To-do item types.
 - Use the standard account journey as the baseline: Day 0 account assignment and sales handover; Day 7 discovery and KYC review; Day 14 stakeholder mapping and relationship planning; Day 30 initial account health review; Day 45 executive alignment review; Day 60 delivery governance review; Day 90 first QBR; monthly account review; quarterly QBR; semi-annual strategic review; T-180 renewal readiness; T-120 renewal planning; T-90 renewal execution; T-30 renewal finalization; continuous AI monitoring and exception management.
 - Journey items should influence or inspect the relevant KPI dimensions from the scoring framework: Relationship Health, Contract Health, Customer Success, Risk Score, Resource Health, Project Health, Financial Health, and Whitespace Analysis.
@@ -110,5 +135,5 @@ Rules:
     ],
   });
 
-  return normalizeOutput(parseJson(response.content));
+  return normalizeOutput(parseJson(response.content), input.role);
 }

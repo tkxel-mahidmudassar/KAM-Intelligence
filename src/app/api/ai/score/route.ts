@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
       })
       .join("\n");
 
-    const prompt = `You are a KAM Intelligence engine. Write a 2-3 sentence executive narrative for this account health score. Be specific, factual, and action-oriented. No bullet points.
+    const prompt = `You are a Kamazing engine. Write a 2-3 sentence executive narrative for this account health score. Be specific, factual, and action-oriented. No bullet points.
 
 Account: ${account.name}
 Overall Score: ${overall}/100 (${health})

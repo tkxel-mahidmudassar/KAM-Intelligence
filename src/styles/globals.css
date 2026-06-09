@@ -224,6 +224,36 @@
   }
 }
 
+@keyframes tman-stage-in {
+  0% { opacity: 0; transform: translateY(18px) scale(0.84) rotate(-4deg); }
+  58% { opacity: 1; transform: translateY(-7px) scale(1.08) rotate(2deg); }
+  100% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+}
+
+@keyframes tman-thinking {
+  0%, 100% { transform: translateY(0) rotate(-1deg) scale(1); }
+  32% { transform: translateY(-7px) rotate(4deg) scale(1.04); }
+  64% { transform: translateY(1px) rotate(-3deg) scale(0.99); }
+}
+
+@keyframes tman-answering {
+  0% { transform: translateY(0) rotate(0deg) scale(1); }
+  22% { transform: translateY(-12px) rotate(-6deg) scale(1.09); }
+  46% { transform: translateY(1px) rotate(4deg) scale(1.02); }
+  72% { transform: translateY(-5px) rotate(-2deg) scale(1.05); }
+  100% { transform: translateY(0) rotate(0deg) scale(1); }
+}
+
+@keyframes tman-eager {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.035); }
+}
+
+@keyframes tman-glow {
+  0%, 100% { opacity: 0.28; transform: translate(-50%, 0) scale(0.92); }
+  50% { opacity: 0.52; transform: translate(-50%, -2px) scale(1.08); }
+}
+
 @layer components {
   .command-hero {
     position: relative;

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const sf = await getSalesforceAdapter().fetch(accountId);
     const score = account.kamScores[0];
 
-    const prompt = `You are a KAM Intelligence engine. Identify 3-5 realistic expansion or upsell opportunities for the account below.
+    const prompt = `You are a Kamazing engine. Identify 3-5 realistic expansion or upsell opportunities for the account below.
 
 Return ONLY a JSON array of opportunity objects with these exact keys:
 [

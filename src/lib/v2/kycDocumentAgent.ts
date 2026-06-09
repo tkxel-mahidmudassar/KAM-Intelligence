@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { complete } from "@/lib/ai";
+import { v2AgentBehaviorPrompt } from "@/lib/v2/agentBehavior";
 
 export interface V2KycDocumentInput {
   role: string;
@@ -88,9 +89,12 @@ Return JSON:
 }
 
 Rules:
+${v2AgentBehaviorPrompt}
+
+KYC-specific rules:
 - Preserve source attribution beside every material claim using inline source labels.
 - Include these sections when possible: executive summary, industry overview, company history, account history with Tkxel, stakeholders, financials, engagement history, Tkxel team, competitors, risks, opportunities, and next actions.
-- If a fact is missing, write "To be confirmed" instead of inventing it.
+- If a material fact is missing, omit that claim or ask for the missing input before final generation. Do not write unknown, TBD, or placeholder language unless the user explicitly accepts it.
 - Make the document review-ready for Associate/KAM approval.`,
       },
     ],
@@ -98,7 +102,7 @@ Rules:
 
   const parsed = parseJson(response.content);
   const title = String(parsed.title || `${input.draft.name || "Account"} KYC draft`).slice(0, 100);
-  const markdown = String(parsed.markdown || `# ${title}\n\nTo be confirmed.`);
+  const markdown = String(parsed.markdown || `# ${title}\n\nNo supported KYC content was returned.`);
   const summary = String(parsed.summary || "Generated KYC draft.").slice(0, 180);
   const fileName = `${slugify(title)}-${randomUUID().slice(0, 8)}.md`;
 

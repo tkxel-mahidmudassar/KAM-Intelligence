@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, FileText, Link2, ShieldAlert, Trash2, Upload, UserPlus } from "lucide-react";
+import { Archive, Bell, FileText, Link2, Music2, ShieldAlert, Trash2, Upload, UserPlus } from "lucide-react";
 import { defaultKpiWeights, integrationMocks } from "@/lib/v2/workspaceData";
 import { useAccountCache } from "@/context/AccountCacheContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 import type { Role } from "@/types";
+import { isAmbientMusicMuted, setAmbientMusicMuted } from "@/lib/client/ambientMusic";
 
 type SettingsWeight = { id: string; name: string; weight: number };
 type TeamUser = {
@@ -66,6 +67,13 @@ function accountName(account: Record<string, unknown>) {
   return String(account.name ?? "Account");
 }
 
+const auditEvents = [
+  { actor: "Sarah Chen", action: "Default KPI weights saved", when: "Today, 10:12 AM", source: "Settings" },
+  { actor: "Aisha Khan", action: "NovaGrid account creation submitted", when: "Today, 9:44 AM", source: "Portfolio" },
+  { actor: "T Man", action: "Project Health Score playbook parsed", when: "Yesterday, 4:18 PM", source: "Playbooks" },
+  { actor: "Omar Farooq", action: "Maersk recovery plan task dismissed with reason", when: "Jun 7, 2:02 PM", source: "Account journey" },
+];
+
 export function SettingsPage() {
   const { role, userId, userName } = useRole();
   const { accounts, refreshAccounts, upsertAccount } = useAccountCache();
@@ -84,8 +92,10 @@ export function SettingsPage() {
   const [playbooks, setPlaybooks] = useState<PlaybookRow[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [playbookUploading, setPlaybookUploading] = useState(false);
+  const [jingleMuted, setJingleMuted] = useState(false);
+  const [ambientMusicMuted, setAmbientMusicMutedState] = useState(false);
 
-  const canAccessSettings = role === "KAM" || role === "ADMIN";
+  const canAccessSettings = role === "KAM" || role === "EXECUTIVE" || role === "ADMIN";
   const associates = useMemo(() => team.filter((user) => user.role === "ASSOCIATE"), [team]);
   const kams = useMemo(() => team.filter((user) => user.role === "KAM"), [team]);
   const totalWeight = useMemo(() => weights.reduce((sum, item) => sum + item.weight, 0), [weights]);
@@ -95,6 +105,7 @@ export function SettingsPage() {
   }).length, [accounts]);
   const connectedIntegrations = useMemo(() => Object.values(integrationStatuses).filter((item) => item === "connected").length, [integrationStatuses]);
   const canSaveWeights = totalWeight === 100 && !savingWeights;
+  const inviteRoleOptions = role === "EXECUTIVE" ? ["KAM"] : ["ASSOCIATE", "KAM", "EXECUTIVE", "ADMIN"];
 
   useEffect(() => {
     if (!canAccessSettings || !userId) return;
@@ -137,6 +148,12 @@ export function SettingsPage() {
     };
   }, [canAccessSettings, refreshAccounts, role, showArchived, userId]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setJingleMuted((window.localStorage.getItem("kamazing:login-jingle-muted") ?? window.localStorage.getItem("dotkam:login-jingle-muted")) === "true");
+    setAmbientMusicMutedState(isAmbientMusicMuted());
+  }, []);
+
   if (!canAccessSettings) {
     return (
       <main className="min-h-screen px-5 py-5">
@@ -148,7 +165,7 @@ export function SettingsPage() {
             <p className="mt-4 text-sm font-black uppercase tracking-[0.18em] text-[#A63F33]">403 Access denied</p>
             <h1 className="mt-2 text-3xl font-black tracking-[-0.05em] text-[#25352E]">Settings are restricted</h1>
             <p className="mt-3 text-[14px] font-bold leading-relaxed text-[#75685A]">
-              Settings are available only to KAM and Admin users. Your current role is {role}.
+              Settings are available only to KAM, C-Level, and Admin users. Your current role is {role}.
             </p>
           </div>
         </section>
@@ -330,6 +347,22 @@ export function SettingsPage() {
     }
   }
 
+  function toggleLoginJingle() {
+    const nextMuted = !jingleMuted;
+    setJingleMuted(nextMuted);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("kamazing:login-jingle-muted", String(nextMuted));
+    }
+    setStatus(nextMuted ? "Login jingle turned off." : "Login jingle turned on.");
+  }
+
+  function toggleAmbientMusic() {
+    const nextMuted = !ambientMusicMuted;
+    setAmbientMusicMutedState(nextMuted);
+    setAmbientMusicMuted(nextMuted);
+    setStatus(nextMuted ? "Background music turned off." : "Background music turned on.");
+  }
+
   return (
     <main className="min-h-screen px-5 py-5">
       <section className="mx-auto max-w-[1500px] space-y-4">
@@ -394,6 +427,37 @@ export function SettingsPage() {
               ))}
             </div>
           </Panel>
+
+          <Panel title="Sound controls">
+            <div className="grid gap-3">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#E8DCCE] bg-[#FFF8ED] px-3 py-3">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-[#25352E]" />
+                  <h2 className="text-[16px] font-black text-[#25352E]">Login sound</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleLoginJingle}
+                  className={`rounded-full px-4 py-2 text-[12px] font-black ${jingleMuted ? "border border-[#D8C7B4] bg-[#FFF8ED] text-[#6F6254]" : "bg-[#25352E] text-[#FFF9EF]"}`}
+                >
+                  {jingleMuted ? "Off" : "On"}
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#E8DCCE] bg-[#FFF8ED] px-3 py-3">
+                <div className="flex items-center gap-2">
+                  <Music2 className="h-5 w-5 text-[#25352E]" />
+                  <h2 className="text-[16px] font-black text-[#25352E]">Background music</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleAmbientMusic}
+                  className={`rounded-full px-4 py-2 text-[12px] font-black ${ambientMusicMuted ? "border border-[#D8C7B4] bg-[#FFF8ED] text-[#6F6254]" : "bg-[#25352E] text-[#FFF9EF]"}`}
+                >
+                  {ambientMusicMuted ? "Off" : "On"}
+                </button>
+              </div>
+            </div>
+          </Panel>
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,0.9fr)]">
@@ -402,10 +466,9 @@ export function SettingsPage() {
               <input value={newUser.name} onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))} placeholder="Full name" className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-bold outline-none" />
               <input value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="Email" className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-bold outline-none" />
               <select value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value as Role }))} className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-black outline-none">
-                <option value="ASSOCIATE">Associate</option>
-                <option value="KAM">KAM</option>
-                <option value="EXECUTIVE">Executive</option>
-                <option value="ADMIN">Admin</option>
+                {inviteRoleOptions.map((option) => (
+                  <option key={option} value={option}>{option === "KAM" ? "KAM" : option.charAt(0) + option.slice(1).toLowerCase()}</option>
+                ))}
               </select>
               <input value={newUser.initialPassword} onChange={(event) => setNewUser((current) => ({ ...current, initialPassword: event.target.value }))} placeholder="Initial password" className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-bold outline-none" />
               <button type="button" onClick={createUser} className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#25352E] px-4 text-[12px] font-black text-[#FFF9EF]">
@@ -413,7 +476,6 @@ export function SettingsPage() {
                 Add
               </button>
             </div>
-
             <div className="mt-4 grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
               <div className="max-h-[470px] space-y-2 overflow-y-auto pr-1">
                 {team.map((person) => (
@@ -511,6 +573,26 @@ export function SettingsPage() {
               ))}
             </div>
           </Panel>
+        </section>
+
+        <section className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[20px] font-black text-[#25352E]">Audit trail</h2>
+            <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{auditEvents.length} events</span>
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {auditEvents.map((event) => (
+              <article key={`${event.actor}-${event.action}`} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-black text-[#25352E]">{event.action}</p>
+                    <p className="mt-1 text-[12px] font-bold text-[#75685A]">{event.actor} · {event.source}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-2 py-1 text-[11px] font-black text-[#6F6254]">{event.when}</span>
+                </div>
+              </article>
+            ))}
+          </div>
         </section>
       </section>
     </main>

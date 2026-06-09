@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     });
     if (!session) return notFound("QBR session");
 
-    const prompt = `You are a KAM Intelligence engine. Write a concise executive summary for the QBR/DBR session below.
+    const prompt = `You are a Kamazing engine. Write a concise executive summary for the QBR/DBR session below.
 The summary should: recap key outcomes, highlight risks discussed, list committed actions, and note any expansion opportunities.
 Write 3-4 sentences in a professional, executive tone.
 

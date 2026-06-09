@@ -8,15 +8,15 @@ import { logAudit } from "@/lib/audit";
 type Params = { params: Promise<{ id: string }> };
 
 interface KycDraftPayload {
-  executiveSummary?: string;
-  businessModel?: string;
-  keyStakeholders?: string;
-  strategicGoals?: string;
-  riskFactors?: string;
-  expansionOpportunity?: string;
-  csatHistory?: string;
-  competitiveLandscape?: string;
-  financialOverview?: string;
+  executiveSummary?: unknown;
+  businessModel?: unknown;
+  keyStakeholders?: unknown;
+  strategicGoals?: unknown;
+  riskFactors?: unknown;
+  expansionOpportunity?: unknown;
+  csatHistory?: unknown;
+  competitiveLandscape?: unknown;
+  financialOverview?: unknown;
   citations?: Array<{ title: string; url: string }>;
 }
 
@@ -49,6 +49,40 @@ function citationListFromResponse(response: unknown): Array<{ title: string; url
     }
   }
   return citations;
+}
+
+function textValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value.trim() || null;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    const lines = value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object") {
+          const entries = Object.entries(item as Record<string, unknown>)
+            .filter(([, entryValue]) => entryValue !== null && entryValue !== undefined && String(entryValue).trim() !== "")
+            .map(([key, entryValue]) => `${key}: ${typeof entryValue === "object" ? JSON.stringify(entryValue) : String(entryValue)}`);
+          return entries.join(", ");
+        }
+        return String(item).trim();
+      })
+      .filter(Boolean);
+    return lines.length ? lines.map((line) => `- ${line}`).join("\n") : null;
+  }
+  if (typeof value === "object") {
+    const lines = Object.entries(value as Record<string, unknown>)
+      .filter(([, entryValue]) => entryValue !== null && entryValue !== undefined && String(entryValue).trim() !== "")
+      .map(([key, entryValue]) => `- ${key}: ${typeof entryValue === "object" ? JSON.stringify(entryValue) : String(entryValue)}`);
+    return lines.length ? lines.join("\n") : null;
+  }
+  return String(value).trim() || null;
+}
+
+function citationsFromPayload(payload: KycDraftPayload) {
+  return Array.isArray(payload.citations)
+    ? payload.citations.filter((citation) => citation?.title && citation?.url)
+    : [];
 }
 
 function fallbackKyc(account: { name: string; industry: string | null; arr: number }, documents: Array<{ name: string; extractedText: string | null }>): KycDraftPayload {
@@ -206,24 +240,26 @@ ${JSON.stringify({
     }
 
     const latestVersion = account.kycVersions[0]?.version ?? 0;
-    const citationsText = generation.payload.citations?.length
-      ? `\n\nSources:\n${generation.payload.citations.map((citation) => `- ${citation.title}: ${citation.url}`).join("\n")}`
+    const citations = citationsFromPayload(generation.payload);
+    const citationsText = citations.length
+      ? `\n\nSources:\n${citations.map((citation) => `- ${citation.title}: ${citation.url}`).join("\n")}`
       : "";
+    const executiveSummary = textValue(generation.payload.executiveSummary);
 
     const kyc = await prisma.kycVersion.create({
       data: {
         accountId: id,
         version: latestVersion + 1,
         status: "DRAFT",
-        executiveSummary: `${generation.payload.executiveSummary ?? ""}${citationsText}`.trim() || null,
-        businessModel: generation.payload.businessModel ?? null,
-        keyStakeholders: generation.payload.keyStakeholders ?? null,
-        strategicGoals: generation.payload.strategicGoals ?? null,
-        riskFactors: generation.payload.riskFactors ?? null,
-        expansionOpportunity: generation.payload.expansionOpportunity ?? null,
-        csatHistory: generation.payload.csatHistory ?? null,
-        competitiveLandscape: generation.payload.competitiveLandscape ?? null,
-        financialOverview: generation.payload.financialOverview ?? null,
+        executiveSummary: `${executiveSummary ?? ""}${citationsText}`.trim() || null,
+        businessModel: textValue(generation.payload.businessModel),
+        keyStakeholders: textValue(generation.payload.keyStakeholders),
+        strategicGoals: textValue(generation.payload.strategicGoals),
+        riskFactors: textValue(generation.payload.riskFactors),
+        expansionOpportunity: textValue(generation.payload.expansionOpportunity),
+        csatHistory: textValue(generation.payload.csatHistory),
+        competitiveLandscape: textValue(generation.payload.competitiveLandscape),
+        financialOverview: textValue(generation.payload.financialOverview),
       },
     });
 
@@ -233,14 +269,14 @@ ${JSON.stringify({
       action: "kyc.regenerated",
       entity: "KycVersion",
       entityId: kyc.id,
-      metadata: { role, model: generation.model, webSearchUsed: generation.webSearchUsed, citationCount: generation.payload.citations?.length ?? 0 },
+      metadata: { role, model: generation.model, webSearchUsed: generation.webSearchUsed, citationCount: citations.length },
     });
 
     return ok({
       kyc,
       model: generation.model,
       webSearchUsed: generation.webSearchUsed,
-      citations: generation.payload.citations ?? [],
+      citations,
     });
   } catch (err) {
     return serverError(err);

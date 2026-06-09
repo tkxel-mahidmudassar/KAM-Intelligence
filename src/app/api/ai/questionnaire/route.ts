@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     const questions = SECTION_QUESTIONS[section];
 
-    const prompt = `You are a KAM Intelligence engine. Based on the account context below, pre-populate a questionnaire section with your best estimates.
+    const prompt = `You are a Kamazing engine. Based on the account context below, pre-populate a questionnaire section with your best estimates.
 
 Account: ${account.name}
 Health: ${account.health}

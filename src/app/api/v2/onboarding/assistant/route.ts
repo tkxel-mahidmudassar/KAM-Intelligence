@@ -39,6 +39,14 @@ export async function POST(req: NextRequest) {
             recurrence: String(item?.recurrence || ""),
           }))
         : [],
+      kycSections: Array.isArray(body.kycSections)
+        ? body.kycSections.map((section) => ({
+            title: String(section?.title || ""),
+            source: String(section?.source || ""),
+            status: section?.status === "Ready" ? "Ready" : "Needs input",
+            draft: String(section?.draft || ""),
+          }))
+        : [],
     };
 
     const result = await runV2OnboardingAssistant(input);

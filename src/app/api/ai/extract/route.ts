@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const doc = await prisma.document.findUnique({ where: { id: documentId } });
     if (!doc) return notFound("Document");
 
-    const prompt = `You are a KAM Intelligence engine. Analyse this document and extract key information for a Key Account Manager.
+    const prompt = `You are a Kamazing engine. Analyse this document and extract key information for a Key Account Manager.
 
 Return ONLY a JSON object with ALL of these exact keys:
 {
