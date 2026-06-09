@@ -44,40 +44,41 @@ function ensurePdfGeometryPolyfills(): void {
 
 async function parsePdf(buffer: Buffer): Promise<ParseResult> {
   ensurePdfGeometryPolyfills();
-  const pdfParse = require("pdf-parse");
-  let text = "";
-  let rawPages: string[] = [];
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    disableWorker: true,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+  } as any);
+  const pdf = await loadingTask.promise;
 
-  if (typeof pdfParse === "function") {
-    const data = await pdfParse(buffer);
-    text = data.text ?? "";
-    rawPages = text
-      .split(/\f/)
-      .map((p: string) => p.trim())
-      .filter((p: string) => p.length > 0);
-  } else if (pdfParse.PDFParse) {
-    const parser = new pdfParse.PDFParse({ data: buffer });
-    try {
-      const data = await parser.getText();
-      text = data.text ?? "";
-      rawPages = Array.isArray(data.pages)
-        ? data.pages.map((page: { text?: string }) => String(page.text ?? "").trim()).filter(Boolean)
-        : [];
-    } finally {
-      await parser.destroy?.();
+  const chunks: ParsedChunk[] = [];
+  try {
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const text = content.items
+        .map((item: unknown) => {
+          const maybeText = item as { str?: unknown };
+          return typeof maybeText.str === "string" ? maybeText.str : "";
+        })
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (text) {
+        chunks.push({ text, sourcePage: pageNumber });
+      }
+      page.cleanup();
     }
-  } else {
-    throw new Error("Unsupported pdf-parse module shape");
+  } finally {
+    await pdf.destroy();
   }
-
-  const chunks: ParsedChunk[] = rawPages.map((text, i) => ({
-    text,
-    sourcePage: i + 1,
-  }));
 
   // If no page breaks, fall back to splitting by blank lines into ~500 char chunks
   if (chunks.length === 0) {
-    return splitIntoChunks(text);
+    return splitIntoChunks("");
   }
 
   return { chunks, totalChunks: chunks.length };
