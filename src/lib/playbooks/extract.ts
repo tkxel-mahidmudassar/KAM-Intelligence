@@ -1,6 +1,6 @@
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { pathToFileURL } from "url";
+import { extractPdfPages } from "../pdfText";
 
 export type PlaybookChunkLocator = {
   page?: number;
@@ -125,31 +125,13 @@ function chunkTextBySections(rawText: string, fallbackSection: string): Playbook
 }
 
 async function extractPdf(filePath: string): Promise<PlaybookExtractedChunk[]> {
-  const { getDocument, GlobalWorkerOptions } = await import(
-    /* webpackIgnore: true */ "pdfjs-dist/legacy/build/pdf.mjs"
-  );
-  const workerPath = join(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs");
-  GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).toString();
-
   const fileBuffer = await readFile(filePath);
-  const pdfDoc = await getDocument({ data: new Uint8Array(fileBuffer) }).promise;
-  const chunks: PlaybookExtractedChunk[] = [];
+  const pages = (await extractPdfPages(fileBuffer)).map(normalizeText).filter(Boolean);
 
-  for (let pageNumber = 1; pageNumber <= pdfDoc.numPages; pageNumber += 1) {
-    const page = await pdfDoc.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const pageText = normalizeText(
-      (content.items as Array<{ str?: string }>)
-        .map((item) => item.str ?? "")
-        .join(" ")
-    );
-
-    if (pageText) {
-      chunks.push({ text: pageText, locator: { page: pageNumber } });
-    }
-  }
-
-  return chunks;
+  return pages.map((pageText, index) => ({
+    text: pageText,
+    locator: { page: index + 1 },
+  }));
 }
 
 async function extractWord(filePath: string): Promise<PlaybookExtractedChunk[]> {

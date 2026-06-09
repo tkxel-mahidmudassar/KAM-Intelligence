@@ -8,6 +8,8 @@
  * Server-only — never import in client components.
  */
 
+import { extractPdfPages } from "../pdfText";
+
 export interface ParsedChunk {
   text: string;
   sourcePage?: number;
@@ -21,67 +23,20 @@ export interface ParseResult {
   error?: string;
 }
 
-function ensurePdfGeometryPolyfills(): void {
-  const globalScope = globalThis as typeof globalThis & {
-    DOMMatrix?: unknown;
-    ImageData?: unknown;
-    Path2D?: unknown;
-  };
-
-  if (globalScope.DOMMatrix && globalScope.ImageData && globalScope.Path2D) return;
-
-  try {
-    const canvas = require("@napi-rs/canvas");
-    globalScope.DOMMatrix ??= canvas.DOMMatrix;
-    globalScope.ImageData ??= canvas.ImageData;
-    globalScope.Path2D ??= canvas.Path2D;
-  } catch {
-    // pdf-parse can still work in runtimes that already provide these globals.
-  }
-}
-
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 
 async function parsePdf(buffer: Buffer): Promise<ParseResult> {
-  ensurePdfGeometryPolyfills();
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-    disableWorker: true,
-    useWorkerFetch: false,
-    isEvalSupported: false,
-  } as any);
-  const pdf = await loadingTask.promise;
+  const pages = await extractPdfPages(buffer);
 
-  const chunks: ParsedChunk[] = [];
-  try {
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const text = content.items
-        .map((item: unknown) => {
-          const maybeText = item as { str?: unknown };
-          return typeof maybeText.str === "string" ? maybeText.str : "";
-        })
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      if (text) {
-        chunks.push({ text, sourcePage: pageNumber });
-      }
-      page.cleanup();
-    }
-  } finally {
-    await pdf.destroy();
+  if (pages.length > 0) {
+    const chunks = pages.map((pageText, index) => ({
+      text: pageText,
+      sourcePage: index + 1,
+    }));
+    return { chunks, totalChunks: chunks.length };
   }
 
-  // If no page breaks, fall back to splitting by blank lines into ~500 char chunks
-  if (chunks.length === 0) {
-    return splitIntoChunks("");
-  }
-
-  return { chunks, totalChunks: chunks.length };
+  return splitIntoChunks("");
 }
 
 // ─── DOCX ─────────────────────────────────────────────────────────────────────
