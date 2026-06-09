@@ -14,7 +14,13 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   // Keep heavy Node-only packages out of the webpack bundle so they load natively
-  serverExternalPackages: ["pdf2json", "mammoth", "xlsx"],
+  serverExternalPackages: ["@napi-rs/canvas", "pdf2json", "pdfjs-dist", "mammoth", "xlsx"],
+  outputFileTracingIncludes: {
+    "/api/**/*": [
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+      "./node_modules/pdfjs-dist/standard_fonts/**/*",
+    ],
+  },
 };
 
 export default nextConfig;
