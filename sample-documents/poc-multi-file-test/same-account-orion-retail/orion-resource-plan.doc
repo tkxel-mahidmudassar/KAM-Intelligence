@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Orion Retail Group - Resource Plan</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    h1 { font-size: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #999; padding: 6px; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Orion Retail Group - Resource Plan</h1>
+  <table><tr><th>Delivery Lead</th><td>New delivery lead joined in May and improved communication cadence.</td></tr>
+<tr><th>Critical Dependency</th><td>Payment gateway specialist is a single point of dependency.</td></tr>
+<tr><th>Backup Readiness</th><td>Backup engineer identified but has not completed checkout architecture onboarding.</td></tr>
+<tr><th>Team Stability</th><td>Core squad is stable; two sprint commitments slipped because of gateway defects.</td></tr>
+<tr><th>Resource Health</th><td>Moderate risk until specialist backup is fully ready.</td></tr></table>
+</body>
+</html>

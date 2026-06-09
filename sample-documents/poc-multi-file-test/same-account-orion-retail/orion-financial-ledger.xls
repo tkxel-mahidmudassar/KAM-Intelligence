@@ -1,0 +1,13 @@
+<html>
+<head><meta charset="utf-8"><title>Orion Retail Group - Financial Ledger</title></head>
+<body>
+<table>
+<tr><th colspan="3">Orion Retail Group - Financial Ledger</th></tr>
+<tr><th>Metric</th><th>Value</th><th>Evidence</th></tr>
+<tr><td>ARR</td><td>$1.8M</td><td>Contract summary</td></tr>
+<tr><td>Invoice status</td><td>Current</td><td>No overdue invoices as of latest finance review</td></tr>
+<tr><td>Billing risk</td><td>Low</td><td>Billing matches current SOW</td></tr>
+<tr><td>Expansion potential</td><td>Moderate</td><td>Analytics and QA automation under discussion</td></tr>
+</table>
+</body>
+</html>

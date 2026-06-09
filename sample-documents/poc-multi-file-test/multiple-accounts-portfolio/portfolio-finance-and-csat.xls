@@ -1,0 +1,12 @@
+<html>
+<head><meta charset="utf-8"><title>Portfolio Finance and CSAT</title></head>
+<body>
+<table>
+<tr><th colspan="5">Portfolio Finance and CSAT</th></tr>
+<tr><th>Account</th><th>ARR</th><th>Invoice Status</th><th>CSAT</th><th>Financial Risk</th></tr>
+<tr><td>Apex Manufacturing Cloud</td><td>$950K</td><td>Current</td><td>3.0/5</td><td>Medium</td></tr>
+<tr><td>BrightBank Digital</td><td>$2.4M</td><td>Current</td><td>4.6/5</td><td>Low</td></tr>
+<tr><td>Helio Health Systems</td><td>$1.2M</td><td>45 days overdue</td><td>2.7/5</td><td>High</td></tr>
+</table>
+</body>
+</html>
