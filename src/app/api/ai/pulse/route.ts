@@ -53,7 +53,7 @@ ${account.kpiDimensions.map((k) => `  - ${k.name}: ${k.value}${k.unit ?? ""} (ta
 ${accounts.map((a) => `  - ${a.name}: ${a.health}, Score ${a.kamScores[0]?.overall ?? "N/A"}/100, ARR $${a.arr.toLocaleString()}, renewal ${a.contractEnd?.toISOString().split("T")[0] ?? "N/A"}`).join("\n")}`;
     }
 
-    const prompt = `You are a Kamazing engine. Based on the data below, generate a concise, specific, and actionable insight.
+    const prompt = `You are a DotKAM engine. Based on the data below, generate a concise, specific, and actionable insight.
 
 Return ONLY a JSON object with these exact keys:
 {

@@ -163,7 +163,7 @@ export async function runRuleQualityScorerAgent(
     .map((f) => `- ${f.dismissReason ?? f.feedbackType}: "${f.annotationText}"`)
     .join("\n");
 
-  const prompt = `You are assessing the quality of a playbook rule used in Kamazing.
+  const prompt = `You are assessing the quality of a playbook rule used in DotKAM.
 
 Rule details:
 - Category: ${rule.category}

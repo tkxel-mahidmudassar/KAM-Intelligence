@@ -58,7 +58,7 @@ export async function runOpportunityAnalysisAgent(
   ];
 
   // Step A: identify expansion vectors
-  const promptA = `You are a Kamazing expansion analyst.
+  const promptA = `You are a DotKAM expansion analyst.
 
 Account: ${account.name}
 Industry: ${account.industry ?? "N/A"} | ARR: $${account.arr.toLocaleString()} | Health: ${account.health}

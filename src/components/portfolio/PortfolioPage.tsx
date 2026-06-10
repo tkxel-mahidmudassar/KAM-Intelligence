@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Check, FileText, Mail, Pencil, Phone, Plus, Search, Settings, Sparkles, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, FileText, Mail, Pencil, Phone, Plus, Search, Settings, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useAccountCache } from "@/context/AccountCacheContext";
 import { useNotifications } from "@/context/NotificationContext";
@@ -2064,7 +2064,7 @@ async function downloadDocxArtifact(fileName: string, content: string) {
 </Relationships>`);
   zip.folder("docProps")?.file("core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <dc:creator>Kamazing T Man</dc:creator>
+  <dc:creator>DotKAM T Man</dc:creator>
   <dc:title>${xmlEscape(fileName.replace(/\.docx$/i, ""))}</dc:title>
 </cp:coreProperties>`);
   zip.folder("word")?.file("document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -5102,7 +5102,7 @@ function AccountModal({
     return labels;
   }, [kpiRows]);
   const isAssociate = role === "ASSOCIATE";
-  const canOverrideDirectly = role === "KAM" || role === "ADMIN";
+  const canOverrideDirectly = role === "KAM";
 
   function applyApiAccountUpdate(rawAccount: Record<string, unknown>) {
     upsertAccount(rawAccount as CachedApiAccount);
@@ -5661,38 +5661,43 @@ function AccountModal({
     }
   }
 
-  if (!account) return null;
+  if (!account || !open) return null;
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-[#1B1812]/42 backdrop-blur-[4px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[92vh] w-[min(1360px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[1.5rem] border border-[#E2D8CC] bg-[#FBF7EF] shadow-[0_34px_110px_-56px_rgba(43,32,19,0.78)] focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+    <main className="min-h-screen bg-[var(--bg-gradient)] px-5 py-5 text-[var(--text-primary)]">
+      <section className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1500px] flex-col overflow-hidden rounded-[1.5rem] border border-[#E2D8CC] bg-[#FBF7EF] shadow-[0_28px_90px_-60px_rgba(43,32,19,0.68)]">
           <div className="relative z-20 shrink-0 overflow-hidden border-b border-[#E5DACD] bg-[#F7F1E7] px-5 py-4">
             <div className="pointer-events-none absolute right-[-7rem] top-[-10rem] h-72 w-72 rounded-full bg-[#A7C7B4]/36 blur-3xl" />
             <div className="pointer-events-none absolute bottom-[-8rem] left-[30%] h-64 w-64 rounded-full bg-[#E8BE86]/24 blur-3xl" />
             <div className="relative z-10 flex items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#25352E] transition-colors hover:bg-white"
+                  aria-label="Back to portfolio"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
                 <AccountLogo account={account} size="lg" />
                 <div className="min-w-0">
-                  <Dialog.Title className="truncate text-3xl font-black leading-none tracking-[-0.06em] text-[#1F2722]">
+                  <h1 className="truncate text-3xl font-black leading-none tracking-[-0.06em] text-[#1F2722]">
                     {account.name}
-                  </Dialog.Title>
-                  <Dialog.Description className="sr-only">
+                  </h1>
+                  <p className="sr-only">
                     Account workspace for {account.name}
-                  </Dialog.Description>
+                  </p>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <Dialog.Close asChild>
-                  <button
-                    type="button"
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#6F6254] transition-colors hover:bg-white hover:text-[#25352E]"
-                    aria-label="Close account modal"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </Dialog.Close>
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-[#FFF9EF]/80 text-[#6F6254] transition-colors hover:bg-white hover:text-[#25352E]"
+                  aria-label="Close account page"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
 
@@ -5797,9 +5802,8 @@ function AccountModal({
               </Tabs.Content>
             </div>
           </Tabs.Root>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </section>
+    </main>
   );
 }
 
@@ -8742,6 +8746,23 @@ export function PortfolioPage() {
     setPendingAccountReviewOpen(true);
   }
 
+  if (selectedAccount) {
+    return (
+      <AccountModal
+        account={selectedAccount}
+        open={Boolean(selectedAccount)}
+        initialTab={selectedAccountTab}
+        onAccountUpdate={updatePortfolioAccount}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedAccount(null);
+            router.push("/portfolio");
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[var(--bg-gradient)] px-5 py-6 text-[var(--text-primary)]">
       <section className="mx-auto max-w-[1500px] space-y-5">
@@ -8889,13 +8910,6 @@ export function PortfolioPage() {
           setPendingAccountReviewOpen(open);
           if (!open && routeFocus === "pending-account-draft") router.push("/portfolio");
         }}
-      />
-      <AccountModal
-        account={selectedAccount}
-        open={Boolean(selectedAccount)}
-        initialTab={selectedAccountTab}
-        onAccountUpdate={updatePortfolioAccount}
-        onOpenChange={(open) => !open && setSelectedAccount(null)}
       />
       <AccountSourceUploadDialog
         open={onboardingOpen && onboardingStage === "source-upload"}

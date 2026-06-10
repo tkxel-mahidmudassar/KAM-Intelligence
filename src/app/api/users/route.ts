@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     const { name, email, role: userRole, avatarUrl, initialPassword, managerId } = body;
 
     if (!name?.trim() || !email?.trim()) return badRequest("name and email are required");
-    const validRoles = ["ASSOCIATE", "KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
+    const validRoles = ["ASSOCIATE", "KAM", "EXECUTIVE"];
     if (userRole && !validRoles.includes(userRole)) return badRequest("Invalid role");
     if (initialPassword !== undefined && !String(initialPassword).trim()) return badRequest("Initial password cannot be empty");
 
@@ -54,7 +54,6 @@ export async function POST(req: NextRequest) {
         email:     email.toLowerCase().trim(),
         role:      userRole ?? "KAM",
         avatarUrl: avatarUrl ?? null,
-        initialPassword: initialPassword ? String(initialPassword).trim() : null,
         managerId: managerId ?? null,
       },
     });

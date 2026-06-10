@@ -1,6 +1,6 @@
-# Kamazing V2 Enhanced
+# DotKAM V2 Enhanced
 
-Fresh rebuild workspace for the enhanced Kamazing product.
+Fresh rebuild workspace for the enhanced DotKAM product.
 
 ## Foundation copied from V1
 

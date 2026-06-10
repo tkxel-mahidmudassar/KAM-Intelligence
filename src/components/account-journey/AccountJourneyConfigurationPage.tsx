@@ -117,11 +117,20 @@ export function AccountJourneyConfigurationPage() {
     setPendingChanges([]);
   }
 
-  function dateToOffsetDays(value: string) {
-    const parsed = new Date(value);
+  function valueToOffsetDays(value: unknown) {
+    if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.round(value));
+    const raw = String(value || "").trim();
+    const dayMatch = raw.match(/\bday\s*(\d+)\b/i);
+    if (dayMatch) return Number(dayMatch[1]);
+    const weekMatch = raw.match(/\b(\d+)\s*weeks?\b/i);
+    if (weekMatch) return Number(weekMatch[1]) * 7;
+    const monthMatch = raw.match(/\b(\d+)\s*months?\b/i);
+    if (monthMatch) return Number(monthMatch[1]) * 30;
+    const daysAfterMatch = raw.match(/\b(\d+)\s*days?\s*after\b/i);
+    if (daysAfterMatch) return Number(daysAfterMatch[1]);
+    const parsed = new Date(raw);
     if (Number.isNaN(parsed.getTime())) {
-      const dayMatch = value.match(/day\s*(\d+)/i);
-      return dayMatch ? Number(dayMatch[1]) : 30;
+      return 30;
     }
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -135,7 +144,7 @@ export function AccountJourneyConfigurationPage() {
       const type = taskTypes.includes(agentItem.type as WorkspaceTaskType) ? agentItem.type as WorkspaceTaskType : "To-do";
       const recurrence = normalizeJourneyRecurrence(String(agentItem.recurrence || "Does not repeat"));
       const detail = String(agentItem.reasoningSummary || agentItem.proposedValue || "Suggested by the journey assistant.").trim();
-      const offsetDays = dateToOffsetDays(String(agentItem.dueDate || ""));
+      const offsetDays = valueToOffsetDays(agentItem.offsetDays ?? agentItem.dueDate ?? agentItem.proposedValue ?? "");
       const existing = items.find((item) => item.title.toLowerCase() === title.toLowerCase());
       if (existing) {
         return {
@@ -189,6 +198,7 @@ export function AccountJourneyConfigurationPage() {
           journey: items.map((item) => ({
             type: item.type,
             title: item.title,
+            offsetDays: item.offsetDays,
             dueDate: `Day ${item.offsetDays}`,
             recurrence: item.recurrence,
           })),

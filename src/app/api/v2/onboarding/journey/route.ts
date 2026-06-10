@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
         ? body.journey.map((item) => ({
             type: item?.type === "Meeting" || item?.type === "QBR" ? item.type : "To-do",
             title: String(item?.title || ""),
+            offsetDays: typeof item?.offsetDays === "number" ? Math.max(0, Math.round(item.offsetDays)) : undefined,
             dueDate: String(item?.dueDate || ""),
             recurrence: String(item?.recurrence || ""),
           }))

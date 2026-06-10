@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
     if (!messages?.length) return badRequest("messages are required");
 
     // Build system context from DB
-    let systemContext = `You are Kammie, the Kamazing AI co-pilot for Key Account Managers at Tkxel.
+    let systemContext = `You are Kammie, the DotKAM AI co-pilot for Key Account Managers at Tkxel.
 You have access to real-time account data, KPI metrics, news items, and action items.
 Be concise, specific, and always ground your answers in the data provided.
 If data is unavailable, say so clearly rather than guessing.`;

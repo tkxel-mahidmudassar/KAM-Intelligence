@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) return notFound("User");
 
-    const validRoles = ["ASSOCIATE", "KAM", "MANAGER", "EXECUTIVE", "ADMIN"];
+    const validRoles = ["ASSOCIATE", "KAM", "EXECUTIVE"];
 
     const user = await prisma.user.update({
       where: { id },
@@ -27,7 +27,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         role:      (body.role && validRoles.includes(body.role)) ? body.role : existing.role,
         avatarUrl: body.avatarUrl !== undefined ? body.avatarUrl : existing.avatarUrl,
         managerId: body.managerId !== undefined ? body.managerId : existing.managerId,
-        initialPassword: body.initialPassword !== undefined ? String(body.initialPassword || "").trim() || null : existing.initialPassword,
       },
     });
 

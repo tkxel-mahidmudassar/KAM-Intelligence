@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { FileText, Loader2, Maximize2, Minimize2, Paperclip, Sparkles, X } from "lucide-react";
 import { useAccountCache } from "@/context/AccountCacheContext";
 import { useRole } from "@/context/RoleContext";
@@ -33,8 +34,20 @@ interface PendingDocumentRequest {
   missingInputs: string[];
 }
 
+declare global {
+  interface Window {
+    __kamazingAssistantAudio?: AudioContext;
+  }
+}
+
 type TManMood = "laptop" | "greeting" | "thinking" | "answering" | "eager";
-const T_MAN_SPRITE = "/7377de14-db2b-49b2-b3bf-5bc8692d1f2d.png";
+const T_MAN_POSES: Record<TManMood, { src: string; label: string }> = {
+  laptop: { src: "/tman/laptop-clean-v2.png", label: "T Man with laptop" },
+  greeting: { src: "/tman/greeting-clean-v2.png", label: "T Man greeting" },
+  thinking: { src: "/tman/thinking-clean-v2.png", label: "T Man thinking" },
+  answering: { src: "/tman/answering-clean-v2.png", label: "T Man answering" },
+  eager: { src: "/tman/eager-clean-v2.png", label: "T Man eager" },
+};
 
 function money(value: number) {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -94,50 +107,133 @@ function storedDocumentTemplates() {
   }
 }
 
-function renderFormattedMessage(content: string) {
-  const lines = content.split("\n");
-  return lines.map((line, index) => {
-    const trimmed = line.trim();
-    if (!trimmed) return <div key={`space-${index}`} className="h-2" />;
-    if (trimmed.startsWith("### ")) {
-      return <p key={`${trimmed}-${index}`} className="mt-2 text-[12px] font-black text-[#1F2722] first:mt-0">{trimmed.replace(/^###\s+/, "")}</p>;
+function cleanMarkdownText(text: string) {
+  return text
+    .replace(/\\\*/g, "*")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*\s*$/gm, "")
+    .replace(/^\s*\*\*/gm, "");
+}
+
+function renderInlineFormatted(text: string) {
+  const parts: Array<string | { type: "bold" | "link"; text: string; href?: string }> = [];
+  const normalizedText = cleanMarkdownText(text);
+  const pattern = /(\*\*([\s\S]+?)\*\*)|(\[([^\]]+)\]\((https?:\/\/[^)]+)\))|(https?:\/\/[^\s)]+)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(normalizedText)) !== null) {
+    if (match.index > lastIndex) parts.push(normalizedText.slice(lastIndex, match.index));
+    if (match[2]) {
+      parts.push({ type: "bold", text: match[2].replace(/\*\*/g, "") });
+    } else if (match[4] && match[5]) {
+      parts.push({ type: "link", text: match[4], href: match[5] });
+    } else if (match[6]) {
+      parts.push({ type: "link", text: match[6], href: match[6] });
     }
-    if (/^[-*]\s+/.test(trimmed)) {
-      return (
-        <p key={`${trimmed}-${index}`} className="relative pl-4 text-[12px] font-bold leading-relaxed text-inherit">
-          <span className="absolute left-0 top-[0.55em] h-1.5 w-1.5 rounded-full bg-current opacity-55" />
-          {trimmed.replace(/^[-*]\s+/, "")}
-        </p>
-      );
-    }
-    const urlMatch = trimmed.match(/https?:\/\/[^\s)]+/);
-    if (urlMatch) {
-      const before = trimmed.slice(0, urlMatch.index);
-      const url = urlMatch[0];
-      const after = trimmed.slice((urlMatch.index ?? 0) + url.length);
-      return (
-        <p key={`${trimmed}-${index}`} className="text-[12px] font-bold leading-relaxed text-inherit">
-          {before}
-          <a href={url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-            {url}
-          </a>
-          {after}
-        </p>
-      );
-    }
-    return <p key={`${trimmed}-${index}`} className="text-[12px] font-bold leading-relaxed text-inherit">{trimmed}</p>;
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < normalizedText.length) parts.push(normalizedText.slice(lastIndex));
+
+  return parts.map((part, index) => {
+    if (typeof part === "string") return <span key={`${part}-${index}`} className="break-words">{part.replace(/\*\*/g, "")}</span>;
+    if (part.type === "bold") return <strong key={`${part.text}-${index}`} className="break-words font-black">{part.text}</strong>;
+    return (
+      <a key={`${part.href}-${index}`} href={part.href} target="_blank" rel="noreferrer" className="break-all underline underline-offset-2">
+        {part.text}
+      </a>
+    );
   });
 }
 
+function renderFormattedMessage(content: string) {
+  const lines = cleanMarkdownText(content).split("\n");
+  return lines.map((line, index) => {
+    const trimmed = line.trim().replace(/^\*\*/, "").replace(/\*\*$/, "");
+    if (!trimmed) return <div key={`space-${index}`} className="h-2" />;
+    if (trimmed.startsWith("### ")) {
+      return <p key={`${trimmed}-${index}`} className="mt-2 break-words text-[12px] font-black text-[#1F2722] first:mt-0">{renderInlineFormatted(trimmed.replace(/^###\s+/, ""))}</p>;
+    }
+    if (/^[-*]\s+/.test(trimmed)) {
+      return (
+        <p key={`${trimmed}-${index}`} className="relative break-words pl-4 text-[12px] font-bold leading-relaxed text-inherit">
+          <span className="absolute left-0 top-[0.55em] h-1.5 w-1.5 rounded-full bg-current opacity-55" />
+          {renderInlineFormatted(trimmed.replace(/^[-*]\s+/, ""))}
+        </p>
+      );
+    }
+    return <p key={`${trimmed}-${index}`} className="max-w-full break-words text-[12px] font-bold leading-relaxed text-inherit">{renderInlineFormatted(trimmed)}</p>;
+  });
+}
+
+function assistantAudioContext() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = window.__kamazingAssistantAudio ?? new AudioContextClass();
+    window.__kamazingAssistantAudio = context;
+    void context.resume().catch(() => undefined);
+    return context;
+  } catch {
+    return;
+  }
+}
+
+function primeAssistantAudio() {
+  const context = assistantAudioContext();
+  if (!context) return;
+  try {
+    const now = context.currentTime;
+    const gain = context.createGain();
+    const oscillator = context.createOscillator();
+    gain.gain.setValueAtTime(0.0001, now);
+    oscillator.frequency.setValueAtTime(880, now);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.015);
+  } catch {
+    // Browsers can still decline audio until another user gesture.
+  }
+}
+
+function playAssistantSuccessTone() {
+  const context = assistantAudioContext();
+  if (!context) return;
+  try {
+    const master = context.createGain();
+    const now = context.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51];
+
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.34, now + 0.025);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.86);
+    master.connect(context.destination);
+
+    notes.forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const start = now + index * 0.052;
+      oscillator.type = index === notes.length - 1 ? "triangle" : index % 2 === 0 ? "sine" : "square";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.34, start + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.42);
+      oscillator.connect(gain);
+      gain.connect(master);
+      oscillator.start(start);
+      oscillator.stop(start + 0.42);
+    });
+  } catch {
+    // Best-effort UI flourish.
+  }
+}
+
 function TManAvatar({ mood, size = "md" }: { mood: TManMood; size?: "sm" | "md" | "lg" }) {
-  const sizeClass = size === "lg" ? "h-44 w-[8rem]" : size === "sm" ? "h-16 w-12" : "h-24 w-[4.75rem]";
-  const pose = {
-    laptop: { x: "100%", y: "0%", scale: 1.14, label: "T Man with laptop" },
-    greeting: { x: "100%", y: "100%", scale: 1.12, label: "T Man greeting" },
-    thinking: { x: "50%", y: "100%", scale: 1.12, label: "T Man thinking" },
-    answering: { x: "0%", y: "0%", scale: 1.12, label: "T Man answering" },
-    eager: { x: "50%", y: "0%", scale: 1.12, label: "T Man eager" },
-  }[mood];
+  const sizeClass = size === "lg" ? "h-[18.5rem] w-[13.5rem]" : size === "sm" ? "h-16 w-12" : "h-24 w-[4.75rem]";
+  const pose = T_MAN_POSES[mood];
   const motion = {
     laptop: "animate-[tman-eager_4.8s_ease-in-out_infinite]",
     greeting: "animate-[tman-stage-in_620ms_cubic-bezier(0.2,0.8,0.2,1)_both]",
@@ -147,16 +243,16 @@ function TManAvatar({ mood, size = "md" }: { mood: TManMood; size?: "sm" | "md" 
   }[mood];
 
   return (
-    <div key={mood} aria-label={pose.label} className={`pointer-events-none relative shrink-0 overflow-hidden ${sizeClass} ${motion}`} role="img">
-      <span
-        className="absolute inset-0 bg-no-repeat"
-        style={{
-          backgroundImage: `url(${T_MAN_SPRITE})`,
-          backgroundPosition: `${pose.x} ${pose.y}`,
-          backgroundSize: "300% 200%",
-          transform: `scale(${pose.scale})`,
-          transformOrigin: "center bottom",
-        }}
+    <div key={mood} aria-label={pose.label} className={`pointer-events-none relative shrink-0 overflow-visible ${sizeClass} ${motion}`} role="img">
+      <Image
+        src={pose.src}
+        alt=""
+        aria-hidden="true"
+        width={216}
+        height={296}
+        className="h-full w-full object-contain object-bottom"
+        draggable={false}
+        priority={size === "lg"}
       />
     </div>
   );
@@ -229,6 +325,7 @@ export function CammiePanel() {
   }
 
   async function sendMessage() {
+    primeAssistantAudio();
     const rawValue = message.trim() || (attachments.length > 0 ? "Review the attached document(s)." : "");
     const value = pendingDocumentRequest && rawValue
       ? `For the pending ${pendingDocumentRequest.type}${pendingDocumentRequest.targetAccount ? ` for ${pendingDocumentRequest.targetAccount}` : ""}, here are the missing details: ${rawValue}. Generate the document now if these details answer the open questions.`
@@ -292,6 +389,7 @@ export function CammiePanel() {
             : undefined,
         },
       ]);
+      playAssistantSuccessTone();
       setAvatarMood("answering");
     } catch (caught) {
       const messageText = caught instanceof Error ? caught.message : "T Man could not respond";
@@ -316,7 +414,7 @@ export function CammiePanel() {
             <div className="relative z-10 flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-[18px] font-black tracking-[-0.05em] text-[#1F2722]">T Man</h3>
-                <p className="text-[12px] font-bold text-[#7D6E5F]">Kamazing assistant</p>
+                <p className="text-[12px] font-bold text-[#7D6E5F]">DotKAM assistant</p>
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setExpanded((current) => !current)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]" aria-label={expanded ? "Restore T Man" : "Expand T Man"}>
@@ -333,7 +431,7 @@ export function CammiePanel() {
               const userMessage = item.role === "user";
               return (
                 <div key={`${item.role}-${item.content}-${index}`} className={`flex ${userMessage ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-[13px] font-bold leading-relaxed ${
+                  <div className={`min-w-0 max-w-[82%] overflow-hidden rounded-2xl px-3 py-2 text-[13px] font-bold leading-relaxed [overflow-wrap:anywhere] ${
                     userMessage ? "bg-[#25352E] text-[#FFF9EF]" : "border border-[#E5DACD] bg-white/70 text-[#25352E]"
                   }`}>
                     <div className="space-y-1">{renderFormattedMessage(item.content)}</div>
@@ -401,6 +499,7 @@ export function CammiePanel() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
+                onPointerDown={primeAssistantAudio}
                 disabled={sending || uploadingAttachment}
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#6F6254] hover:bg-[#F7F1E7] disabled:cursor-not-allowed disabled:opacity-55"
                 aria-label="Attach file for T Man"
@@ -410,13 +509,15 @@ export function CammiePanel() {
               <input
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
+                onPointerDown={primeAssistantAudio}
+                onFocus={primeAssistantAudio}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") sendMessage();
                 }}
                 className="h-10 min-w-0 flex-1 bg-transparent px-3 text-[13px] font-bold text-[#25352E] outline-none placeholder:text-[#A69A8B]"
                 placeholder="Ask about accounts, documents, or the web"
               />
-              <button type="button" onClick={sendMessage} disabled={sending || uploadingAttachment || (!message.trim() && attachments.length === 0)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send T Man message">
+              <button type="button" onPointerDown={primeAssistantAudio} onClick={sendMessage} disabled={sending || uploadingAttachment || (!message.trim() && attachments.length === 0)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send T Man message">
                 <Sparkles className="h-4 w-4" />
               </button>
             </div>
@@ -425,7 +526,9 @@ export function CammiePanel() {
       ) : null}
       <button
         type="button"
+        onPointerDown={primeAssistantAudio}
         onClick={() => {
+          primeAssistantAudio();
           setOpen((current) => {
             if (!current) setAvatarMood("greeting");
             return !current;

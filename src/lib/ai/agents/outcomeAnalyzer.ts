@@ -108,7 +108,7 @@ export async function runOutcomeAnalyzerAgent(
 
   // ── 5. LLM call ───────────────────────────────────────────────────────────
   const llmStart = Date.now();
-  const prompt = `You are analyzing account health outcomes for Kamazing.
+  const prompt = `You are analyzing account health outcomes for DotKAM.
 
 IMPORTANT: Do NOT claim causation. Use phrases like "may have contributed", "appears correlated with", "coincided with", "was observed alongside".
 

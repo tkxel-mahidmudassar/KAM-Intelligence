@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     const lastSession = account.qbrSessions[0];
 
-    const prompt = `You are a Kamazing engine. Generate a structured ${sessionType} (${sessionType === "QBR" ? "Quarterly Business Review" : sessionType === "DBR" ? "Daily Business Review" : "Executive Business Review"}) agenda for the account below.
+    const prompt = `You are a DotKAM engine. Generate a structured ${sessionType} (${sessionType === "QBR" ? "Quarterly Business Review" : sessionType === "DBR" ? "Daily Business Review" : "Executive Business Review"}) agenda for the account below.
 
 Account: ${account.name} | Industry: ${account.industry ?? "N/A"} | ARR: $${account.arr.toLocaleString()}
 Health: ${account.health} | Score: ${account.kamScores[0]?.overall ?? "N/A"}/100

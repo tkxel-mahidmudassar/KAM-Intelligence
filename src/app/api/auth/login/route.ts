@@ -4,6 +4,12 @@ import { prisma } from "@/lib/prisma";
 
 // POST /api/auth/login  { email, password }
 // POC auth: password is a configured initial password, falling back to first name.
+const demoPasswordsByEmail: Record<string, string> = {
+  "aisha.khan@tkxel.com": "aisha",
+  "sarah.chen@tkxel.com": "sarah",
+  "daniel.west@tkxel.com": "daniel",
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -16,14 +22,14 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, name: true, email: true, role: true, initialPassword: true },
+      select: { id: true, name: true, email: true, role: true },
     });
 
     if (!user) {
       return badRequest("Invalid email or password");
     }
 
-    const expectedPassword = user.initialPassword || user.name.split(" ")[0].toLowerCase();
+    const expectedPassword = demoPasswordsByEmail[user.email.toLowerCase()] || user.name.split(" ")[0].toLowerCase();
     if (password !== expectedPassword) {
       return badRequest("Invalid email or password");
     }

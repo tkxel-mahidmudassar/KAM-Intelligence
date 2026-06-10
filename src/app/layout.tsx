@@ -7,7 +7,7 @@ import { RoleProvider } from "@/context/RoleContext";
 import "../styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "Kamazing",
+  title: "DotKAM",
   description: "Key account workspace by Tkxel",
 };
 

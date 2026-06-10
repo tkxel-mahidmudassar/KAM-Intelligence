@@ -74,6 +74,12 @@ const auditEvents = [
   { actor: "Omar Farooq", action: "Maersk recovery plan task dismissed with reason", when: "Jun 7, 2:02 PM", source: "Account journey" },
 ];
 
+const aiRules = [
+  "Do not repeat a recommendation when the same user dismissed it because the sponsor is already engaged.",
+  "When Project Health drops from delivery cadence, prefer pod-level recovery tasks before commercial escalation.",
+  "If finance denies a document-derived ARR update because invoice evidence is missing, wait for invoice support before proposing it again.",
+];
+
 export function SettingsPage() {
   const { role, userId, userName } = useRole();
   const { accounts, refreshAccounts, upsertAccount } = useAccountCache();
@@ -95,7 +101,7 @@ export function SettingsPage() {
   const [jingleMuted, setJingleMuted] = useState(false);
   const [ambientMusicMuted, setAmbientMusicMutedState] = useState(false);
 
-  const canAccessSettings = role === "KAM" || role === "EXECUTIVE" || role === "ADMIN";
+  const canAccessSettings = role === "KAM" || role === "EXECUTIVE";
   const associates = useMemo(() => team.filter((user) => user.role === "ASSOCIATE"), [team]);
   const kams = useMemo(() => team.filter((user) => user.role === "KAM"), [team]);
   const totalWeight = useMemo(() => weights.reduce((sum, item) => sum + item.weight, 0), [weights]);
@@ -105,7 +111,7 @@ export function SettingsPage() {
   }).length, [accounts]);
   const connectedIntegrations = useMemo(() => Object.values(integrationStatuses).filter((item) => item === "connected").length, [integrationStatuses]);
   const canSaveWeights = totalWeight === 100 && !savingWeights;
-  const inviteRoleOptions = role === "EXECUTIVE" ? ["KAM"] : ["ASSOCIATE", "KAM", "EXECUTIVE", "ADMIN"];
+  const inviteRoleOptions = role === "EXECUTIVE" ? ["KAM"] : ["ASSOCIATE", "KAM", "EXECUTIVE"];
 
   useEffect(() => {
     if (!canAccessSettings || !userId) return;
@@ -165,7 +171,7 @@ export function SettingsPage() {
             <p className="mt-4 text-sm font-black uppercase tracking-[0.18em] text-[#A63F33]">403 Access denied</p>
             <h1 className="mt-2 text-3xl font-black tracking-[-0.05em] text-[#25352E]">Settings are restricted</h1>
             <p className="mt-3 text-[14px] font-bold leading-relaxed text-[#75685A]">
-              Settings are available only to KAM, C-Level, and Admin users. Your current role is {role}.
+              Settings are available only to KAM and C-Level users. Your current role is {role}.
             </p>
           </div>
         </section>
@@ -575,23 +581,43 @@ export function SettingsPage() {
           </Panel>
         </section>
 
-        <section className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[20px] font-black text-[#25352E]">Audit trail</h2>
-            <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{auditEvents.length} events</span>
-          </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {auditEvents.map((event) => (
-              <article key={`${event.actor}-${event.action}`} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[13px] font-black text-[#25352E]">{event.action}</p>
-                    <p className="mt-1 text-[12px] font-bold text-[#75685A]">{event.actor} · {event.source}</p>
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[20px] font-black text-[#25352E]">AI rules playbook</h2>
+              <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{aiRules.length} rules</span>
+            </div>
+            <div className="mt-4 space-y-3">
+              {aiRules.map((rule, index) => (
+                <article key={rule} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#25352E] text-[11px] font-black text-[#FFF9EF]">{index + 1}</span>
+                    <p className="text-[13px] font-bold leading-relaxed text-[#25352E]">{rule}</p>
                   </div>
-                  <span className="shrink-0 rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-2 py-1 text-[11px] font-black text-[#6F6254]">{event.when}</span>
-                </div>
-              </article>
-            ))}
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[20px] font-black text-[#25352E]">Audit trail</h2>
+              <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{auditEvents.length} events</span>
+            </div>
+            <div className="relative mt-4 space-y-4 pl-5 before:absolute before:bottom-3 before:left-[8px] before:top-3 before:w-px before:bg-[#D8C7B4]">
+              {auditEvents.map((event) => (
+                <article key={`${event.actor}-${event.action}`} className="relative rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
+                  <span className="absolute -left-[25px] top-4 h-4 w-4 rounded-full border-2 border-[#FFFCF6] bg-[#25352E] shadow-[0_0_0_1px_#D8C7B4]" />
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[13px] font-black text-[#25352E]">{event.action}</p>
+                      <p className="mt-1 text-[12px] font-bold text-[#75685A]">{event.actor} · {event.source}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-2 py-1 text-[11px] font-black text-[#6F6254]">{event.when}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
       </section>

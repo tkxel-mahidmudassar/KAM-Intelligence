@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { notifications, unreadCount, markRead, markAllRead, dismissNotification } = useNotifications();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const canAccessSettings = role === "KAM" || role === "EXECUTIVE" || role === "ADMIN";
+  const canAccessSettings = role === "KAM" || role === "EXECUTIVE";
   const hasLegacyDemoSession = Boolean(userId?.startsWith("demo-"));
 
   useEffect(() => {

@@ -119,14 +119,14 @@ async function buildXlsx(markdown: string, title: string) {
   zip.file("docProps/core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${escapeXml(title)}</dc:title>
-  <dc:creator>Kamazing T Man</dc:creator>
-  <cp:lastModifiedBy>Kamazing T Man</cp:lastModifiedBy>
+  <dc:creator>DotKAM T Man</dc:creator>
+  <cp:lastModifiedBy>DotKAM T Man</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:modified>
 </cp:coreProperties>`);
   zip.file("docProps/app.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>Kamazing</Application>
+  <Application>DotKAM</Application>
 </Properties>`);
   zip.file("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -219,14 +219,14 @@ async function buildDocx(markdown: string, title: string) {
   zip.file("docProps/core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${escapeXml(title)}</dc:title>
-  <dc:creator>Kamazing T Man</dc:creator>
-  <cp:lastModifiedBy>Kamazing T Man</cp:lastModifiedBy>
+  <dc:creator>DotKAM T Man</dc:creator>
+  <cp:lastModifiedBy>DotKAM T Man</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${createdAt}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${createdAt}</dcterms:modified>
 </cp:coreProperties>`);
   zip.file("docProps/app.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>Kamazing</Application>
+  <Application>DotKAM</Application>
 </Properties>`);
   zip.file("word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -358,14 +358,14 @@ async function buildPptx(markdown: string, title: string) {
   zip.file("docProps/core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${escapeXml(title)}</dc:title>
-  <dc:creator>Kamazing T Man</dc:creator>
-  <cp:lastModifiedBy>Kamazing T Man</cp:lastModifiedBy>
+  <dc:creator>DotKAM T Man</dc:creator>
+  <cp:lastModifiedBy>DotKAM T Man</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:modified>
 </cp:coreProperties>`);
   zip.file("docProps/app.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>Kamazing</Application>
+  <Application>DotKAM</Application>
   <Slides>${slides.length}</Slides>
   <Notes>${slides.length}</Notes>
 </Properties>`);
@@ -406,7 +406,7 @@ async function buildPptx(markdown: string, title: string) {
   <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld>
   <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
 </p:notesMaster>`);
-  zip.file("ppt/theme/theme1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Kamazing"><a:themeElements><a:clrScheme name="Kamazing"><a:dk1><a:srgbClr val="1F2722"/></a:dk1><a:lt1><a:srgbClr val="FFF9EF"/></a:lt1><a:dk2><a:srgbClr val="25352E"/></a:dk2><a:lt2><a:srgbClr val="FBF7EF"/></a:lt2><a:accent1><a:srgbClr val="25352E"/></a:accent1><a:accent2><a:srgbClr val="7FB99A"/></a:accent2><a:accent3><a:srgbClr val="D8CAB9"/></a:accent3><a:accent4><a:srgbClr val="D7A24A"/></a:accent4><a:accent5><a:srgbClr val="D66A5B"/></a:accent5><a:accent6><a:srgbClr val="6F6254"/></a:accent6><a:hlink><a:srgbClr val="25352E"/></a:hlink><a:folHlink><a:srgbClr val="6F6254"/></a:folHlink></a:clrScheme><a:fontScheme name="Kamazing"><a:majorFont><a:latin typeface="Aptos Display"/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/></a:minorFont></a:fontScheme><a:fmtScheme name="Kamazing"><a:fillStyleLst><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`);
+  zip.file("ppt/theme/theme1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="DotKAM"><a:themeElements><a:clrScheme name="DotKAM"><a:dk1><a:srgbClr val="1F2722"/></a:dk1><a:lt1><a:srgbClr val="FFF9EF"/></a:lt1><a:dk2><a:srgbClr val="25352E"/></a:dk2><a:lt2><a:srgbClr val="FBF7EF"/></a:lt2><a:accent1><a:srgbClr val="25352E"/></a:accent1><a:accent2><a:srgbClr val="7FB99A"/></a:accent2><a:accent3><a:srgbClr val="D8CAB9"/></a:accent3><a:accent4><a:srgbClr val="D7A24A"/></a:accent4><a:accent5><a:srgbClr val="D66A5B"/></a:accent5><a:accent6><a:srgbClr val="6F6254"/></a:accent6><a:hlink><a:srgbClr val="25352E"/></a:hlink><a:folHlink><a:srgbClr val="6F6254"/></a:folHlink></a:clrScheme><a:fontScheme name="DotKAM"><a:majorFont><a:latin typeface="Aptos Display"/></a:majorFont><a:minorFont><a:latin typeface="Aptos"/></a:minorFont></a:fontScheme><a:fmtScheme name="DotKAM"><a:fillStyleLst><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`);
 
   slides.forEach((slide, index) => {
     const slideNumber = index + 1;

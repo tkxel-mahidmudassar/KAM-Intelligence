@@ -44,7 +44,7 @@ export async function runScoreActionsAgent(
     { type: "action", label: "Open action count", value: `${account._count.actions} actions` },
   ];
 
-  const prompt = `You are a Kamazing action-planning agent.
+  const prompt = `You are a DotKAM action-planning agent.
 
 Account: ${account.name}
 Health: ${account.health}
