@@ -1,0 +1,55 @@
+Account: Atlas Demo Badge Account
+Industry: Enterprise SaaS and customer operations
+Region: North America
+ARR: $2.6M
+Contract start: 2025-01-01
+Contract end / renewal: 2027-01-01
+Executive sponsor: Maya Chen, Chief Customer Officer
+Primary contact: Daniel Brooks, VP Customer Operations
+
+Purpose of this file:
+This is a POC test document designed to show every important UI badge in one extraction:
+Healthy / Excellent account status, CRITICAL signal, Action Needed signal, and INFO signal.
+The three signals below are demo-only UI test signals and should not lower the account's underlying health score. For scoring, use the relationship, contract, delivery, customer success, resource, financial, and growth evidence in this document.
+
+Relationship health:
+The account has strong executive sponsorship, weekly operating cadence, and quarterly executive reviews. The customer champion is active and has introduced Tkxel to two additional business units.
+
+Contract health:
+The renewal path is clear. The agreement has a two-year term, annual price review language, and a documented expansion SOW process. Procurement has confirmed there is no current termination notice.
+
+Project health:
+The current implementation is generally on track. Sprint delivery is predictable and the customer has accepted the latest release. One integration dependency requires action before the next milestone.
+
+Customer success:
+Latest CSAT is 4.8 out of 5. The customer specifically praised delivery communication, response time, and roadmap alignment.
+
+Resource health:
+The delivery team is stable, fully staffed, and has backup coverage for architecture, QA, DevOps, and product analysis.
+
+Financial health:
+Invoices are paid on time. There is no outstanding billing dispute. ARR is stable and expansion discussions are active.
+
+Whitespace and growth:
+The customer is evaluating analytics automation, AI-assisted support workflows, and managed QA expansion. An expansion workshop is scheduled for next month.
+
+POC badge test signals to extract exactly:
+- Severity: CRITICAL
+  Type: CUSTOM
+  Title: Executive escalation simulation
+  Evidence: Demo-only critical signal for badge testing. A critical integration escalation is marked here so the UI can show the dark red CRITICAL badge.
+
+- Severity: WARNING
+  Type: CUSTOM
+  Title: Milestone action needed
+  Evidence: Demo-only warning signal for badge testing. The integration dependency must be resolved before the next milestone, so the UI should display this as Action Needed.
+
+- Severity: INFO
+  Type: UPSELL_OPPORTUNITY
+  Title: Expansion workshop scheduled
+  Evidence: Demo-only info signal for badge testing. The customer has a planned expansion workshop for analytics automation and AI-assisted support workflows.
+
+Expected visual result:
+- Overall account status should be Healthy or Excellent where possible.
+- Signals should include one CRITICAL badge, one Action Needed badge, and one INFO badge.
+- This file is intentionally mixed for UI testing and should not be treated as a realistic account-risk profile.

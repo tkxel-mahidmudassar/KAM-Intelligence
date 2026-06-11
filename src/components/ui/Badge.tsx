@@ -14,12 +14,12 @@ const badgeVariants = cva(
         /* ── Neutral / brand ── */
         neutral: "bg-[var(--bg-surface-2)] text-[var(--text-secondary)] border border-[var(--border-subtle)]",
         brand:   "bg-[#EEF4FE] text-[#0755E9] border border-[#B3CFFD] dark:bg-[#0D1E42] dark:text-[#4D8BFF] dark:border-[#1A3060]",
-        info:    "bg-[#DCFCE7] text-[#166534] border border-[#86EFAC] shadow-[0_0_0_1px_rgba(22,101,52,0.05),0_6px_14px_-10px_rgba(22,101,52,0.55)] dark:bg-[rgba(34,197,94,0.16)] dark:text-[#86EFAC] dark:border-[rgba(74,222,128,0.45)]",
+        info:    "bg-[#15803D] text-white border border-[#166534] shadow-[0_0_0_1px_rgba(21,128,61,0.10),0_6px_14px_-10px_rgba(21,128,61,0.80)] dark:bg-[#15803D] dark:text-white dark:border-[#86EFAC]",
         outline: "border border-[var(--border-default)] bg-transparent text-[var(--text-secondary)]",
 
         /* ── Score states ── */
         "ai-proposed":      "bg-[#EEF4FE] text-[#0647C7] border border-[#B3CFFD] dark:bg-[#0D1E42] dark:text-[#7AAEFF] dark:border-[#1A3060]",
-        "human-accepted":   "bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0] dark:bg-[rgba(34,197,94,0.12)] dark:text-[#4ADE80] dark:border-[rgba(34,197,94,0.25)]",
+        "human-accepted":   "bg-[#15803D] text-white border border-[#166534] dark:bg-[#15803D] dark:text-white dark:border-[#86EFAC]",
         "human-overridden": "bg-[#F5F3FF] text-[#6D28D9] border border-[#DDD6FE] dark:bg-[rgba(109,40,217,0.15)] dark:text-[#A78BFA] dark:border-[rgba(109,40,217,0.3)]",
 
         /* ── Action priorities — visually distinct from each other ── */
