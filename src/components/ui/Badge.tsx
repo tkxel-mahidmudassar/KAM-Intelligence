@@ -8,7 +8,7 @@ const badgeVariants = cva(
       variant: {
         /* ── RAG status ── */
         healthy:  "bg-[#14532D] text-white border border-[#166534] shadow-[0_0_0_1px_rgba(20,83,45,0.08),0_6px_14px_-10px_rgba(20,83,45,0.85)] dark:bg-[#166534] dark:text-[#ECFDF5] dark:border-[#22C55E]",
-        "at-risk": "bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5] shadow-[0_0_0_1px_rgba(153,27,27,0.06),0_6px_14px_-10px_rgba(153,27,27,0.65)] dark:bg-[rgba(239,68,68,0.20)] dark:text-[#FECACA] dark:border-[rgba(248,113,113,0.55)]",
+        "at-risk": "bg-[#DC2626] text-white border border-[#B91C1C] shadow-[0_0_0_1px_rgba(185,28,28,0.12),0_6px_14px_-10px_rgba(185,28,28,0.90)] dark:bg-[#DC2626] dark:text-white dark:border-[#FCA5A5]",
         critical: "bg-[#7F1D1D] text-white border border-[#991B1B] shadow-[0_0_0_1px_rgba(127,29,29,0.10),0_6px_14px_-10px_rgba(127,29,29,0.95)] dark:bg-[#991B1B] dark:text-[#FEF2F2] dark:border-[#F87171]",
 
         /* ── Neutral / brand ── */
