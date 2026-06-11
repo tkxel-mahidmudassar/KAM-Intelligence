@@ -7,13 +7,14 @@ const badgeVariants = cva(
     variants: {
       variant: {
         /* ── RAG status ── */
-        healthy:  "bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0] dark:bg-[rgba(34,197,94,0.12)] dark:text-[#4ADE80] dark:border-[rgba(34,197,94,0.25)]",
-        "at-risk": "bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A] dark:bg-[rgba(245,158,11,0.12)] dark:text-[#FCD34D] dark:border-[rgba(245,158,11,0.25)]",
-        critical: "bg-[#FEF2F2] text-[#B91C1C] border border-[#FECACA] dark:bg-[rgba(239,68,68,0.12)] dark:text-[#F87171] dark:border-[rgba(239,68,68,0.25)]",
+        healthy:  "bg-[#14532D] text-white border border-[#166534] shadow-[0_0_0_1px_rgba(20,83,45,0.08),0_6px_14px_-10px_rgba(20,83,45,0.85)] dark:bg-[#166534] dark:text-[#ECFDF5] dark:border-[#22C55E]",
+        "at-risk": "bg-[#FEE2E2] text-[#991B1B] border border-[#FCA5A5] shadow-[0_0_0_1px_rgba(153,27,27,0.06),0_6px_14px_-10px_rgba(153,27,27,0.65)] dark:bg-[rgba(239,68,68,0.20)] dark:text-[#FECACA] dark:border-[rgba(248,113,113,0.55)]",
+        critical: "bg-[#7F1D1D] text-white border border-[#991B1B] shadow-[0_0_0_1px_rgba(127,29,29,0.10),0_6px_14px_-10px_rgba(127,29,29,0.95)] dark:bg-[#991B1B] dark:text-[#FEF2F2] dark:border-[#F87171]",
 
         /* ── Neutral / brand ── */
         neutral: "bg-[var(--bg-surface-2)] text-[var(--text-secondary)] border border-[var(--border-subtle)]",
         brand:   "bg-[#EEF4FE] text-[#0755E9] border border-[#B3CFFD] dark:bg-[#0D1E42] dark:text-[#4D8BFF] dark:border-[#1A3060]",
+        info:    "bg-[#DCFCE7] text-[#166534] border border-[#86EFAC] shadow-[0_0_0_1px_rgba(22,101,52,0.05),0_6px_14px_-10px_rgba(22,101,52,0.55)] dark:bg-[rgba(34,197,94,0.16)] dark:text-[#86EFAC] dark:border-[rgba(74,222,128,0.45)]",
         outline: "border border-[var(--border-default)] bg-transparent text-[var(--text-secondary)]",
 
         /* ── Score states ── */

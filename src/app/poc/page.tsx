@@ -90,6 +90,17 @@ function statusVariant(status: string): "critical" | "at-risk" | "healthy" | "ne
   return "neutral";
 }
 
+function signalVariant(severity: string): "critical" | "at-risk" | "info" {
+  const normalized = severity.toUpperCase();
+  if (normalized === "CRITICAL") return "critical";
+  if (normalized === "INFO") return "info";
+  return "at-risk";
+}
+
+function signalLabel(severity: string): string {
+  return severity.toUpperCase() === "WARNING" ? "Action Needed" : severity;
+}
+
 function ScoreBar({ value }: { value: number }) {
   const percent = Math.max(0, Math.min(100, (value / 5) * 100));
   return (
@@ -471,7 +482,7 @@ export default function PocPage() {
                               <p className="text-[15px] font-black tracking-[-0.02em]">{signal.title}</p>
                               <p className="mt-1 text-xs font-semibold text-[var(--text-muted)]">{signal.type}</p>
                             </div>
-                            <Badge variant={signal.severity === "CRITICAL" ? "critical" : signal.severity === "INFO" ? "brand" : "at-risk"}>{signal.severity}</Badge>
+                            <Badge variant={signalVariant(signal.severity)}>{signalLabel(signal.severity)}</Badge>
                           </div>
                           <p className="mt-3 text-sm font-medium text-[var(--text-secondary)]">{signal.evidence}</p>
                         </article>
