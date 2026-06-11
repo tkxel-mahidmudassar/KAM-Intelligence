@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Bell, FileText, Link2, Music2, ShieldAlert, Trash2, Upload, UserPlus } from "lucide-react";
+import { Archive, Bell, FileText, Link2, Loader2, Music2, ShieldAlert, Trash2, Upload, UserPlus } from "lucide-react";
 import { defaultKpiWeights, integrationMocks } from "@/lib/v2/workspaceData";
 import { useAccountCache } from "@/context/AccountCacheContext";
 import { useNotifications } from "@/context/NotificationContext";
@@ -70,7 +70,7 @@ function accountName(account: Record<string, unknown>) {
 const auditEvents = [
   { actor: "Sarah Chen", action: "Default KPI weights saved", when: "Today, 10:12 AM", source: "Settings" },
   { actor: "Aisha Khan", action: "NovaGrid account creation submitted", when: "Today, 9:44 AM", source: "Portfolio" },
-  { actor: "T Man", action: "Project Health Score playbook parsed", when: "Yesterday, 4:18 PM", source: "Playbooks" },
+  { actor: "T-Man", action: "Project Health Score playbook parsed", when: "Yesterday, 4:18 PM", source: "Playbooks" },
   { actor: "Omar Farooq", action: "Maersk recovery plan task dismissed with reason", when: "Jun 7, 2:02 PM", source: "Account journey" },
 ];
 
@@ -93,11 +93,15 @@ export function SettingsPage() {
   const [savingWeights, setSavingWeights] = useState(false);
   const [allocationSaving, setAllocationSaving] = useState<Record<string, boolean>>({});
   const [integrationStatuses, setIntegrationStatuses] = useState<Record<string, "connected" | "needs setup">>(
-    Object.fromEntries(integrationMocks.map((name, index) => [name, index < 2 ? "connected" : "needs setup"])),
+    Object.fromEntries(integrationMocks.map((name) => [name, "connected"])),
   );
   const [playbooks, setPlaybooks] = useState<PlaybookRow[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [playbookUploading, setPlaybookUploading] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState("");
+  const [integrationSavingName, setIntegrationSavingName] = useState("");
+  const [archivingPlaybookId, setArchivingPlaybookId] = useState("");
   const [jingleMuted, setJingleMuted] = useState(false);
   const [ambientMusicMuted, setAmbientMusicMutedState] = useState(false);
 
@@ -111,7 +115,8 @@ export function SettingsPage() {
   }).length, [accounts]);
   const connectedIntegrations = useMemo(() => Object.values(integrationStatuses).filter((item) => item === "connected").length, [integrationStatuses]);
   const canSaveWeights = totalWeight === 100 && !savingWeights;
-  const inviteRoleOptions = role === "EXECUTIVE" ? ["KAM"] : ["ASSOCIATE", "KAM", "EXECUTIVE"];
+  const inviteRoleOptions: Role[] = role === "EXECUTIVE" ? ["KAM"] : ["ASSOCIATE"];
+  const defaultInviteRole: Role = role === "EXECUTIVE" ? "KAM" : "ASSOCIATE";
 
   useEffect(() => {
     if (!canAccessSettings || !userId) return;
@@ -135,9 +140,7 @@ export function SettingsPage() {
         if (!playbooksResponse.ok) throw new Error(playbooksPayload.error || "Playbooks could not be loaded");
         if (cancelled) return;
         setWeights(toSettingsWeights(settingsPayload.data.scoreWeights ?? {}));
-        if (settingsPayload.data.integrationSettings && typeof settingsPayload.data.integrationSettings === "object") {
-          setIntegrationStatuses(settingsPayload.data.integrationSettings as Record<string, "connected" | "needs setup">);
-        }
+        setIntegrationStatuses(Object.fromEntries(integrationMocks.map((name) => [name, "connected"])));
         setTeam((usersPayload.data?.users ?? []) as TeamUser[]);
         setPlaybooks((playbooksPayload.data ?? []) as PlaybookRow[]);
       } catch (loadError) {
@@ -159,6 +162,14 @@ export function SettingsPage() {
     setJingleMuted((window.localStorage.getItem("kamazing:login-jingle-muted") ?? window.localStorage.getItem("dotkam:login-jingle-muted")) === "true");
     setAmbientMusicMutedState(isAmbientMusicMuted());
   }, []);
+
+  useEffect(() => {
+    setNewUser((current) => {
+      if (role === "EXECUTIVE" && current.role !== "KAM") return { ...current, role: "KAM" };
+      if (role !== "EXECUTIVE" && current.role !== "ASSOCIATE") return { ...current, role: "ASSOCIATE" };
+      return current;
+    });
+  }, [role]);
 
   if (!canAccessSettings) {
     return (
@@ -206,6 +217,7 @@ export function SettingsPage() {
   }
 
   async function createUser() {
+    if (creatingUser) return;
     const name = newUser.name.trim() || newUser.email.split("@")[0]?.replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()).trim();
     if (!name || !newUser.email.trim() || !newUser.initialPassword.trim()) {
       setError("Name, email, and initial password are required.");
@@ -213,6 +225,7 @@ export function SettingsPage() {
     }
     setError("");
     setStatus("");
+    setCreatingUser(true);
     try {
       const response = await fetch("/api/users", {
         method: "POST",
@@ -228,7 +241,7 @@ export function SettingsPage() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "User could not be created");
       setTeam((current) => [payload.data as TeamUser, ...current]);
-      setNewUser({ name: "", email: "", role: "ASSOCIATE", initialPassword: "" });
+      setNewUser({ name: "", email: "", role: defaultInviteRole, initialPassword: "" });
       setStatus(`${name} was added with an initial password.`);
       fireNotification({
         id: `user-created-${payload.data.id}`,
@@ -240,12 +253,16 @@ export function SettingsPage() {
       });
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "User could not be created");
+    } finally {
+      setCreatingUser(false);
     }
   }
 
   async function deleteUser(user: TeamUser) {
+    if (deletingUserId) return;
     setError("");
     setStatus("");
+    setDeletingUserId(user.id);
     try {
       const response = await fetch(`/api/users/${user.id}`, {
         method: "DELETE",
@@ -260,6 +277,8 @@ export function SettingsPage() {
       void refreshAccounts();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "User could not be removed");
+    } finally {
+      setDeletingUserId("");
     }
   }
 
@@ -288,13 +307,12 @@ export function SettingsPage() {
   }
 
   async function toggleIntegration(name: string) {
-    const nextStatuses = {
-      ...integrationStatuses,
-      [name]: integrationStatuses[name] === "connected" ? "needs setup" as const : "connected" as const,
-    };
+    if (integrationSavingName) return;
+    const nextStatuses = Object.fromEntries(integrationMocks.map((item) => [item, "connected" as const]));
     setIntegrationStatuses(nextStatuses);
     setError("");
     setStatus("");
+    setIntegrationSavingName(name);
     try {
       const response = await fetch("/api/settings", {
         method: "PUT",
@@ -303,10 +321,12 @@ export function SettingsPage() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Integration settings could not be saved");
-      setIntegrationStatuses(payload.data.integrationSettings as Record<string, "connected" | "needs setup">);
-      setStatus(`${name} marked as ${nextStatuses[name]}.`);
+      setIntegrationStatuses(nextStatuses);
+      setStatus(`${name} is connected.`);
     } catch (toggleError) {
       setError(toggleError instanceof Error ? toggleError.message : "Integration settings could not be saved");
+    } finally {
+      setIntegrationSavingName("");
     }
   }
 
@@ -336,8 +356,10 @@ export function SettingsPage() {
   }
 
   async function archivePlaybook(playbook: PlaybookRow) {
+    if (archivingPlaybookId) return;
     setError("");
     setStatus("");
+    setArchivingPlaybookId(playbook.id);
     try {
       const response = await fetch(`/api/playbooks/${playbook.id}`, {
         method: "PATCH",
@@ -350,6 +372,8 @@ export function SettingsPage() {
       setStatus(`${playbook.title} archived.`);
     } catch (archiveError) {
       setError(archiveError instanceof Error ? archiveError.message : "Playbook could not be archived");
+    } finally {
+      setArchivingPlaybookId("");
     }
   }
 
@@ -397,8 +421,9 @@ export function SettingsPage() {
                 type="button"
                 disabled={!canSaveWeights}
                 onClick={saveWeights}
-                className="rounded-full bg-[#25352E] px-4 py-2 text-[12px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
+                className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[12px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
               >
+                {savingWeights ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 {savingWeights ? "Saving..." : "Save weights"}
               </button>
             </div>
@@ -421,13 +446,14 @@ export function SettingsPage() {
                 <button
                   key={name}
                   type="button"
+                  disabled={Boolean(integrationSavingName)}
                   onClick={() => void toggleIntegration(name)}
-                  className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] px-3 py-2 text-left transition hover:border-[#25352E]/45"
+                  className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] px-3 py-2 text-left transition hover:border-[#25352E]/45 disabled:cursor-not-allowed disabled:opacity-65"
                 >
                   <span className="truncate text-[13px] font-black text-[#25352E]">{name}</span>
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-black ${integrationStatuses[name] === "connected" ? "bg-[#EDF8EE] text-[#1F6C42]" : "bg-[#F2E8D8] text-[#6E5F4F]"}`}>
-                    <Link2 className="h-3.5 w-3.5" />
-                    {integrationStatuses[name]}
+                    {integrationSavingName === name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+                    {integrationSavingName === name ? "Updating..." : integrationStatuses[name]}
                   </span>
                 </button>
               ))}
@@ -477,9 +503,9 @@ export function SettingsPage() {
                 ))}
               </select>
               <input value={newUser.initialPassword} onChange={(event) => setNewUser((current) => ({ ...current, initialPassword: event.target.value }))} placeholder="Initial password" className="h-10 rounded-full border border-[#D7C6B4] bg-[#FFFCF6] px-3 text-[12px] font-bold outline-none" />
-              <button type="button" onClick={createUser} className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#25352E] px-4 text-[12px] font-black text-[#FFF9EF]">
-                <UserPlus className="h-3.5 w-3.5" />
-                Add
+              <button type="button" onClick={() => void createUser()} disabled={creatingUser} className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#25352E] px-4 text-[12px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/45">
+                {creatingUser ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                {creatingUser ? "Adding..." : "Add"}
               </button>
             </div>
             <div className="mt-4 grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -493,8 +519,8 @@ export function SettingsPage() {
                         <p className="mt-1 text-[11px] font-black text-[#8A7563]">{person.role}</p>
                       </div>
                       {person.id !== userId ? (
-                        <button type="button" onClick={() => deleteUser(person)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#A04436]">
-                          <Trash2 className="h-3.5 w-3.5" />
+                        <button type="button" onClick={() => void deleteUser(person)} disabled={Boolean(deletingUserId)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#A04436] disabled:cursor-not-allowed disabled:opacity-55">
+                          {deletingUserId === person.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
                       ) : null}
                     </div>
@@ -528,6 +554,11 @@ export function SettingsPage() {
                             <option key={associate.id} value={associate.id}>{associate.name}</option>
                           ))}
                         </select>
+                        {allocationSaving[accountId] ? (
+                          <span className="text-right text-[11px] font-black text-[#8A7563] sm:col-start-2">
+                            Saving...
+                          </span>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -539,9 +570,9 @@ export function SettingsPage() {
           <Panel title="Global playbooks" aside={`${playbooks.length} shown`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-2 text-[12px] font-black text-[#25352E]">
-                <Upload className="h-3.5 w-3.5" />
+                {playbookUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                 {playbookUploading ? "Uploading..." : "Upload playbook"}
-                <input type="file" className="hidden" accept=".pdf,.doc,.docx,.txt,.md,.xls,.xlsx" onChange={(event) => {
+                <input type="file" className="hidden" disabled={playbookUploading} accept=".pdf,.doc,.docx,.txt,.md,.xls,.xlsx" onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.currentTarget.value = "";
                   if (file) void uploadPlaybook(file);
@@ -569,8 +600,8 @@ export function SettingsPage() {
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="rounded-full border border-[#D8C7B4] bg-[#FFFCF6] px-2 py-1 text-[10px] font-black text-[#6F6254]">{playbook.status}</span>
                       {playbook.status !== "ARCHIVED" ? (
-                        <button type="button" onClick={() => archivePlaybook(playbook)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#6F6254]">
-                          <Archive className="h-3.5 w-3.5" />
+                        <button type="button" onClick={() => void archivePlaybook(playbook)} disabled={Boolean(archivingPlaybookId)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DECFC0] text-[#6F6254] disabled:cursor-not-allowed disabled:opacity-55">
+                          {archivingPlaybookId === playbook.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
                         </button>
                       ) : null}
                     </div>

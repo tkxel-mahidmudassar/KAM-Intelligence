@@ -116,7 +116,7 @@ Return JSON:
       "dueDate": "optional YYYY-MM-DD only for account-specific journeys; use offsetDays for templates",
       "recurrence": "Once, Weekly, Monthly, Quarterly, etc.",
       "proposedValue": "specific journey item change being proposed",
-      "source": "source file, prior account journey, Salesforce mock, or user instruction",
+      "source": "uploaded evidence, prior account journey, current draft, or user instruction",
       "confidence": 0.85,
       "reasoningSummary": "short explanation for the journey change",
       "approvalState": "draft | proposed | needs_user_confirmation | associate_requested | kam_review | approved | denied | dismissed"
@@ -130,6 +130,8 @@ ${v2AgentBehaviorPrompt}
 Journey-specific rules:
 - If mode is generate, return a complete recommended journey.
 - If mode is enhance, preserve useful existing cadence but improve gaps, dates, recurrence, and titles based on the instruction.
+- Use only supplied account context, uploaded evidence, current journey items, and user instructions. Do not rely on Salesforce mock data or implied CRM records.
+- If uploaded files only include file names and no extracted text, treat those names as directional evidence only and ask for missing proof instead of fabricating journey facts.
 - For configuration-style requests, suggest diffs first unless the user explicitly instructs you to apply the change.
 - For default journey configuration, use offsetDays as days after account creation. Do not collapse new items to Day 0 unless the user explicitly asks for account creation day.
 - Use only Meeting, QBR, and To-do item types.

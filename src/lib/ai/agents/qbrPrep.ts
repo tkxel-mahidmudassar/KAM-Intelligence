@@ -5,6 +5,12 @@ import type { QbrSession } from "@prisma/client";
 
 type QbrSessionWithItems = QbrSession & { items: { id: string; order: number; category: string | null; title: string; content: string | null; status: string | null }[] };
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 export async function runQbrPrepAgent(
   accountId: string,
   sessionType: string,
@@ -30,7 +36,7 @@ export async function runQbrPrepAgent(
 
   if (!account) throw new Error("Account not found");
 
-  const scores = account.kamScores.map((s) => `${s.overall}/100 (${s.health})`).join(", ");
+  const scores = account.kamScores.map((s) => `${scoreOutOfFiveLabel(s.overall)}/5 (${s.health})`).join(", ");
   const lastSession = account.qbrSessions[0];
   const monthYear   = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const sessionTitle = requestedTitle || `${account.name} ${sessionType} - ${monthYear}`;

@@ -47,11 +47,22 @@ function normalizeTemplate(template: unknown) {
   };
 }
 
+function normalizeDocumentGenerationRequest(value: unknown) {
+  if (!isObject(value)) return null;
+  const documentType = String(value.documentType || "").trim();
+  const outputFormat = String(value.outputFormat || "").trim();
+  if (!documentType) return null;
+  return {
+    documentType,
+    outputFormat,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     if (!isObject(body)) {
-      return NextResponse.json({ error: "Invalid T Man payload" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid T-Man payload" }, { status: 400 });
     }
 
     const activeAccount = normalizeAccount(body.activeAccount);
@@ -80,6 +91,34 @@ export async function POST(req: NextRequest) {
 
     if (!input.message.trim()) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    }
+
+    const directDocumentRequest = normalizeDocumentGenerationRequest(body.generateDocument);
+    if (directDocumentRequest) {
+      const generatedDocument = await generateV2Document({
+        documentType: directDocumentRequest.documentType,
+        userRequest: `${input.message}\n\nRequested file format: ${directDocumentRequest.outputFormat || "DOCX"}`,
+        role: input.role,
+        activeAccount: input.activeAccount,
+        accounts: input.accounts,
+        attachments: input.attachments,
+        templates: input.templates,
+        conversation: input.conversation,
+      });
+
+      return NextResponse.json({
+        degraded: false,
+        intent: "document_request",
+        reply: `Generated ${generatedDocument.title}.`,
+        generatedDocument,
+        documentRequest: {
+          type: directDocumentRequest.documentType,
+          targetAccount: input.activeAccount?.name,
+          missingInputs: [],
+          nextAction: "Preview or download the generated document.",
+          canGenerate: true,
+        },
+      });
     }
 
     if (shouldUseCammieWebResearch(input.message)) {
@@ -132,7 +171,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "T Man failed",
+        error: error instanceof Error ? error.message : "T-Man failed",
       },
       { status: 500 },
     );

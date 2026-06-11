@@ -19,6 +19,12 @@ interface OppResult {
   nextAction: string | null;
 }
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 export async function runOpportunityAnalysisAgent(
   accountId: string,
 ): Promise<AgentResult<Opportunity[]>> {
@@ -47,9 +53,9 @@ export async function runOpportunityAnalysisAgent(
 
   // Build sources list from fetched DB data
   const sources: AgentSource[] = [
-    { type: "score",   label: "Overall score",   value: score ? `${score.overall}/100 (${account.health})` : "N/A" },
-    { type: "score",   label: "Whitespace score", value: score?.whitespace != null ? `${score.whitespace}/100` : "N/A" },
-    { type: "score",   label: "CSAT score",       value: score?.csat != null ? `${score.csat}/100` : "N/A" },
+    { type: "score",   label: "Overall score",   value: score ? `${scoreOutOfFiveLabel(score.overall)}/5 (${account.health})` : "N/A" },
+    { type: "score",   label: "Whitespace score", value: score?.whitespace != null ? `${scoreOutOfFiveLabel(score.whitespace)}/5` : "N/A" },
+    { type: "score",   label: "CSAT score",       value: score?.csat != null ? `${scoreOutOfFiveLabel(score.csat)}/5` : "N/A" },
     ...account.signals.map((s): AgentSource => ({ type: "signal", label: `Signal: ${s.title}`, value: s.severity })),
     ...account.kpiDimensions.slice(0, 6).map((k): AgentSource => ({ type: "kpi", label: k.name, value: `${k.value}${k.unit ?? ""}` })),
     ...(account.kycVersions[0]?.strategicGoals ? [{ type: "kyc" as const, label: "Strategic goals", value: account.kycVersions[0].strategicGoals?.slice(0, 80) }] : []),
@@ -62,7 +68,7 @@ export async function runOpportunityAnalysisAgent(
 
 Account: ${account.name}
 Industry: ${account.industry ?? "N/A"} | ARR: $${account.arr.toLocaleString()} | Health: ${account.health}
-Score: ${score?.overall ?? "N/A"}/100 | Whitespace: ${score?.whitespace ?? "N/A"}/100 | CSAT: ${score?.csat ?? "N/A"}/100
+Score: ${scoreOutOfFiveLabel(score?.overall)}/5 | Whitespace: ${scoreOutOfFiveLabel(score?.whitespace)}/5 | CSAT: ${scoreOutOfFiveLabel(score?.csat)}/5
 Active signals: ${account.signals.map((s) => s.title).join("; ") || "none"}
 KPIs: ${account.kpiDimensions.slice(0, 6).map((k) => `${k.name}: ${k.value}${k.unit ?? ""}`).join(", ")}
 Strategic goals: ${account.kycVersions[0]?.strategicGoals ?? "N/A"}

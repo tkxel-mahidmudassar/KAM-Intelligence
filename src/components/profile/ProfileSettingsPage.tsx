@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, LockKeyhole, Mail, UserRound } from "lucide-react";
+import { Check, Loader2, LockKeyhole, Mail, UserRound } from "lucide-react";
 import { useRole } from "@/context/RoleContext";
 
 export function ProfileSettingsPage() {
@@ -12,6 +12,8 @@ export function ProfileSettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     setName(userName || "Sarah Chen");
@@ -27,18 +29,30 @@ export function ProfileSettingsPage() {
   const canSaveProfile = name.trim().length > 1 && email.includes("@");
   const canChangePassword = currentPassword.trim().length > 0 && newPassword.length >= 8 && newPassword === confirmPassword;
 
-  function saveProfile() {
-    if (!canSaveProfile || !userId) return;
-    setUser(userId, name.trim(), email.trim(), role);
-    setStatus("Profile details saved.");
+  async function saveProfile() {
+    if (!canSaveProfile || !userId || savingProfile) return;
+    setSavingProfile(true);
+    try {
+      setUser(userId, name.trim(), email.trim(), role);
+      setStatus("Profile details saved.");
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
-  function changePassword() {
-    if (!canChangePassword) return;
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setStatus("Password change saved for this demo session.");
+  async function changePassword() {
+    if (!canChangePassword || changingPassword) return;
+    setChangingPassword(true);
+    try {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setStatus("Password change saved for this demo session.");
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    } finally {
+      setChangingPassword(false);
+    }
   }
 
   return (
@@ -101,11 +115,12 @@ export function ProfileSettingsPage() {
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
-                disabled={!canSaveProfile}
-                onClick={saveProfile}
-                className="rounded-full bg-[#25352E] px-5 py-3 text-[13px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
+                disabled={!canSaveProfile || savingProfile}
+                onClick={() => void saveProfile()}
+                className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-5 py-3 text-[13px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
               >
-                Save profile
+                {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {savingProfile ? "Saving..." : "Save profile"}
               </button>
             </div>
           </div>
@@ -144,11 +159,12 @@ export function ProfileSettingsPage() {
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
-                disabled={!canChangePassword}
-                onClick={changePassword}
-                className="rounded-full bg-[#25352E] px-5 py-3 text-[13px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
+                disabled={!canChangePassword || changingPassword}
+                onClick={() => void changePassword()}
+                className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-5 py-3 text-[13px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#AFA79C]"
               >
-                Change password
+                {changingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {changingPassword ? "Updating..." : "Change password"}
               </button>
             </div>
           </div>

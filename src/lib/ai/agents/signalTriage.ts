@@ -8,6 +8,12 @@ interface TriageResult {
   suggestedAction?: Action;
 }
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 export async function runSignalTriageAgent(
   accountId: string,
   signalId: string,
@@ -30,7 +36,7 @@ export async function runSignalTriageAgent(
     return { output: { signal: signal!, suggestedAction: undefined }, sources: [], steps, model: "skipped", totalLatencyMs: 0 };
   }
 
-  const scoreHistory = account.kamScores.map((s) => `${s.overall}/100 (${s.health})`).join(", ");
+  const scoreHistory = account.kamScores.map((s) => `${scoreOutOfFiveLabel(s.overall)}/5 (${s.health})`).join(", ");
   const openActions  = account.actions.map((a) => a.title).join("; ") || "none";
 
   const sources: AgentSource[] = [

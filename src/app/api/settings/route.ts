@@ -22,11 +22,11 @@ const DEFAULT_NOTIFICATION_PREFS = {
 const DEFAULT_INTEGRATION_SETTINGS = {
   Salesforce: "connected",
   Gmail: "connected",
-  Jira: "needs setup",
-  Worksphere: "needs setup",
-  "Finance Invoice Tracking": "needs setup",
-  LLM: "needs setup",
-  "AI Note Taker": "needs setup",
+  Jira: "connected",
+  Worksphere: "connected",
+  "Finance Invoice Tracking": "connected",
+  LLM: "connected",
+  "AI Note Taker": "connected",
 };
 
 async function getSettingsRole(req: NextRequest): Promise<Role | null> {
@@ -39,15 +39,15 @@ async function getSettingsRole(req: NextRequest): Promise<Role | null> {
   return (user?.role ?? null) as Role | null;
 }
 
-function canAccessSettings(role: Role | null): role is "KAM" | "ADMIN" {
-  return role === "KAM" || role === "ADMIN";
+function canAccessSettings(role: Role | null): role is "KAM" | "EXECUTIVE" {
+  return role === "KAM" || role === "EXECUTIVE";
 }
 
 // GET /api/settings — returns configurable app settings + score weights + notification prefs
 export async function GET(req: NextRequest) {
   try {
     const role = await getSettingsRole(req);
-    if (!canAccessSettings(role)) return forbidden("Settings are available to KAM and Admin users only");
+    if (!canAccessSettings(role)) return forbidden("Settings are available to KAM and Executive users only");
 
     let dbConnected = false;
     try {
@@ -75,12 +75,7 @@ export async function GET(req: NextRequest) {
           ...(cfg.notificationPrefs as typeof DEFAULT_NOTIFICATION_PREFS),
         };
       }
-      if (cfg?.integrationSettings && typeof cfg.integrationSettings === "object") {
-        integrationSettings = {
-          ...DEFAULT_INTEGRATION_SETTINGS,
-          ...(cfg.integrationSettings as typeof DEFAULT_INTEGRATION_SETTINGS),
-        };
-      }
+      integrationSettings = { ...DEFAULT_INTEGRATION_SETTINGS };
     } catch {
       // table may not exist in older envs — defaults are fine
     }
@@ -109,7 +104,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const role = await getSettingsRole(req);
-    if (!canAccessSettings(role)) return forbidden("Settings are available to KAM and Admin users only");
+    if (!canAccessSettings(role)) return forbidden("Settings are available to KAM and Executive users only");
 
     const body = await req.json();
 
@@ -126,7 +121,7 @@ export async function PUT(req: NextRequest) {
     }
 
     if (body.integrationSettings) {
-      const settings = body.integrationSettings;
+      const settings = { ...DEFAULT_INTEGRATION_SETTINGS };
       const cfg = await prisma.appConfig.upsert({
         where:  { id: "global" },
         create: { id: "global", integrationSettings: settings, updatedBy: role },

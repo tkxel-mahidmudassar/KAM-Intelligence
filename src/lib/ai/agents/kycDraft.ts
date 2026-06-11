@@ -53,6 +53,12 @@ function withRequiredSources(value: unknown, sectionKey: string): string | null 
   return `${trimmed}\nSources: ${SECTION_SOURCE_FALLBACKS[sectionKey] ?? "Current account sources"}`;
 }
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 export async function runKycDraftAgent(
   accountId: string,
   authorId?: string,
@@ -81,7 +87,7 @@ export async function runKycDraftAgent(
 
   // Build sources from all fetched data
   const sources: AgentSource[] = [
-    { type: "score",   label: "Overall score",   value: account.kamScores[0] ? `${account.kamScores[0].overall}/100` : "N/A" },
+    { type: "score",   label: "Overall score",   value: account.kamScores[0] ? `${scoreOutOfFiveLabel(account.kamScores[0].overall)}/5` : "N/A" },
     { type: "score",   label: "Account health",   value: account.health },
     ...account.contacts.map((c): AgentSource => ({ type: "contact", label: `Contact: ${c.name}`, value: c.title ?? undefined })),
     ...account.kpiDimensions.slice(0, 8).map((k): AgentSource => ({ type: "kpi", label: k.name, value: `${k.value}${k.unit ?? ""}` })),
@@ -101,7 +107,7 @@ Account: ${account.name}
 Industry: ${account.industry ?? "N/A"} | Region: ${account.region ?? "N/A"} | Country: ${account.country ?? "N/A"}
 ARR: $${account.arr.toLocaleString()} | Health: ${account.health}
 Contract: ${account.contractStart?.toISOString().split("T")[0] ?? "N/A"} to ${account.contractEnd?.toISOString().split("T")[0] ?? "N/A"}
-Score: ${account.kamScores[0]?.overall ?? "N/A"}/100
+Score: ${scoreOutOfFiveLabel(account.kamScores[0]?.overall)}/5
 
 Contacts: ${account.contacts.map((c) => `${c.name} (${c.title ?? "N/A"})`).join(", ")}
 KPIs: ${account.kpiDimensions.map((k) => `${k.name}: ${k.value}${k.unit ?? ""}`).join(", ")}

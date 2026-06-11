@@ -45,7 +45,24 @@ function slugify(value: string) {
 
 function parseJson(content: string): { title?: string; summary?: string; markdown?: string } {
   const raw = content.replace(/```json|```/g, "").trim();
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const jsonStart = raw.indexOf("{");
+    const jsonEnd = raw.lastIndexOf("}");
+    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+      try {
+        return JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+      } catch {
+        // Fall through to Markdown fallback below.
+      }
+    }
+    return {
+      title: "Generated document",
+      summary: "Generated from the available account context.",
+      markdown: raw,
+    };
+  }
 }
 
 function hasUnresolvedPlaceholder(markdown: string) {
@@ -69,8 +86,10 @@ function inferFormat(input: V2DocumentGenerationInput): GeneratedFormat {
   const text = `${input.documentType} ${input.userRequest}`.toLowerCase();
   if (/\b(markdown|\.md|md file)\b/.test(text)) return "Markdown";
   if (/\b(xlsx|excel|spreadsheet|workbook|\.xls|\.xlsx)\b/.test(text)) return "XLSX";
-  if (/\b(pptx|ppt|powerpoint|slide deck|slides|presentation|deck|qbr)\b/.test(text)) return "PPTX";
   if (/\b(pdf|\.pdf)\b/.test(text)) return "PDF";
+  if (/\b(docx|word document|word file|\.docx)\b/.test(text)) return "DOCX";
+  if (/\b(pptx|ppt|powerpoint|slide deck|slides|presentation|deck)\b/.test(text)) return "PPTX";
+  if (/\bqbr\b/.test(text)) return "PPTX";
   return "DOCX";
 }
 
@@ -119,8 +138,8 @@ async function buildXlsx(markdown: string, title: string) {
   zip.file("docProps/core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${escapeXml(title)}</dc:title>
-  <dc:creator>DotKAM T Man</dc:creator>
-  <cp:lastModifiedBy>DotKAM T Man</cp:lastModifiedBy>
+  <dc:creator>DotKAM T-Man</dc:creator>
+  <cp:lastModifiedBy>DotKAM T-Man</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:modified>
 </cp:coreProperties>`);
@@ -148,6 +167,10 @@ async function buildXlsx(markdown: string, title: string) {
 function dataUrl(buffer: Buffer | Uint8Array | string, format: GeneratedFormat) {
   const bytes = typeof buffer === "string" ? Buffer.from(buffer, "utf-8") : Buffer.from(buffer);
   return `data:${mimeForFormat(format)};base64,${bytes.toString("base64")}`;
+}
+
+export async function buildDocxDataUrl(markdown: string, title: string) {
+  return dataUrl(await buildDocx(markdown, title), "DOCX");
 }
 
 function markdownLines(markdown: string) {
@@ -219,8 +242,8 @@ async function buildDocx(markdown: string, title: string) {
   zip.file("docProps/core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${escapeXml(title)}</dc:title>
-  <dc:creator>DotKAM T Man</dc:creator>
-  <cp:lastModifiedBy>DotKAM T Man</cp:lastModifiedBy>
+  <dc:creator>DotKAM T-Man</dc:creator>
+  <cp:lastModifiedBy>DotKAM T-Man</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${createdAt}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${createdAt}</dcterms:modified>
 </cp:coreProperties>`);
@@ -358,8 +381,8 @@ async function buildPptx(markdown: string, title: string) {
   zip.file("docProps/core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>${escapeXml(title)}</dc:title>
-  <dc:creator>DotKAM T Man</dc:creator>
-  <cp:lastModifiedBy>DotKAM T Man</cp:lastModifiedBy>
+  <dc:creator>DotKAM T-Man</dc:creator>
+  <cp:lastModifiedBy>DotKAM T-Man</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created>
   <dcterms:modified xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:modified>
 </cp:coreProperties>`);
@@ -548,7 +571,7 @@ export async function generateV2Document(input: V2DocumentGenerationInput): Prom
     markdown = String(parsed.markdown || markdown);
   }
   if (hasUnresolvedPlaceholder(markdown)) {
-    throw new Error("T Man needs more input before generating a complete document without placeholders.");
+    throw new Error("T-Man needs more input before generating a complete document without placeholders.");
   }
   const summary = String(parsed.summary || `Generated ${input.documentType}.`).slice(0, 180);
   const format = inferFormat(input);

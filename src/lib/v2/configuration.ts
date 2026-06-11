@@ -141,5 +141,5 @@ export const accountDocumentTypes: DocumentTypeConfig[] = [
   },
 ];
 
-export const documentGenerationTypes = ["QBR", "MBR", "DBR", "EBR", "KYC", "Account Brief", "Renewal Plan", "Risk Memo", "Executive Summary"];
+export const documentGenerationTypes = ["QBR", "MBR", "DBR", "EBR", "KYC", "Account Brief", "Renewal Plan", "Executive Summary"];
 export const documentOutputFormats = ["pptx", "docx", "pdf", "xlsx"] as const;

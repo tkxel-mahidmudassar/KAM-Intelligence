@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
 
     const input: V2OnboardingAgentInput = {
       role: String(body.role || "ASSOCIATE"),
+      activeStep: String(body.activeStep || "profile"),
       sourceFiles: Array.isArray(body.sourceFiles) ? body.sourceFiles.map(String) : [],
       prompt: String(body.prompt || ""),
       draft: isObject(body.draft)

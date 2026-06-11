@@ -2,9 +2,9 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, CalendarDays, Check, FileText, Mail, Pencil, Phone, Plus, Search, Settings, Sparkles, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, FileText, Loader2, Mail, Pencil, Phone, Plus, Search, Settings, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useAccountCache } from "@/context/AccountCacheContext";
 import { useNotifications } from "@/context/NotificationContext";
@@ -136,6 +136,7 @@ interface TkxelResource {
   name: string;
   role: string;
   pod: string;
+  sowName?: string;
   location: string;
   startDate: string;
 }
@@ -144,6 +145,7 @@ interface ResourceDraft {
   name: string;
   role: string;
   pod: string;
+  sowName: string;
   location: string;
   startDate: string;
 }
@@ -263,6 +265,102 @@ interface QbrPromptDraft {
   asks: string;
 }
 
+const documentGenerationFieldCopy: Record<string, {
+  periodLabel: string;
+  periodPlaceholder: string;
+  goalsLabel: string;
+  goalsPlaceholder: string;
+  risksLabel: string;
+  risksPlaceholder: string;
+  asksLabel: string;
+  asksPlaceholder: string;
+}> = {
+  QBR: {
+    periodLabel: "Quarter",
+    periodPlaceholder: "Q2 2026",
+    goalsLabel: "QBR goals",
+    goalsPlaceholder: "Business outcomes, renewal narrative, delivery health, expansion decisions",
+    risksLabel: "Risks or blockers",
+    risksPlaceholder: "Delivery, commercial, stakeholder, or relationship risks to address",
+    asksLabel: "Client decisions needed",
+    asksPlaceholder: "Approvals, next-step commitments, executive asks",
+  },
+  MBR: {
+    periodLabel: "Month",
+    periodPlaceholder: "June 2026",
+    goalsLabel: "Monthly review focus",
+    goalsPlaceholder: "Progress, open actions, blockers, delivery confidence, decisions needed",
+    risksLabel: "Monthly risks",
+    risksPlaceholder: "Items requiring attention before the next check-in",
+    asksLabel: "Follow-up asks",
+    asksPlaceholder: "Requests for the client, Tkxel team, or sponsor",
+  },
+  DBR: {
+    periodLabel: "Delivery period",
+    periodPlaceholder: "Sprint 14 or current delivery window",
+    goalsLabel: "Delivery review focus",
+    goalsPlaceholder: "Sprint progress, blockers, scope movement, resource needs",
+    risksLabel: "Delivery risks",
+    risksPlaceholder: "Backlog, scope, dependency, resource, or quality risks",
+    asksLabel: "Delivery asks",
+    asksPlaceholder: "Decisions needed from delivery owners or client stakeholders",
+  },
+  EBR: {
+    periodLabel: "Executive period",
+    periodPlaceholder: "H1 2026 or executive steering cycle",
+    goalsLabel: "Executive storyline",
+    goalsPlaceholder: "Strategic outcomes, account health, sponsor alignment, renewal posture",
+    risksLabel: "Executive risks",
+    risksPlaceholder: "Issues that require executive awareness or intervention",
+    asksLabel: "Executive decisions",
+    asksPlaceholder: "Steering asks, escalation decisions, growth approvals",
+  },
+  KYC: {
+    periodLabel: "KYC purpose",
+    periodPlaceholder: "New account onboarding or renewal refresh",
+    goalsLabel: "KYC sections to emphasize",
+    goalsPlaceholder: "Company profile, stakeholders, commercial context, engagement history",
+    risksLabel: "Unknowns to resolve",
+    risksPlaceholder: "Missing sources, uncertain stakeholders, unverified financial details",
+    asksLabel: "Review requirements",
+    asksPlaceholder: "What the reviewer should confirm before approving",
+  },
+  "Account Brief": {
+    periodLabel: "Brief purpose",
+    periodPlaceholder: "Exec handoff, internal account review, pre-meeting prep",
+    goalsLabel: "Briefing focus",
+    goalsPlaceholder: "Current state, priorities, relationship map, risks, opportunities",
+    risksLabel: "Watch items",
+    risksPlaceholder: "Risks, gaps, or source uncertainty to call out",
+    asksLabel: "Recommended actions",
+    asksPlaceholder: "Actions the reader should take after reading the brief",
+  },
+  "Renewal Plan": {
+    periodLabel: "Renewal window",
+    periodPlaceholder: "90 days before renewal",
+    goalsLabel: "Renewal objectives",
+    goalsPlaceholder: "Retention path, commercial strategy, stakeholders, blockers",
+    risksLabel: "Renewal risks",
+    risksPlaceholder: "Contract, delivery, pricing, stakeholder, or competitor risks",
+    asksLabel: "Renewal asks",
+    asksPlaceholder: "Approvals, evidence, or conversations needed to close renewal",
+  },
+  "Executive Summary": {
+    periodLabel: "Summary purpose",
+    periodPlaceholder: "Leadership update, board note, account snapshot",
+    goalsLabel: "Summary focus",
+    goalsPlaceholder: "Most important account context and decisions needed",
+    risksLabel: "Exceptions",
+    risksPlaceholder: "Anything leadership should not miss",
+    asksLabel: "Leadership asks",
+    asksPlaceholder: "Decisions or next actions expected from the reader",
+  },
+};
+
+function generationCopyFor(documentType: string) {
+  return documentGenerationFieldCopy[documentType] ?? documentGenerationFieldCopy["Account Brief"];
+}
+
 interface CammieMessage {
   role: "user" | "assistant";
   content: string;
@@ -314,6 +412,28 @@ const accountWorkspaceTabs: Array<{ label: string; value: AccountWorkspaceTab }>
   { label: "Docs & AI", value: "documents" },
   { label: "KYC", value: "kyc" },
 ];
+
+const accountWorkspaceTabValues = new Set<AccountWorkspaceTab>(accountWorkspaceTabs.map((tab) => tab.value));
+
+function normalizeWorkspaceTab(value: string | null): AccountWorkspaceTab {
+  return value && accountWorkspaceTabValues.has(value as AccountWorkspaceTab) ? (value as AccountWorkspaceTab) : "overview";
+}
+
+function slugifyRouteValue(value: string) {
+  return value.trim().toLowerCase().replace(/^v2-acct-/, "").replace(/^acc-/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function accountMatchesRouteTarget(account: PortfolioAccount, target: string) {
+  const normalizedTarget = slugifyRouteValue(target);
+  const accountSlug = slugifyRouteValue(account.name);
+  const accountIdSlug = slugifyRouteValue(account.id);
+  return account.id === target || accountIdSlug === normalizedTarget || accountSlug === normalizedTarget;
+}
+
+function normalizeFocusTarget(value: string | null) {
+  return value ? slugifyRouteValue(value.replace(/-score$/, "")) : null;
+}
+
 type OnboardingSuggestionStatus = "Pending" | "Accepted" | "Dismissed";
 const LS_ACCOUNT_CREATION_REQUESTS = "kam_v2_account_creation_requests";
 type OnboardingStepStatus = "Done" | "Active" | "Pending";
@@ -1501,10 +1621,108 @@ const accountDraftFields = new Set<keyof AccountDraft>([
   "nextTouchpoint",
 ]);
 
+const accountDraftFieldLabels: Record<keyof AccountDraft, string> = {
+  name: "Account name",
+  industry: "Industry",
+  segment: "Domain",
+  arr: "ARR",
+  location: "Location",
+  contractRenewal: "Contract renewal",
+  kamOwner: "KAM owner",
+  associateOwner: "Associate owner",
+  primaryContact: "Client POC",
+  activeRisk: "Active risk",
+  openOpportunity: "Open opportunity",
+  nextTouchpoint: "Next touchpoint",
+};
+
+const mandatoryAccountDraftFields = new Set<keyof AccountDraft>([
+  "name",
+  "industry",
+  "segment",
+  "arr",
+  "location",
+  "contractRenewal",
+  "kamOwner",
+  "primaryContact",
+]);
+
+const numericAccountDraftFields = new Set<keyof AccountDraft>(["arr"]);
+const dateAccountDraftFields = new Set<keyof AccountDraft>(["contractRenewal"]);
+
+const accountDraftFieldTooltips: Partial<Record<keyof AccountDraft, string>> = {
+  name: "Legal or commonly used client account name.",
+  industry: "The client industry, for example fintech, healthcare, logistics, or retail.",
+  segment: "The business domain or service domain this account belongs to.",
+  arr: "Annual recurring revenue. Use a value such as $1.4M, 850K, or 1400000.",
+  location: "Primary client location and region.",
+  contractRenewal: "Next contract renewal or contract end date.",
+  kamOwner: "Tkxel KAM accountable for the account.",
+  associateOwner: "Associate supporting the KAM, if assigned.",
+  primaryContact: "Client-side point of contact for the account.",
+  activeRisk: "Known current risk, if one exists.",
+  openOpportunity: "Known growth, upsell, or whitespace opportunity, if one exists.",
+  nextTouchpoint: "Next planned meeting, follow-up, or governance checkpoint.",
+};
+
 function normalizeAccountDraftField(field: unknown): keyof AccountDraft {
   return typeof field === "string" && accountDraftFields.has(field as keyof AccountDraft)
     ? (field as keyof AccountDraft)
     : "openOpportunity";
+}
+
+function accountDraftFieldHasValue(field: keyof AccountDraft, draft: AccountDraft) {
+  return Boolean(draft[field]?.trim());
+}
+
+function accountDraftValidationError(field: keyof AccountDraft, value: string) {
+  const trimmed = value.trim();
+  if (mandatoryAccountDraftFields.has(field) && !trimmed) return `${accountDraftFieldLabels[field]} is required.`;
+  if (dateAccountDraftFields.has(field) && trimmed && !toDateInputValue(trimmed)) {
+    return `${accountDraftFieldLabels[field]} must be a valid date.`;
+  }
+  if (numericAccountDraftFields.has(field) && trimmed && !/^\$?\s?\d+(?:\.\d+)?\s?(?:k|m|b)?$/i.test(trimmed.replace(/,/g, ""))) {
+    return "Use a valid revenue value, e.g. $1.4M, 850K, or 1400000.";
+  }
+  return "";
+}
+
+function toDateInputValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const timestamp = Date.parse(trimmed);
+  if (!Number.isFinite(timestamp)) return "";
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function correctionFromDismissalReason(reason: string) {
+  const normalized = reason.trim();
+  const patterns = [
+    /\b(?:it'?s|it is|should be|correct(?: answer| value)? is|actually|change(?: it)? to)\s+["“]?([^"”.\n]+)["”]?/i,
+    /\bnot\s+.+?,\s*(?:it'?s|it is|should be)\s+["“]?([^"”.\n]+)["”]?/i,
+    /\bnot\s+.+?\s+-\s+["“]?([^"”.\n]+)["”]?/i,
+  ];
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    const value = match?.[1]?.trim();
+    if (value && value.length <= 180) return value.replace(/\s+instead$/i, "").trim();
+  }
+  return "";
+}
+
+function promptExplicitlyTargetsFilledField(prompt: string, suggestion: Partial<OnboardingSuggestion>, field: keyof AccountDraft) {
+  const normalized = prompt.toLowerCase();
+  if (!/(change|update|correct|replace|actually|wrong|not\b|instead)/i.test(normalized)) return false;
+  const fieldTerms = accountDraftFieldQuestionTerms[field] ?? [];
+  const label = String(suggestion.label ?? accountDraftFieldLabels[field]).toLowerCase();
+  return normalized.includes(label) || fieldTerms.some((term) => normalized.includes(term));
+}
+
+function shouldKeepOnboardingSuggestion(suggestion: Partial<OnboardingSuggestion>, draft: AccountDraft, prompt: string) {
+  const field = normalizeAccountDraftField(suggestion.field);
+  if (!accountDraftFieldHasValue(field, draft)) return true;
+  return promptExplicitlyTargetsFilledField(prompt, suggestion, field);
 }
 
 function formatAssistantMessage(message: string) {
@@ -1522,13 +1740,13 @@ function formatAssistantMessage(message: string) {
 const accountDraftFieldQuestionTerms: Record<keyof AccountDraft, string[]> = {
   name: ["account name", "company name", "client name"],
   industry: ["industry"],
-  segment: ["segment"],
+  segment: ["domain", "business domain", "service domain", "segment"],
   arr: ["arr", "revenue", "annual recurring"],
   location: ["location", "country", "region"],
   contractRenewal: ["contract renewal", "renewal date", "contract end"],
   kamOwner: ["kam owner", "kam"],
   associateOwner: ["associate owner", "associate"],
-  primaryContact: ["primary contact", "contact"],
+  primaryContact: ["client poc", "primary contact", "point of contact", "poc", "contact"],
   activeRisk: ["active risk", "risk"],
   openOpportunity: ["open opportunity", "opportunity", "whitespace"],
   nextTouchpoint: ["next touchpoint", "next meeting", "touchpoint"],
@@ -1566,15 +1784,15 @@ const seededOnboardingSuggestions: OnboardingSuggestion[] = [
     field: "industry",
     label: "Industry",
     proposedValue: "Energy and grid analytics",
-    source: "Salesforce mock",
+    source: "Initial source files",
     status: "Pending",
   },
   {
     id: "suggest-segment",
     field: "segment",
-    label: "Segment",
-    proposedValue: "Enterprise",
-    source: "Salesforce mock",
+    label: "Domain",
+    proposedValue: "Grid modernization and analytics",
+    source: "Initial source files",
     status: "Pending",
   },
   {
@@ -1590,7 +1808,7 @@ const seededOnboardingSuggestions: OnboardingSuggestion[] = [
     field: "location",
     label: "Location",
     proposedValue: "USA · North America",
-    source: "Salesforce mock",
+    source: "Initial source files",
     status: "Pending",
   },
   {
@@ -1604,7 +1822,7 @@ const seededOnboardingSuggestions: OnboardingSuggestion[] = [
   {
     id: "suggest-contact",
     field: "primaryContact",
-    label: "Primary contact",
+    label: "Client POC",
     proposedValue: "Amelia Hart, VP Operations",
     source: "Initial source files",
     status: "Pending",
@@ -1633,7 +1851,7 @@ const pendingAccountCreationRequests: PendingAccountCreationRequest[] = [
     submittedBy: "Aisha Khan",
     submittedAt: "Today",
     associateReason: "Initial source files identify NovaGrid as a new energy analytics account with expansion potential. ARR, primary sponsor, and renewal assumptions were accepted from uploaded sales notes and should be reviewed by the KAM before creation.",
-    sourceFiles: ["NovaGrid kickoff notes.pdf", "Energy analytics SOW.docx", "Salesforce opportunity export.csv"],
+    sourceFiles: ["NovaGrid kickoff notes.pdf", "Energy analytics SOW.docx", "Executive discovery notes.docx"],
     draft: {
       name: "NovaGrid Energy",
       industry: "Energy and grid analytics",
@@ -1665,7 +1883,7 @@ const kycDraftSections: KycDraftSection[] = [
   {
     id: "kyc-executive-summary",
     title: "Executive summary",
-    source: "Accepted profile fields, Salesforce mock, uploaded source files",
+    source: "Accepted profile fields and uploaded source files",
     status: "Needs input",
     draft: "A short KYC narrative will summarize the account, critical risks, opportunity, and recommended next action after required profile fields are confirmed.",
   },
@@ -1679,7 +1897,7 @@ const kycDraftSections: KycDraftSection[] = [
   {
     id: "kyc-company-history",
     title: "Company history",
-    source: "Initial source files and Salesforce mock",
+    source: "Initial source files",
     status: "Ready",
     draft: "Founding context, ownership structure, acquisition notes, and operating footprint are staged for review.",
   },
@@ -1700,7 +1918,7 @@ const kycDraftSections: KycDraftSection[] = [
   {
     id: "kyc-financials",
     title: "Company financials",
-    source: "Salesforce mock, initial source files, support documents",
+    source: "Initial source files and support documents",
     status: "Ready",
     draft: "ARR, renewal timing, commercial exposure, and expansion opportunity values are staged for review.",
   },
@@ -1732,12 +1950,12 @@ const onboardingScoreDrafts: OnboardingScoreDraft[] = defaultKpiWeights.map((kpi
   name: kpi.name,
   weight: kpi.weight,
   score: [4.1, 3.8, 3.6, 3.2, 3.4, 3.7, 4.0, 3.1][index] ?? 3.5,
-  source: "Source files + Salesforce mock",
+  source: "Source files + user-confirmed context",
   why: {
     relationship:
       "Proposed from the visible sponsor/contact evidence, current draft ownership fields, and any meeting or stakeholder references found in the source package. This score should stay above average only if the account has named executive access, more than one functional stakeholder, a clear internal champion, and a repeatable engagement cadence. If those contacts are not confirmed, the score should be reduced because relationship coverage would be too dependent on assumptions.",
     "contract-health":
-      "Proposed from renewal timing, contract/source-file references, and any commercial terms visible in the draft. The score reflects whether the account has enough contractual protection: duration, notice period, renewability, pricing/uplift language, and termination safeguards. If the uploaded files do not prove those terms, this should be treated as a provisional score until the SOW/MSA or Salesforce contract fields confirm them.",
+      "Proposed from renewal timing, contract/source-file references, and any commercial terms visible in the draft. The score reflects whether the account has enough contractual protection: duration, notice period, renewability, pricing/uplift language, and termination safeguards. If the uploaded files do not prove those terms, this should be treated as a provisional score until the SOW/MSA or signed contract evidence confirms them.",
     "customer-success":
       "Proposed from client feedback signals, issue-resolution notes, communication cadence, and delivery satisfaction evidence found in the onboarding context. A healthy score requires explicit signs that the client is satisfied and responsive, not just an absence of complaints. If feedback is indirect or missing, the score should remain conservative until a sponsor or recent meeting note confirms confidence.",
     risk:
@@ -1750,7 +1968,7 @@ const onboardingScoreDrafts: OnboardingScoreDraft[] = defaultKpiWeights.map((kpi
       "Proposed from ARR, payment/commercial references, invoice exposure, revenue trend, and contract-to-billing alignment evidence. A high score needs source-backed signs that revenue is stable, invoices are current, and commercial terms match what is being billed. If finance evidence is only inferred from ARR or filename context, the score should remain provisional rather than pretending payment health is known.",
     whitespace:
       "Proposed from expansion clues such as unsold services, cross-sell/upsell references, sponsor appetite, and whether the current work creates a credible next buying motion. This score can be positive even when overall health is not perfect, but only if there is evidence of a real expansion path. If the source package does not identify a sponsor, need, or next commercial step, the score should stay conservative and trigger validation rather than automatic optimism.",
-  }[kpi.id] ?? "Proposed from uploaded source files, Salesforce mock context, and the current account draft. Keep this score provisional unless the underlying sub-parameters have source-backed evidence or user confirmation.",
+  }[kpi.id] ?? "Proposed from uploaded source files and the current account draft. Keep this score provisional unless the underlying sub-parameters have source-backed evidence or user confirmation.",
   proposedTask:
     index === 3
       ? "Confirm risk owner and mitigation path before onboarding handoff."
@@ -1764,7 +1982,7 @@ function onboardingSteps(sourceFileCount: number, draft: AccountDraft, suggestio
   const hasSourceFiles = sourceFileCount > 0;
   return [
     { label: "Source files uploaded", status: hasSourceFiles ? "Done" : "Active" },
-    { label: "Salesforce mock pull", status: hasSourceFiles ? "Done" : "Pending" },
+    { label: "Evidence extraction", status: hasSourceFiles ? "Done" : "Pending" },
     { label: "Account profile", status: draft.name && draft.industry && draft.arr ? "Done" : hasSourceFiles ? "Active" : "Pending" },
     { label: "KYC draft", status: acceptedSuggestions >= 5 ? "Done" : hasSourceFiles ? "Active" : "Pending" },
     { label: "Account journey", status: journey.length > 0 ? "Done" : "Pending" },
@@ -1851,7 +2069,7 @@ function mapApiAccountToPortfolioAccount(account: Record<string, unknown>): Port
     renewalDays: daysUntil(account.contractEnd as string | null | undefined),
     kamOwner: kam?.name ?? "KAM not set",
     associateOwner: associateOwner?.name ?? "Account owner not set",
-    contactName: metadata?.primaryContact || String(contacts.find((contact) => contact.isPrimary)?.name ?? contacts[0]?.name ?? "Primary contact not set"),
+    contactName: metadata?.primaryContact || String(contacts.find((contact) => contact.isPrimary)?.name ?? contacts[0]?.name ?? "Client POC not set"),
     logoUrl: typeof account.logoUrl === "string" ? account.logoUrl : undefined,
     deliveryModel: String(account.deliveryModel ?? account.segment ?? "Delivery model not set"),
     currentWork: String(account.currentWork ?? "Account setup in progress"),
@@ -2013,7 +2231,7 @@ function generatedKycDocumentFromPayload(account: PortfolioAccount, kyc: Generat
     id: `kyc-draft-${String(kyc.id ?? `${account.id}-${safeCreatedAtMs}`)}`,
     name: fileName,
     type: "KYC draft",
-    uploadedBy: "T Man",
+    uploadedBy: "T-Man",
     uploadedAt: new Date(safeCreatedAtMs).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     uploadedAtMs: safeCreatedAtMs,
     status: "Draft",
@@ -2064,7 +2282,7 @@ async function downloadDocxArtifact(fileName: string, content: string) {
 </Relationships>`);
   zip.folder("docProps")?.file("core.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <dc:creator>DotKAM T Man</dc:creator>
+  <dc:creator>DotKAM T-Man</dc:creator>
   <dc:title>${xmlEscape(fileName.replace(/\.docx$/i, ""))}</dc:title>
 </cp:coreProperties>`);
   zip.folder("word")?.file("document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -2178,6 +2396,12 @@ function formatWeight(value: number) {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 }
 
+function settleUiAction() {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, 180);
+  });
+}
+
 function subParameterKey(rowId: string, parameterName: string) {
   return `${rowId}:${parameterName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 }
@@ -2191,6 +2415,7 @@ function ScoreOverrideEditor({
   overrideRequest,
   scoreOverride,
   overrideDraft,
+  isSubmitting,
   onDraftChange,
   onSubmitRequest,
   onApplyOverride,
@@ -2206,6 +2431,7 @@ function ScoreOverrideEditor({
   overrideRequest: ScoreOverrideRequest | undefined;
   scoreOverride: ScoreOverride | undefined;
   overrideDraft: { score: string; reason: string } | undefined;
+  isSubmitting: boolean;
   onDraftChange: (rowId: string, field: "score" | "reason", value: string) => void;
   onSubmitRequest: (targetId: string) => void;
   onApplyOverride: (targetId: string) => void;
@@ -2284,10 +2510,11 @@ function ScoreOverrideEditor({
         <button
           type="button"
           onClick={action}
-          disabled={!hasReason}
-          className="h-9 rounded-full bg-[#25352E] px-4 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
+          disabled={!hasReason || isSubmitting}
+          className="inline-flex h-9 items-center gap-2 rounded-full bg-[#25352E] px-4 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
         >
-          {primaryActionLabel}
+          {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          {isSubmitting ? (isAssociate ? "Requesting..." : "Saving...") : primaryActionLabel}
         </button>
       </div>
     </div>
@@ -2305,7 +2532,6 @@ function ScoreOverrideEditor({
           reasonPlaceholder: "Why should this score change?",
           action: () => {
             onSubmitRequest(targetId);
-            onClose();
           },
         })}
       </>,
@@ -2321,10 +2547,22 @@ function ScoreOverrideEditor({
             <p className="font-bold text-[#25352E]">Associate request: {overrideRequest.requestedScore}/5</p>
             <p className="mt-1">{overrideRequest.reason}</p>
             <div className="mt-2 flex gap-2">
-              <button type="button" onClick={() => onApproveRequest(targetId)} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
-                Approve
+              <button
+                type="button"
+                onClick={() => onApproveRequest(targetId)}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
+              >
+                {isSubmitting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                {isSubmitting ? "Working..." : "Approve"}
               </button>
-              <button type="button" onClick={() => onDenyRequest(targetId)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#6F6254]">
+              <button
+                type="button"
+                onClick={() => onDenyRequest(targetId)}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#6F6254] disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {isSubmitting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                 Deny
               </button>
             </div>
@@ -2335,7 +2573,6 @@ function ScoreOverrideEditor({
           reasonPlaceholder: "Reason for direct override",
           action: () => {
             onApplyOverride(targetId);
-            onClose();
           },
         })}
       </>,
@@ -2463,6 +2700,7 @@ function KpiWeightSettingsModal({
   weightDrafts,
   weightRequest,
   weightReason,
+  weightSubmitting,
   isAssociate,
   canOverrideDirectly,
   onDraftChange,
@@ -2479,6 +2717,7 @@ function KpiWeightSettingsModal({
   weightDrafts: Record<string, { weight: string }>;
   weightRequest: KpiWeightRequest | undefined;
   weightReason: string;
+  weightSubmitting: boolean;
   isAssociate: boolean;
   canOverrideDirectly: boolean;
   onDraftChange: (rowId: string, value: string) => void;
@@ -2535,15 +2774,19 @@ function KpiWeightSettingsModal({
                   <button
                     type="button"
                     onClick={onApproveRequest}
-                    className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]"
+                    disabled={weightSubmitting}
+                    className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
                   >
-                    Approve
+                    {weightSubmitting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    {weightSubmitting ? "Working..." : "Approve"}
                   </button>
                   <button
                     type="button"
                     onClick={onDenyRequest}
-                    className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#6F6254]"
+                    disabled={weightSubmitting}
+                    className="inline-flex items-center gap-2 rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#6F6254] disabled:cursor-not-allowed disabled:opacity-55"
                   >
+                    {weightSubmitting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Deny
                   </button>
                 </div>
@@ -2610,10 +2853,11 @@ function KpiWeightSettingsModal({
                     type="button"
                     data-kpi-weight-action={isAssociate ? "request" : "save"}
                     onClick={isAssociate ? onSubmitRequest : onSaveWeight}
-                    disabled={!canSubmitWeights}
-                    className="h-10 rounded-full bg-[#25352E] px-5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
+                    disabled={!canSubmitWeights || weightSubmitting}
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[#25352E] px-5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
                   >
-                    {actionLabel}
+                    {weightSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    {weightSubmitting ? (isAssociate ? "Requesting..." : "Saving...") : actionLabel}
                   </button>
                 </div>
               </div>
@@ -2650,6 +2894,7 @@ function withEffectiveKpiScores(kpiRows: KpiOverviewRow[], scoreOverrides: Recor
 
 function OverviewTab({
   kpiRows,
+  initialFocus,
   isLoadingKpis,
   kpiRowsError,
   activeTasks,
@@ -2657,12 +2902,14 @@ function OverviewTab({
   pendingDenials,
   deniedReasons,
   overrideDrafts,
+  overrideSubmitting,
   overrideRequests,
   scoreOverrides,
   kpiWeights,
   weightDrafts,
   weightRequest,
   weightReason,
+  weightSubmitting,
   isAssociate,
   canOverrideDirectly,
   onAccept,
@@ -2683,6 +2930,7 @@ function OverviewTab({
   onDenyWeightRequest,
 }: {
   kpiRows: KpiOverviewRow[];
+  initialFocus: string | null;
   isLoadingKpis: boolean;
   kpiRowsError: string;
   activeTasks: ActiveTask[];
@@ -2690,12 +2938,14 @@ function OverviewTab({
   pendingDenials: Record<string, string>;
   deniedReasons: Record<string, string>;
   overrideDrafts: Record<string, { score: string; reason: string }>;
+  overrideSubmitting: string | null;
   overrideRequests: Record<string, ScoreOverrideRequest>;
   scoreOverrides: Record<string, ScoreOverride>;
   kpiWeights: Record<string, number>;
   weightDrafts: Record<string, { weight: string }>;
   weightRequest: KpiWeightRequest | undefined;
   weightReason: string;
+  weightSubmitting: boolean;
   isAssociate: boolean;
   canOverrideDirectly: boolean;
   onAccept: (row: KpiOverviewRow) => void;
@@ -2721,6 +2971,18 @@ function OverviewTab({
   const [weightSettingsOpen, setWeightSettingsOpen] = useState(false);
   const effectiveKpiRows = useMemo(() => withEffectiveKpiScores(kpiRows, scoreOverrides), [kpiRows, scoreOverrides]);
   const sortedKpiRows = [...effectiveKpiRows].sort((a, b) => a.score - b.score);
+
+  useEffect(() => {
+    const normalizedFocus = normalizeFocusTarget(initialFocus);
+    if (!normalizedFocus) return;
+    const matchingRow = kpiRows.find((row) => normalizeFocusTarget(row.id) === normalizedFocus);
+    if (!matchingRow) return;
+    setExpandedRows((rows) => {
+      const next = new Set(rows);
+      next.add(matchingRow.id);
+      return next;
+    });
+  }, [initialFocus, kpiRows]);
 
   function toggleRow(rowId: string) {
     setExpandedRows((rows) => {
@@ -2774,7 +3036,7 @@ function OverviewTab({
             const isExpanded = expandedRows.has(row.id) || Boolean(activeOverrideTargetId?.startsWith(`${row.id}:`));
             const hasProposedAction = Boolean(row.why || row.task);
             return (
-              <div key={row.id} className="group">
+	              <div key={row.id} data-kpi-focus={normalizeFocusTarget(row.id) ?? row.id} className="group scroll-mt-24">
                 <button
                   type="button"
                   onClick={() => toggleRow(row.id)}
@@ -2881,6 +3143,7 @@ function OverviewTab({
                                 overrideRequest={overrideRequests[targetId]}
                                 scoreOverride={scoreOverrides[targetId]}
                                 overrideDraft={overrideDrafts[targetId]}
+                                isSubmitting={overrideSubmitting === targetId}
                                 onDraftChange={onOverrideDraftChange}
                                 onSubmitRequest={onSubmitOverrideRequest}
                                 onApplyOverride={onApplyScoreOverride}
@@ -2947,6 +3210,7 @@ function OverviewTab({
         weightDrafts={weightDrafts}
         weightRequest={weightRequest}
         weightReason={weightReason}
+        weightSubmitting={weightSubmitting}
         isAssociate={isAssociate}
         canOverrideDirectly={canOverrideDirectly}
         onDraftChange={onWeightDraftChange}
@@ -3155,6 +3419,7 @@ function ProposalResolutionForm({
   reason,
   proposal,
   role,
+  saving,
   onOpenChange,
   onReasonChange,
   onConfirm,
@@ -3165,6 +3430,7 @@ function ProposalResolutionForm({
   reason: string;
   proposal?: DocumentSignalProposal;
   role: Role;
+  saving?: boolean;
   onOpenChange: (open: boolean) => void;
   onReasonChange: (reason: string) => void;
   onConfirm: () => void;
@@ -3175,7 +3441,10 @@ function ProposalResolutionForm({
   const reasonPlaceholder = isApproval ? "Reason for approving this proposal" : "Reason for denying this proposal";
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => {
+      if (saving && !nextOpen) return;
+      onOpenChange(nextOpen);
+    }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[70] bg-[#1F2722]/28 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[min(92vw,500px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] p-4 shadow-[0_28px_70px_-32px_rgba(31,39,34,0.56)] focus:outline-none">
@@ -3184,6 +3453,7 @@ function ProposalResolutionForm({
             <button
               type="button"
               onClick={onCancel}
+              disabled={saving}
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]"
               aria-label="Close proposal reason modal"
             >
@@ -3211,12 +3481,14 @@ function ProposalResolutionForm({
             value={reason}
             onChange={(event) => onReasonChange(event.target.value)}
             placeholder={reasonPlaceholder}
+            disabled={saving}
             className="mt-4 min-h-28 w-full rounded-xl border border-[#E1D7CA] bg-white/80 p-3 text-[13px] text-[#25352E] outline-none placeholder:text-[#A69A8B] focus:border-[#25352E]/45"
           />
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
               onClick={onCancel}
+              disabled={saving}
               className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]"
             >
               Cancel
@@ -3224,10 +3496,11 @@ function ProposalResolutionForm({
             <button
               type="button"
               onClick={onConfirm}
-              disabled={!reason.trim()}
-              className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
+              disabled={!reason.trim() || saving}
+              className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
             >
-              Confirm
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {saving ? "Saving..." : "Confirm"}
             </button>
           </div>
         </Dialog.Content>
@@ -3236,19 +3509,36 @@ function ProposalResolutionForm({
   );
 }
 
-function FieldLabel({ children }: { children: string }) {
-  return <span className="text-[12px] font-bold text-[#7D6E5F]">{children}</span>;
+function FieldLabel({ children, required, tooltip }: { children: ReactNode; required?: boolean; tooltip?: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#7D6E5F]">
+      <span>
+        {children}
+        {required ? <span className="ml-0.5 text-[#B33D32]">*</span> : null}
+      </span>
+      {tooltip ? (
+        <span className="group relative inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#D8CAB9] text-[10px] font-black text-[#8A7A69]">
+          ?
+          <span className="pointer-events-none absolute left-1/2 top-5 z-20 hidden w-52 -translate-x-1/2 rounded-xl border border-[#D8CAB9] bg-[#FFF9EF] px-3 py-2 text-left text-[11px] font-bold leading-relaxed text-[#25352E] shadow-[0_16px_38px_-26px_rgba(31,39,34,0.58)] group-hover:block">
+            {tooltip}
+          </span>
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 function AddContactDialog({
   open,
   draft,
+  saving,
   onOpenChange,
   onDraftChange,
   onSave,
 }: {
   open: boolean;
   draft: ContactDraft;
+  saving: boolean;
   onOpenChange: (open: boolean) => void;
   onDraftChange: (draft: ContactDraft) => void;
   onSave: () => void;
@@ -3257,7 +3547,10 @@ function AddContactDialog({
   const inputClass = "mt-1 h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] text-[#25352E] outline-none placeholder:text-[#A69A8B] focus:border-[#25352E]/45";
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => {
+      if (saving && !nextOpen) return;
+      onOpenChange(nextOpen);
+    }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[70] bg-[#1F2722]/28 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] p-4 shadow-[0_28px_70px_-32px_rgba(31,39,34,0.56)] focus:outline-none">
@@ -3277,15 +3570,15 @@ function AddContactDialog({
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <label>
-              <FieldLabel>Name</FieldLabel>
+              <FieldLabel required>Name</FieldLabel>
               <input className={inputClass} value={draft.name} onChange={(event) => onDraftChange({ ...draft, name: event.target.value })} placeholder="Contact name" />
             </label>
             <label>
-              <FieldLabel>Designation</FieldLabel>
+              <FieldLabel required>Designation</FieldLabel>
               <input className={inputClass} value={draft.designation} onChange={(event) => onDraftChange({ ...draft, designation: event.target.value })} placeholder="Role or title" />
             </label>
             <label>
-              <FieldLabel>Email</FieldLabel>
+              <FieldLabel required>Email</FieldLabel>
               <input className={inputClass} type="email" value={draft.email} onChange={(event) => onDraftChange({ ...draft, email: event.target.value })} placeholder="name@company.com" />
             </label>
             <label>
@@ -3310,8 +3603,8 @@ function AddContactDialog({
             <button type="button" onClick={() => onOpenChange(false)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]">
               Cancel
             </button>
-            <button type="button" onClick={onSave} disabled={!canSave} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
-              Save
+            <button type="button" onClick={onSave} disabled={!canSave || saving} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </Dialog.Content>
@@ -3323,12 +3616,14 @@ function AddContactDialog({
 function AddResourceDialog({
   open,
   draft,
+  saving,
   onOpenChange,
   onDraftChange,
   onSave,
 }: {
   open: boolean;
   draft: ResourceDraft;
+  saving: boolean;
   onOpenChange: (open: boolean) => void;
   onDraftChange: (draft: ResourceDraft) => void;
   onSave: () => void;
@@ -3337,7 +3632,10 @@ function AddResourceDialog({
   const inputClass = "mt-1 h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] text-[#25352E] outline-none placeholder:text-[#A69A8B] focus:border-[#25352E]/45";
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => {
+      if (saving && !nextOpen) return;
+      onOpenChange(nextOpen);
+    }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[70] bg-[#1F2722]/28 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[min(92vw,540px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] p-4 shadow-[0_28px_70px_-32px_rgba(31,39,34,0.56)] focus:outline-none">
@@ -3346,6 +3644,7 @@ function AddResourceDialog({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
+              disabled={saving}
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]"
               aria-label="Close add resource"
             >
@@ -3355,33 +3654,38 @@ function AddResourceDialog({
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <label>
-              <FieldLabel>Name</FieldLabel>
-              <input className={inputClass} value={draft.name} onChange={(event) => onDraftChange({ ...draft, name: event.target.value })} placeholder="Resource name" />
+              <FieldLabel required>Name</FieldLabel>
+              <input className={inputClass} value={draft.name} disabled={saving} onChange={(event) => onDraftChange({ ...draft, name: event.target.value })} placeholder="Resource name" />
             </label>
             <label>
-              <FieldLabel>Role</FieldLabel>
-              <input className={inputClass} value={draft.role} onChange={(event) => onDraftChange({ ...draft, role: event.target.value })} placeholder="Delivery Lead" />
+              <FieldLabel required>Role</FieldLabel>
+              <input className={inputClass} value={draft.role} disabled={saving} onChange={(event) => onDraftChange({ ...draft, role: event.target.value })} placeholder="Delivery Lead" />
             </label>
             <label>
-              <FieldLabel>Pod</FieldLabel>
-              <input className={inputClass} value={draft.pod} onChange={(event) => onDraftChange({ ...draft, pod: event.target.value })} placeholder="Payments Modernization" />
+              <FieldLabel required>Pod</FieldLabel>
+              <input className={inputClass} value={draft.pod} disabled={saving} onChange={(event) => onDraftChange({ ...draft, pod: event.target.value })} placeholder="Payments Modernization" />
+            </label>
+            <label>
+              <FieldLabel>SOW name</FieldLabel>
+              <input className={inputClass} value={draft.sowName} disabled={saving} onChange={(event) => onDraftChange({ ...draft, sowName: event.target.value })} placeholder="Statement of work name" />
             </label>
             <label>
               <FieldLabel>Location</FieldLabel>
-              <input className={inputClass} value={draft.location} onChange={(event) => onDraftChange({ ...draft, location: event.target.value })} placeholder="Lahore, Pakistan" />
+              <input className={inputClass} value={draft.location} disabled={saving} onChange={(event) => onDraftChange({ ...draft, location: event.target.value })} placeholder="Lahore, Pakistan" />
             </label>
-            <label className="md:col-span-2">
+            <label>
               <FieldLabel>Start date</FieldLabel>
-              <input className={inputClass} value={draft.startDate} onChange={(event) => onDraftChange({ ...draft, startDate: event.target.value })} placeholder="Jun 2026" />
+              <input className={inputClass} value={draft.startDate} disabled={saving} onChange={(event) => onDraftChange({ ...draft, startDate: event.target.value })} placeholder="Jun 2026" />
             </label>
           </div>
 
           <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => onOpenChange(false)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]">
+            <button type="button" onClick={() => onOpenChange(false)} disabled={saving} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254] disabled:opacity-60">
               Cancel
             </button>
-            <button type="button" onClick={onSave} disabled={!canSave} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
-              Save
+            <button type="button" onClick={onSave} disabled={!canSave || saving} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </Dialog.Content>
@@ -3393,12 +3697,14 @@ function AddResourceDialog({
 function AddJourneyItemDialog({
   open,
   draft,
+  saving,
   onOpenChange,
   onDraftChange,
   onSave,
 }: {
   open: boolean;
   draft: JourneyItemDraft;
+  saving: boolean;
   onOpenChange: (open: boolean) => void;
   onDraftChange: (draft: JourneyItemDraft) => void;
   onSave: () => void;
@@ -3407,7 +3713,10 @@ function AddJourneyItemDialog({
   const inputClass = "mt-1 h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] text-[#25352E] outline-none placeholder:text-[#A69A8B] focus:border-[#25352E]/45";
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => {
+      if (saving && !nextOpen) return;
+      onOpenChange(nextOpen);
+    }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[70] bg-[#1F2722]/28 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] p-4 shadow-[0_28px_70px_-32px_rgba(31,39,34,0.56)] focus:outline-none">
@@ -3427,7 +3736,7 @@ function AddJourneyItemDialog({
 
           <div className="mt-4 grid gap-3">
             <label>
-              <FieldLabel>Tag</FieldLabel>
+              <FieldLabel required>Tag</FieldLabel>
               <select className={inputClass} value={draft.type} onChange={(event) => onDraftChange({ ...draft, type: event.target.value as TaskType })}>
                 <option value="Meeting">Meeting</option>
                 <option value="QBR">QBR</option>
@@ -3435,15 +3744,15 @@ function AddJourneyItemDialog({
               </select>
             </label>
             <label>
-              <FieldLabel>Title</FieldLabel>
+              <FieldLabel required>Title</FieldLabel>
               <input className={inputClass} value={draft.title} onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} placeholder="Journey item title" />
             </label>
             <label>
-              <FieldLabel>Due date</FieldLabel>
+              <FieldLabel required>Due date</FieldLabel>
               <input className={inputClass} type="date" value={draft.date} onChange={(event) => onDraftChange({ ...draft, date: event.target.value })} />
             </label>
             <label>
-              <FieldLabel>Details</FieldLabel>
+              <FieldLabel required>Details</FieldLabel>
               <textarea
                 value={draft.detail}
                 onChange={(event) => onDraftChange({ ...draft, detail: event.target.value })}
@@ -3457,8 +3766,8 @@ function AddJourneyItemDialog({
             <button type="button" onClick={() => onOpenChange(false)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]">
               Cancel
             </button>
-            <button type="button" onClick={onSave} disabled={!canSave} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
-              Save
+            <button type="button" onClick={onSave} disabled={!canSave || saving} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </Dialog.Content>
@@ -3483,11 +3792,15 @@ function GenerateDocumentDialog({
   onGenerate: () => void;
 }) {
   const canGenerate = Boolean(draft.documentType.trim() && draft.outputFormat && draft.audience.trim() && draft.period.trim() && draft.goals.trim());
+  const copy = generationCopyFor(draft.documentType);
   const inputClass = "mt-1 h-10 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] text-[#25352E] outline-none placeholder:text-[#A69A8B] focus:border-[#25352E]/45";
   const textareaClass = "mt-1 min-h-20 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 py-2 text-[13px] text-[#25352E] outline-none placeholder:text-[#A69A8B] focus:border-[#25352E]/45";
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => {
+      if (generating && !nextOpen) return;
+      onOpenChange(nextOpen);
+    }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[70] bg-[#1F2722]/28 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[min(92vw,620px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] p-4 shadow-[0_28px_70px_-32px_rgba(31,39,34,0.56)] focus:outline-none">
@@ -3496,6 +3809,7 @@ function GenerateDocumentDialog({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
+              disabled={generating}
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]"
               aria-label="Close document builder"
             >
@@ -3505,49 +3819,50 @@ function GenerateDocumentDialog({
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <label>
-              <FieldLabel>Document</FieldLabel>
-              <select className={inputClass} value={draft.documentType} onChange={(event) => onDraftChange({ ...draft, documentType: event.target.value })}>
+              <FieldLabel required>Document</FieldLabel>
+              <select className={inputClass} value={draft.documentType} disabled={generating} onChange={(event) => onDraftChange({ ...draft, documentType: event.target.value })}>
                 {documentGenerationTypes.map((type) => (
                   <option key={type} value={type}>{type}</option>
                 ))}
               </select>
             </label>
             <label>
-              <FieldLabel>Format</FieldLabel>
-              <select className={inputClass} value={draft.outputFormat} onChange={(event) => onDraftChange({ ...draft, outputFormat: event.target.value as QbrPromptDraft["outputFormat"] })}>
+              <FieldLabel required>Format</FieldLabel>
+              <select className={inputClass} value={draft.outputFormat} disabled={generating} onChange={(event) => onDraftChange({ ...draft, outputFormat: event.target.value as QbrPromptDraft["outputFormat"] })}>
                 {documentOutputFormats.map((format) => (
                   <option key={format} value={format}>{format}</option>
                 ))}
               </select>
             </label>
             <label>
-              <FieldLabel>Audience</FieldLabel>
-              <input className={inputClass} value={draft.audience} onChange={(event) => onDraftChange({ ...draft, audience: event.target.value })} placeholder="Client leadership, internal execs" />
+              <FieldLabel required>Audience</FieldLabel>
+              <input className={inputClass} value={draft.audience} disabled={generating} onChange={(event) => onDraftChange({ ...draft, audience: event.target.value })} placeholder="Client leadership, internal execs" />
             </label>
             <label>
-              <FieldLabel>Period or purpose</FieldLabel>
-              <input className={inputClass} value={draft.period} onChange={(event) => onDraftChange({ ...draft, period: event.target.value })} placeholder="Q2 2026" />
+              <FieldLabel required>{copy.periodLabel}</FieldLabel>
+              <input className={inputClass} value={draft.period} disabled={generating} onChange={(event) => onDraftChange({ ...draft, period: event.target.value })} placeholder={copy.periodPlaceholder} />
             </label>
             <label className="md:col-span-2">
-              <FieldLabel>Primary goals</FieldLabel>
-              <textarea className={textareaClass} value={draft.goals} onChange={(event) => onDraftChange({ ...draft, goals: event.target.value })} placeholder="What this QBR needs to accomplish" />
+              <FieldLabel required>{copy.goalsLabel}</FieldLabel>
+              <textarea className={textareaClass} value={draft.goals} disabled={generating} onChange={(event) => onDraftChange({ ...draft, goals: event.target.value })} placeholder={copy.goalsPlaceholder} />
             </label>
             <label>
-              <FieldLabel>Risks to address</FieldLabel>
-              <textarea className={textareaClass} value={draft.risks} onChange={(event) => onDraftChange({ ...draft, risks: event.target.value })} placeholder="Known risks, blockers, or escalation themes" />
+              <FieldLabel>{copy.risksLabel}</FieldLabel>
+              <textarea className={textareaClass} value={draft.risks} disabled={generating} onChange={(event) => onDraftChange({ ...draft, risks: event.target.value })} placeholder={copy.risksPlaceholder} />
             </label>
             <label>
-              <FieldLabel>Client asks</FieldLabel>
-              <textarea className={textareaClass} value={draft.asks} onChange={(event) => onDraftChange({ ...draft, asks: event.target.value })} placeholder="Decisions, approvals, or next steps needed" />
+              <FieldLabel>{copy.asksLabel}</FieldLabel>
+              <textarea className={textareaClass} value={draft.asks} disabled={generating} onChange={(event) => onDraftChange({ ...draft, asks: event.target.value })} placeholder={copy.asksPlaceholder} />
             </label>
           </div>
 
           <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => onOpenChange(false)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]">
+            <button type="button" onClick={() => onOpenChange(false)} disabled={generating} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254] disabled:opacity-60">
               Cancel
             </button>
-            <button type="button" onClick={onGenerate} disabled={!canGenerate || generating} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
-              {generating ? "Generating" : "Generate"}
+            <button type="button" onClick={onGenerate} disabled={!canGenerate || generating} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+              {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {generating ? "Generating..." : "Generate"}
             </button>
           </div>
         </Dialog.Content>
@@ -3559,12 +3874,14 @@ function GenerateDocumentDialog({
 function UploadDocumentDialog({
   open,
   draft,
+  saving,
   onOpenChange,
   onDraftChange,
   onSave,
 }: {
   open: boolean;
   draft: DocumentUploadDraft;
+  saving: boolean;
   onOpenChange: (open: boolean) => void;
   onDraftChange: (draft: DocumentUploadDraft) => void;
   onSave: () => void;
@@ -3573,7 +3890,10 @@ function UploadDocumentDialog({
   const canSave = Boolean(draft.fileName);
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => {
+      if (saving && !nextOpen) return;
+      onOpenChange(nextOpen);
+    }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[70] bg-[#1F2722]/28 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] p-4 shadow-[0_28px_70px_-32px_rgba(31,39,34,0.56)] focus:outline-none">
@@ -3582,6 +3902,7 @@ function UploadDocumentDialog({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
+              disabled={saving}
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]"
               aria-label="Close upload document"
             >
@@ -3591,9 +3912,10 @@ function UploadDocumentDialog({
 
           <div className="mt-4 grid gap-3">
             <label>
-              <FieldLabel>Document type</FieldLabel>
+              <FieldLabel required>Document type</FieldLabel>
               <select
                 value={draft.type}
+                disabled={saving}
                 onChange={(event) => onDraftChange({ ...draft, type: event.target.value })}
                 className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/45"
               >
@@ -3606,10 +3928,11 @@ function UploadDocumentDialog({
             </label>
 
             <label className="rounded-2xl border border-dashed border-[#D8CAB9] bg-white/62 p-4">
-              <FieldLabel>File</FieldLabel>
+              <FieldLabel required>File</FieldLabel>
               <input
                 type="file"
                 accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
+                disabled={saving}
                 className="mt-3 block w-full text-[13px] font-bold text-[#25352E] file:mr-3 file:rounded-full file:border-0 file:bg-[#25352E] file:px-4 file:py-2 file:text-[13px] file:font-bold file:text-[#FFF9EF]"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -3633,11 +3956,12 @@ function UploadDocumentDialog({
           </div>
 
           <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => onOpenChange(false)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]">
+            <button type="button" onClick={() => onOpenChange(false)} disabled={saving} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254] disabled:opacity-60">
               Cancel
             </button>
-            <button type="button" onClick={onSave} disabled={!canSave} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
-              Save
+            <button type="button" onClick={onSave} disabled={!canSave || saving} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </Dialog.Content>
@@ -3688,12 +4012,15 @@ function DocumentsTab({
   const [documentUploading, setDocumentUploading] = useState(false);
   const [documentUploadError, setDocumentUploadError] = useState("");
   const [draftDocumentEditor, setDraftDocumentEditor] = useState<UploadedAccountDocument | null>(null);
+  const [savingDraftDocument, setSavingDraftDocument] = useState(false);
   const [qbrOpen, setQbrOpen] = useState(false);
   const [qbrDraftReady, setQbrDraftReady] = useState(false);
   const [qbrDeckUrl, setQbrDeckUrl] = useState("");
   const [qbrGenerating, setQbrGenerating] = useState(false);
   const [qbrError, setQbrError] = useState("");
   const [proposalResolutionDraft, setProposalResolutionDraft] = useState<ProposalResolutionDraft | null>(null);
+  const [proposalResolutionSaving, setProposalResolutionSaving] = useState(false);
+  const [acceptingKycDraftId, setAcceptingKycDraftId] = useState<string | null>(null);
   const [uploadDraft, setUploadDraft] = useState<DocumentUploadDraft>({
     type: documentTypes[0].type,
     fileName: "",
@@ -3808,16 +4135,23 @@ function DocumentsTab({
     openExternalTab(document.url);
   }
 
-  function saveDraftDocumentEdits() {
-    if (!draftDocumentEditor) return;
-    setUploadedDocuments((documents) =>
-      documents.map((document) => (document.id === draftDocumentEditor.id ? draftDocumentEditor : document)),
-    );
-    setDraftDocumentEditor(null);
+  async function saveDraftDocumentEdits() {
+    if (!draftDocumentEditor || savingDraftDocument) return;
+    setSavingDraftDocument(true);
+    try {
+      await settleUiAction();
+      setUploadedDocuments((documents) =>
+        documents.map((document) => (document.id === draftDocumentEditor.id ? draftDocumentEditor : document)),
+      );
+      setDraftDocumentEditor(null);
+    } finally {
+      setSavingDraftDocument(false);
+    }
   }
 
   async function acceptKycDraft(document: UploadedAccountDocument) {
-    if (!document.kycPayload) return;
+    if (!document.kycPayload || acceptingKycDraftId) return;
+    setAcceptingKycDraftId(document.id);
     const kyc = document.kycPayload;
     const financialOverview = asPlainRecord(kyc.financialOverview);
     const parsedArr = Number(financialOverview.arr);
@@ -3833,24 +4167,25 @@ function DocumentsTab({
       relationshipSignal: riskFactors || expansionOpportunity || account.relationshipSignal,
     };
 
-    setUploadedDocuments((documents) =>
-      documents.map((item) =>
-        item.id === document.id
-          ? {
-              ...item,
-              status: "Processed",
-              type: "Accepted KYC",
-              acceptedAt: "Today",
-              uploadedAtMs: Date.now(),
-            }
-          : item,
-      ),
-    );
-    onGeneratedKycAccepted?.(document.id);
-    onAccountUpdate(nextAccount);
+    try {
+      await settleUiAction();
+      setUploadedDocuments((documents) =>
+        documents.map((item) =>
+          item.id === document.id
+            ? {
+                ...item,
+                status: "Processed",
+                type: "Accepted KYC",
+                acceptedAt: "Today",
+                uploadedAtMs: Date.now(),
+              }
+            : item,
+        ),
+      );
+      onGeneratedKycAccepted?.(document.id);
+      onAccountUpdate(nextAccount);
 
-    if (!account.id.startsWith("v2-acct-")) {
-      try {
+      if (!account.id.startsWith("v2-acct-")) {
         const response = await fetch(`/api/accounts/${account.id}`, {
           method: "PATCH",
           headers: {
@@ -3868,9 +4203,11 @@ function DocumentsTab({
         if (!response.ok) throw new Error(payload.error || "Accepted KYC could not update account information");
         upsertAccount(payload.data as CachedApiAccount);
         onAccountUpdate(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
-      } catch (error) {
-        setDocumentUploadError(error instanceof Error ? error.message : "Accepted KYC could not update account information");
       }
+    } catch (error) {
+      setDocumentUploadError(error instanceof Error ? error.message : "Accepted KYC could not update account information");
+    } finally {
+      setAcceptingKycDraftId(null);
     }
   }
 
@@ -3993,11 +4330,12 @@ function DocumentsTab({
 
   async function confirmProposalResolution() {
     const reason = proposalResolutionDraft?.reason.trim();
-    if (!proposalResolutionDraft || !reason) return;
+    if (!proposalResolutionDraft || !reason || proposalResolutionSaving) return;
+    setProposalResolutionSaving(true);
     const decidedAt = "Today";
     const currentProposal = signalProposals.find((proposal) => proposal.id === proposalResolutionDraft.proposalId);
-    if (currentProposal?.documentId) {
-      try {
+    try {
+      if (currentProposal?.documentId) {
         const response = await fetch(`/api/documents/${currentProposal.documentId}/analyze-impact`, {
           method: "PATCH",
           headers: {
@@ -4015,27 +4353,29 @@ function DocumentsTab({
         if (payload.data?.profileUpdated || payload.data?.scoreRecomputed) {
           void refreshAccountFromApi();
         }
-      } catch (error) {
-        setDocumentUploadError(error instanceof Error ? error.message : "Document proposal review failed");
-        return;
       }
+      await settleUiAction();
+      setSignalProposals((proposals) =>
+        proposals.map((proposal) => {
+          if (proposal.id !== proposalResolutionDraft.proposalId) return proposal;
+          const status = proposalResolutionDraft.action === "deny" ? "Denied" : canApproveDirectly ? "Approved" : "Routed to KAM";
+          return {
+            ...proposal,
+            status,
+            associateReason: role === "ASSOCIATE" ? reason : proposal.associateReason,
+            kamReason: role === "KAM" ? reason : proposal.kamReason,
+            latestReason: reason,
+            latestDecisionBy: role,
+            latestDecisionAt: decidedAt,
+          };
+        }),
+      );
+      setProposalResolutionDraft(null);
+    } catch (error) {
+      setDocumentUploadError(error instanceof Error ? error.message : "Document proposal review failed");
+    } finally {
+      setProposalResolutionSaving(false);
     }
-    setSignalProposals((proposals) =>
-      proposals.map((proposal) => {
-        if (proposal.id !== proposalResolutionDraft.proposalId) return proposal;
-        const status = proposalResolutionDraft.action === "deny" ? "Denied" : canApproveDirectly ? "Approved" : "Routed to KAM";
-        return {
-          ...proposal,
-          status,
-          associateReason: role === "ASSOCIATE" ? reason : proposal.associateReason,
-          kamReason: role === "KAM" ? reason : proposal.kamReason,
-          latestReason: reason,
-          latestDecisionBy: role,
-          latestDecisionAt: decidedAt,
-        };
-      }),
-    );
-    setProposalResolutionDraft(null);
   }
 
   async function generateQbr() {
@@ -4073,12 +4413,16 @@ function DocumentsTab({
             })),
             templates: storedDocumentTemplates(),
             conversation: [],
+            generateDocument: {
+              documentType: qbrDraft.documentType,
+              outputFormat: qbrDraft.outputFormat,
+            },
           }),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Document generation failed");
         if (!payload.generatedDocument?.fileUrl) {
-          throw new Error(payload.reply || "T Man needs more input before generating this document.");
+          throw new Error(payload.reply || "T-Man needs more input before generating this document.");
         }
         if (qbrDeckUrl && qbrDeckUrl.startsWith("blob:")) URL.revokeObjectURL(qbrDeckUrl);
         setQbrDeckUrl(String(payload.generatedDocument.fileUrl));
@@ -4154,7 +4498,8 @@ function DocumentsTab({
       </section>
 
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={() => setUploadOpen(true)} disabled={documentUploading} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#25352E] disabled:opacity-60">
+        <button type="button" onClick={() => setUploadOpen(true)} disabled={documentUploading} className="inline-flex items-center gap-2 rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#25352E] disabled:opacity-60">
+          {documentUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           {documentUploading ? "Uploading..." : "Upload"}
         </button>
         <button type="button" onClick={() => setQbrOpen(true)} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF]">
@@ -4195,8 +4540,9 @@ function DocumentsTab({
                       Download
                     </button>
                     {document.kind === "generated-kyc" && document.status === "Draft" ? (
-                      <button type="button" onClick={() => void acceptKycDraft(document)} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
-                        Accept KYC
+                      <button type="button" onClick={() => void acceptKycDraft(document)} disabled={acceptingKycDraftId === document.id} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+                        {acceptingKycDraftId === document.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                        {acceptingKycDraftId === document.id ? "Accepting..." : "Accept KYC"}
                       </button>
                     ) : null}
                   </div>
@@ -4232,10 +4578,10 @@ function DocumentsTab({
                       </div>
                       {canReviewProposals && (proposal.status === "Needs review" || (role === "KAM" && proposal.status === "Routed to KAM")) ? (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <button type="button" onClick={() => startProposalResolution(proposal.id, "approve")} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
+                          <button type="button" onClick={() => startProposalResolution(proposal.id, "approve")} disabled={proposalResolutionSaving} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
                             {canApproveDirectly ? "Approve" : "Route to KAM"}
                           </button>
-                          <button type="button" onClick={() => startProposalResolution(proposal.id, "deny")} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#6F6254]">
+                          <button type="button" onClick={() => startProposalResolution(proposal.id, "deny")} disabled={proposalResolutionSaving} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#6F6254] disabled:opacity-60">
                             Deny
                           </button>
                         </div>
@@ -4311,21 +4657,23 @@ function DocumentsTab({
               >
                 Download
               </button>
-              <button type="button" onClick={saveDraftDocumentEdits} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF]">
-                Save draft
+              <button type="button" onClick={() => void saveDraftDocumentEdits()} disabled={savingDraftDocument} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+                {savingDraftDocument ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {savingDraftDocument ? "Saving..." : "Save draft"}
               </button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
       <GenerateDocumentDialog open={qbrOpen} draft={qbrDraft} onOpenChange={setQbrOpen} onDraftChange={setQbrDraft} onGenerate={generateQbr} generating={qbrGenerating} />
-      <UploadDocumentDialog open={uploadOpen} draft={uploadDraft} onOpenChange={setUploadOpen} onDraftChange={setUploadDraft} onSave={saveUploadedDocument} />
+      <UploadDocumentDialog open={uploadOpen} draft={uploadDraft} saving={documentUploading} onOpenChange={setUploadOpen} onDraftChange={setUploadDraft} onSave={saveUploadedDocument} />
       <ProposalResolutionForm
         open={Boolean(proposalResolutionDraft)}
         action={proposalResolutionDraft?.action ?? "approve"}
         reason={proposalResolutionDraft?.reason ?? ""}
         proposal={proposalUnderReview}
         role={role}
+        saving={proposalResolutionSaving}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setProposalResolutionDraft(null);
         }}
@@ -4363,11 +4711,11 @@ function ProfileTab({
     mobile: contact.mobile,
     hierarchyRank: contact.hierarchyRank,
   }));
-  const accountDerivedContacts: AccountContact[] = accountPersistedContacts.length === 0 && primaryContactName && primaryContactName !== "Primary contact not set"
+  const accountDerivedContacts: AccountContact[] = accountPersistedContacts.length === 0 && primaryContactName && primaryContactName !== "Client POC not set"
     ? [{
         id: `derived-contact-${account.id}`,
         name: primaryContactName,
-        designation: "Primary contact",
+        designation: "Client POC",
         location: account.country && account.country !== "Country not set" ? account.country : "Location not set",
         timeZone: "Time zone not set",
         email: "Email not set",
@@ -4452,6 +4800,7 @@ function ProfileTab({
     name: "",
     role: "",
     pod: "",
+    sowName: "",
     location: "",
     startDate: "",
   });
@@ -4658,8 +5007,9 @@ function ProfileTab({
   }
 
   async function saveContact() {
-    if (!contactDraft.name.trim() || !contactDraft.email.trim() || !contactDraft.designation.trim()) return;
+    if (profileSaving || !contactDraft.name.trim() || !contactDraft.email.trim() || !contactDraft.designation.trim()) return;
     setProfileError("");
+    setProfileSaving(true);
     try {
       const response = await fetch(`/api/accounts/${account.id}/contacts`, {
         method: "POST",
@@ -4691,12 +5041,15 @@ function ProfileTab({
       setContactDialogOpen(false);
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Contact save failed");
+    } finally {
+      setProfileSaving(false);
     }
   }
 
   async function saveResource() {
-    if (!resourceDraft.name.trim() || !resourceDraft.role.trim() || !resourceDraft.pod.trim()) return;
+    if (profileSaving || !resourceDraft.name.trim() || !resourceDraft.role.trim() || !resourceDraft.pod.trim()) return;
     setProfileError("");
+    setProfileSaving(true);
     try {
       const response = await fetch(`/api/accounts/${account.id}/resources`, {
         method: "POST",
@@ -4705,6 +5058,7 @@ function ProfileTab({
           name: resourceDraft.name.trim(),
           role: resourceDraft.role.trim(),
           pod: resourceDraft.pod.trim(),
+          sowName: resourceDraft.sowName.trim() || undefined,
           location: resourceDraft.location.trim() || undefined,
           startDate: resourceDraft.startDate.trim() || undefined,
         }),
@@ -4717,12 +5071,15 @@ function ProfileTab({
         name: "",
         role: "",
         pod: "",
+        sowName: "",
         location: "",
         startDate: "",
       });
       setResourceDialogOpen(false);
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Resource save failed");
+    } finally {
+      setProfileSaving(false);
     }
   }
 
@@ -4765,8 +5122,9 @@ function ProfileTab({
   }
 
   async function saveJourneyItem() {
-    if (!journeyDraft.title.trim() || !journeyDraft.date || !journeyDraft.detail.trim()) return;
+    if (profileSaving || !journeyDraft.title.trim() || !journeyDraft.date || !journeyDraft.detail.trim()) return;
     setProfileError("");
+    setProfileSaving(true);
     try {
       const response = await fetch(`/api/accounts/${account.id}/journey-items`, {
         method: "POST",
@@ -4793,6 +5151,8 @@ function ProfileTab({
       setJourneyDialogOpen(false);
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Journey item save failed");
+    } finally {
+      setProfileSaving(false);
     }
   }
 
@@ -4844,7 +5204,7 @@ function ProfileTab({
               <input value={profileDraft.industry} onChange={(event) => updateProfileDraft("industry", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
             </label>
             <label>
-              <FieldLabel>Segment</FieldLabel>
+              <FieldLabel required>Domain</FieldLabel>
               <input value={profileDraft.segment} onChange={(event) => updateProfileDraft("segment", event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-[#E1D7CA] bg-white/80 px-3 text-[13px] font-bold text-[#25352E] outline-none" />
             </label>
             <label>
@@ -4895,7 +5255,7 @@ function ProfileTab({
           </div>
         ) : (
           <div className="mt-4 grid gap-2 md:grid-cols-4">
-            <SummaryItem label="Segment" value={account.segment ?? account.deliveryModel} />
+            <SummaryItem label="Domain" value={account.segment ?? account.deliveryModel} />
             <SummaryItem label="ARR" value={money(account.arr)} />
             <SummaryItem label="Location" value={`${account.country} - ${account.region}`} />
             <SummaryItem label="KAM owner" value={account.kamOwner} />
@@ -5015,6 +5375,7 @@ function ProfileTab({
       <AddContactDialog
         open={contactDialogOpen}
         draft={contactDraft}
+        saving={profileSaving}
         onOpenChange={setContactDialogOpen}
         onDraftChange={setContactDraft}
         onSave={saveContact}
@@ -5022,6 +5383,7 @@ function ProfileTab({
       <AddResourceDialog
         open={resourceDialogOpen}
         draft={resourceDraft}
+        saving={profileSaving}
         onOpenChange={setResourceDialogOpen}
         onDraftChange={setResourceDraft}
         onSave={saveResource}
@@ -5029,6 +5391,7 @@ function ProfileTab({
       <AddJourneyItemDialog
         open={journeyDialogOpen}
         draft={journeyDraft}
+        saving={profileSaving}
         onOpenChange={setJourneyDialogOpen}
         onDraftChange={setJourneyDraft}
         onSave={saveJourneyItem}
@@ -5053,12 +5416,14 @@ function AccountModal({
   account,
   open,
   initialTab,
+  initialFocus,
   onAccountUpdate,
   onOpenChange,
 }: {
   account: PortfolioAccount | null;
   open: boolean;
   initialTab: AccountWorkspaceTab;
+  initialFocus: string | null;
   onAccountUpdate: (account: PortfolioAccount) => void;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -5070,6 +5435,7 @@ function AccountModal({
   const [pendingDenials, setPendingDenials] = useState<Record<string, string>>({});
   const [deniedReasons, setDeniedReasons] = useState<Record<string, string>>({});
   const [overrideDrafts, setOverrideDrafts] = useState<Record<string, { score: string; reason: string }>>({});
+  const [overrideSubmitting, setOverrideSubmitting] = useState<string | null>(null);
   const [overrideRequests, setOverrideRequests] = useState<Record<string, ScoreOverrideRequest>>({});
   const [scoreOverrides, setScoreOverrides] = useState<Record<string, ScoreOverride>>({});
   const [scoreOverrideMessage, setScoreOverrideMessage] = useState("");
@@ -5081,6 +5447,7 @@ function AccountModal({
   const [weightDrafts, setWeightDrafts] = useState<Record<string, { weight: string }>>({});
   const [weightReason, setWeightReason] = useState("");
   const [weightRequest, setWeightRequest] = useState<KpiWeightRequest | undefined>();
+  const [weightSubmitting, setWeightSubmitting] = useState(false);
   const [kycRegenerating, setKycRegenerating] = useState(false);
   const [kycRegenerationMessage, setKycRegenerationMessage] = useState("");
   const [kycRegenerationError, setKycRegenerationError] = useState("");
@@ -5148,7 +5515,18 @@ function AccountModal({
       setOverrideRequests({});
       setScoreOverrides({});
     }
-  }, [account?.id, initialTab, open]);
+	  }, [account?.id, initialTab, open]);
+
+	  useEffect(() => {
+	    if (!open || !initialFocus) return;
+	    const normalizedFocus = normalizeFocusTarget(initialFocus);
+	    if (!normalizedFocus) return;
+	    const timeout = window.setTimeout(() => {
+	      const target = document.querySelector(`[data-kpi-focus="${normalizedFocus}"]`);
+	      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+	    }, 180);
+	    return () => window.clearTimeout(timeout);
+	  }, [account?.id, activeTab, initialFocus, open]);
 
   useEffect(() => {
     if (!open || !account?.id) return;
@@ -5363,12 +5741,13 @@ function AccountModal({
   }
 
   async function submitOverrideRequestAsync(targetId: string) {
-    if (!account?.id) return;
+    if (!account?.id || overrideSubmitting) return;
     const draft = overrideDrafts[targetId] ?? { score: String(defaultScoreForOverrideTarget(targetId)), reason: "" };
     const reason = draft.reason.trim();
     if (!reason) return;
     setScoreOverrideMessage("");
     setScoreOverrideError("");
+    setOverrideSubmitting(targetId);
 
     try {
       const requestedScore = clampKpiScore(draft.score);
@@ -5414,6 +5793,8 @@ function AccountModal({
       });
     } catch (error) {
       setScoreOverrideError(error instanceof Error ? error.message : "Score change request could not be submitted");
+    } finally {
+      setOverrideSubmitting(null);
     }
   }
 
@@ -5422,12 +5803,13 @@ function AccountModal({
   }
 
   async function applyScoreOverrideAsync(targetId: string) {
-    if (!account?.id) return;
+    if (!account?.id || overrideSubmitting) return;
     const draft = overrideDrafts[targetId] ?? { score: String(scoreOverrides[targetId]?.score ?? defaultScoreForOverrideTarget(targetId)), reason: "" };
     const reason = draft.reason.trim();
     if (!reason) return;
     setScoreOverrideMessage("");
     setScoreOverrideError("");
+    setOverrideSubmitting(targetId);
 
     try {
       const score = clampKpiScore(draft.score);
@@ -5469,9 +5851,11 @@ function AccountModal({
       const accountPayload = await accountResponse.json();
       if (accountResponse.ok) applyApiAccountUpdate(accountPayload.data as Record<string, unknown>);
       const recalculated = payload.data?.score?.overall;
-      setScoreOverrideMessage(`Score override saved${typeof recalculated === "number" ? `; account score is now ${recalculated}/100` : ""}.`);
+      setScoreOverrideMessage(`Score override saved${typeof recalculated === "number" ? `; account score is now ${scoreOutOfFiveLabel(recalculated)}/5` : ""}.`);
     } catch (error) {
       setScoreOverrideError(error instanceof Error ? error.message : "Score override could not be saved");
+    } finally {
+      setOverrideSubmitting(null);
     }
   }
 
@@ -5481,9 +5865,10 @@ function AccountModal({
 
   async function approveOverrideRequestAsync(targetId: string) {
     const request = overrideRequests[targetId];
-    if (!request) return;
+    if (!request || overrideSubmitting) return;
     setScoreOverrideMessage("");
     setScoreOverrideError("");
+    setOverrideSubmitting(targetId);
 
     try {
       if (request.id) {
@@ -5527,6 +5912,8 @@ function AccountModal({
       setScoreOverrideMessage("Score change request approved.");
     } catch (error) {
       setScoreOverrideError(error instanceof Error ? error.message : "Score request could not be approved");
+    } finally {
+      setOverrideSubmitting(null);
     }
   }
 
@@ -5536,9 +5923,10 @@ function AccountModal({
 
   async function denyOverrideRequestAsync(targetId: string) {
     const request = overrideRequests[targetId];
-    if (!request) return;
+    if (!request || overrideSubmitting) return;
     setScoreOverrideMessage("");
     setScoreOverrideError("");
+    setOverrideSubmitting(targetId);
 
     try {
       if (request.id) {
@@ -5563,6 +5951,8 @@ function AccountModal({
       setScoreOverrideMessage("Score change request denied.");
     } catch (error) {
       setScoreOverrideError(error instanceof Error ? error.message : "Score request could not be denied");
+    } finally {
+      setOverrideSubmitting(null);
     }
   }
 
@@ -5591,39 +5981,65 @@ function AccountModal({
     }));
   }
 
-  function submitWeightRequest() {
+  async function submitWeightRequest() {
+    if (weightSubmitting) return;
     const reason = weightReason.trim();
     if (!reason || draftWeightTotal() !== 100) return;
-    setWeightRequest({
-      requestedWeights: draftKpiWeights(),
-      reason,
-      status: "Pending",
-    });
-    setWeightReason("");
+    setWeightSubmitting(true);
+    try {
+      await settleUiAction();
+      setWeightRequest({
+        requestedWeights: draftKpiWeights(),
+        reason,
+        status: "Pending",
+      });
+      setWeightReason("");
+    } finally {
+      setWeightSubmitting(false);
+    }
   }
 
-  function saveKpiWeight() {
+  async function saveKpiWeight() {
+    if (weightSubmitting) return;
     const reason = weightReason.trim();
     if (!reason || draftWeightTotal() !== 100) return;
-    setKpiWeights(draftKpiWeights());
-    setWeightReason("");
+    setWeightSubmitting(true);
+    try {
+      await settleUiAction();
+      setKpiWeights(draftKpiWeights());
+      setWeightReason("");
+    } finally {
+      setWeightSubmitting(false);
+    }
   }
 
-  function approveWeightRequest() {
-    if (!weightRequest) return;
-    setKpiWeights(weightRequest.requestedWeights);
-    setWeightRequest({
-      ...weightRequest,
-      status: "Approved",
-    });
+  async function approveWeightRequest() {
+    if (!weightRequest || weightSubmitting) return;
+    setWeightSubmitting(true);
+    try {
+      await settleUiAction();
+      setKpiWeights(weightRequest.requestedWeights);
+      setWeightRequest({
+        ...weightRequest,
+        status: "Approved",
+      });
+    } finally {
+      setWeightSubmitting(false);
+    }
   }
 
-  function denyWeightRequest() {
-    if (!weightRequest) return;
-    setWeightRequest({
-      ...weightRequest,
-      status: "Denied",
-    });
+  async function denyWeightRequest() {
+    if (!weightRequest || weightSubmitting) return;
+    setWeightSubmitting(true);
+    try {
+      await settleUiAction();
+      setWeightRequest({
+        ...weightRequest,
+        status: "Denied",
+      });
+    } finally {
+      setWeightSubmitting(false);
+    }
   }
 
   async function regenerateKyc() {
@@ -5743,6 +6159,7 @@ function AccountModal({
                 ) : null}
                 <OverviewTab
                   kpiRows={kpiRows}
+                  initialFocus={initialFocus}
                   isLoadingKpis={kpiRowsLoading}
                   kpiRowsError={kpiRowsError}
                   activeTasks={activeTasks}
@@ -5756,6 +6173,8 @@ function AccountModal({
                   weightDrafts={weightDrafts}
                   weightRequest={weightRequest}
                   weightReason={weightReason}
+                  overrideSubmitting={overrideSubmitting}
+                  weightSubmitting={weightSubmitting}
                   isAssociate={isAssociate}
                   canOverrideDirectly={canOverrideDirectly}
                   onAccept={acceptRecommendation}
@@ -6119,22 +6538,32 @@ function AccountSourceUploadDialog({
 }
 
 function AccountDraftField({
+  field,
   label,
   value,
   onChange,
 }: {
+  field: keyof AccountDraft;
   label: string;
   value: string;
   onChange: (value: string) => void;
 }) {
+  const validationError = accountDraftValidationError(field, value);
+  const required = mandatoryAccountDraftFields.has(field);
+  const isNumeric = numericAccountDraftFields.has(field);
+  const isDate = dateAccountDraftFields.has(field);
   return (
-    <label className="block rounded-2xl border border-[#E5DACD] bg-white/62 p-3">
-      <FieldLabel>{label}</FieldLabel>
+    <label className={`block rounded-2xl border bg-white/62 p-3 ${validationError ? "border-[#EAB3A9]" : "border-[#E5DACD]"}`}>
+      <FieldLabel required={required} tooltip={accountDraftFieldTooltips[field]}>{label}</FieldLabel>
       <input
-        value={value}
+        type={isDate ? "date" : "text"}
+        value={isDate ? toDateInputValue(value) : value}
+        inputMode={isNumeric ? "decimal" : undefined}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-2 h-9 w-full rounded-xl border border-[#E1D7CA] bg-[#FFF9EF]/80 px-3 text-[13px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/45"
+        aria-invalid={Boolean(validationError)}
+        className={`mt-2 h-9 w-full rounded-xl border bg-[#FFF9EF]/80 px-3 text-[13px] font-bold text-[#25352E] outline-none focus:border-[#25352E]/45 ${validationError ? "border-[#EAB3A9]" : "border-[#E1D7CA]"}`}
       />
+      {validationError ? <p className="mt-1 text-[11px] font-bold text-[#B33D32]">{validationError}</p> : null}
     </label>
   );
 }
@@ -6349,6 +6778,7 @@ function PendingAccountCreationDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role,
+          activeStep,
           sourceFiles: attachedFileName ? [attachedFileName, ...sourceFiles] : sourceFiles,
           prompt: message,
           draft,
@@ -6430,18 +6860,18 @@ function PendingAccountCreationDialog({
     if (activeStep === "profile") {
       return (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <AccountDraftField label="Account name" value={draft.name} onChange={(value) => updateDraft({ ...draft, name: value })} />
-          <AccountDraftField label="Industry" value={draft.industry} onChange={(value) => updateDraft({ ...draft, industry: value })} />
-          <AccountDraftField label="Segment" value={draft.segment} onChange={(value) => updateDraft({ ...draft, segment: value })} />
-          <AccountDraftField label="ARR" value={draft.arr} onChange={(value) => updateDraft({ ...draft, arr: value })} />
-          <AccountDraftField label="Location" value={draft.location} onChange={(value) => updateDraft({ ...draft, location: value })} />
-          <AccountDraftField label="Contract renewal" value={draft.contractRenewal} onChange={(value) => updateDraft({ ...draft, contractRenewal: value })} />
-          <AccountDraftField label="KAM owner" value={draft.kamOwner} onChange={(value) => updateDraft({ ...draft, kamOwner: value })} />
-          <AccountDraftField label="Associate owner" value={draft.associateOwner} onChange={(value) => updateDraft({ ...draft, associateOwner: value })} />
-          <AccountDraftField label="Primary contact" value={draft.primaryContact} onChange={(value) => updateDraft({ ...draft, primaryContact: value })} />
-          <AccountDraftField label="Active risk" value={draft.activeRisk} onChange={(value) => updateDraft({ ...draft, activeRisk: value })} />
-          <AccountDraftField label="Open opportunity" value={draft.openOpportunity} onChange={(value) => updateDraft({ ...draft, openOpportunity: value })} />
-          <AccountDraftField label="Next touchpoint" value={draft.nextTouchpoint} onChange={(value) => updateDraft({ ...draft, nextTouchpoint: value })} />
+          <AccountDraftField field="name" label="Account name" value={draft.name} onChange={(value) => updateDraft({ ...draft, name: value })} />
+          <AccountDraftField field="industry" label="Industry" value={draft.industry} onChange={(value) => updateDraft({ ...draft, industry: value })} />
+          <AccountDraftField field="segment" label="Domain" value={draft.segment} onChange={(value) => updateDraft({ ...draft, segment: value })} />
+          <AccountDraftField field="arr" label="ARR" value={draft.arr} onChange={(value) => updateDraft({ ...draft, arr: value })} />
+          <AccountDraftField field="location" label="Location" value={draft.location} onChange={(value) => updateDraft({ ...draft, location: value })} />
+          <AccountDraftField field="contractRenewal" label="Contract renewal" value={draft.contractRenewal} onChange={(value) => updateDraft({ ...draft, contractRenewal: value })} />
+          <AccountDraftField field="kamOwner" label="KAM owner" value={draft.kamOwner} onChange={(value) => updateDraft({ ...draft, kamOwner: value })} />
+          <AccountDraftField field="associateOwner" label="Associate owner" value={draft.associateOwner} onChange={(value) => updateDraft({ ...draft, associateOwner: value })} />
+          <AccountDraftField field="primaryContact" label="Client POC" value={draft.primaryContact} onChange={(value) => updateDraft({ ...draft, primaryContact: value })} />
+          <AccountDraftField field="activeRisk" label="Active risk" value={draft.activeRisk} onChange={(value) => updateDraft({ ...draft, activeRisk: value })} />
+          <AccountDraftField field="openOpportunity" label="Open opportunity" value={draft.openOpportunity} onChange={(value) => updateDraft({ ...draft, openOpportunity: value })} />
+          <AccountDraftField field="nextTouchpoint" label="Next touchpoint" value={draft.nextTouchpoint} onChange={(value) => updateDraft({ ...draft, nextTouchpoint: value })} />
         </div>
       );
     }
@@ -6688,19 +7118,26 @@ function PendingAccountCreationDialog({
 
           <div className={`grid min-h-0 flex-1 gap-4 overflow-hidden p-4 ${assistantCollapsed ? "lg:grid-cols-[1fr_auto]" : "lg:grid-cols-[minmax(0,1fr)_390px]"}`}>
             <div className="flex min-h-0 min-w-0 flex-col">
-              <div className="mb-3 flex flex-wrap gap-2">
-                {setupTabs.map((tab) => (
+              <div className="mb-3 rounded-3xl border border-[#E5DACD] bg-[#FFF9EF]/70 p-2">
+                <div className="grid gap-2 md:grid-cols-5">
+                {setupTabs.map((tab, index) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveStep(tab.id)}
-                    className={`rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${
-                      activeStep === tab.id ? "bg-[#25352E] text-[#FFF9EF]" : "border border-[#D8CAB9] bg-white/64 text-[#6F6254] hover:text-[#25352E]"
+                    className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-left text-[12px] font-black transition-colors ${
+                      activeStep === tab.id ? "bg-[#25352E] text-[#FFF9EF] shadow-[0_14px_28px_-22px_rgba(31,39,34,0.55)]" : "border border-[#D8CAB9] bg-white/64 text-[#6F6254] hover:text-[#25352E]"
                     }`}
                   >
-                    {tab.label}
+                    <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                      activeStep === tab.id ? "bg-[#FFF9EF] text-[#25352E]" : "border border-[#D8CAB9] text-[#8A7A69]"
+                    }`}>
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 truncate">{tab.label}</span>
                   </button>
                 ))}
+                </div>
               </div>
 
               <section className="min-h-0 flex-1 overflow-y-auto rounded-3xl border border-[#E5DACD] bg-white/50 p-4">
@@ -6826,18 +7263,18 @@ function PendingAccountCreationDialog({
               <section className="space-y-4">
                 <div className="rounded-3xl border border-[#E5DACD] bg-white/50 p-4">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <AccountDraftField label="Account name" value={draft.name} onChange={(value) => updateDraft({ ...draft, name: value })} />
-                  <AccountDraftField label="Industry" value={draft.industry} onChange={(value) => updateDraft({ ...draft, industry: value })} />
-                  <AccountDraftField label="Segment" value={draft.segment} onChange={(value) => updateDraft({ ...draft, segment: value })} />
-                  <AccountDraftField label="ARR" value={draft.arr} onChange={(value) => updateDraft({ ...draft, arr: value })} />
-                  <AccountDraftField label="Location" value={draft.location} onChange={(value) => updateDraft({ ...draft, location: value })} />
-                  <AccountDraftField label="Contract renewal" value={draft.contractRenewal} onChange={(value) => updateDraft({ ...draft, contractRenewal: value })} />
-                  <AccountDraftField label="KAM owner" value={draft.kamOwner} onChange={(value) => updateDraft({ ...draft, kamOwner: value })} />
-                  <AccountDraftField label="Associate owner" value={draft.associateOwner} onChange={(value) => updateDraft({ ...draft, associateOwner: value })} />
-                  <AccountDraftField label="Primary contact" value={draft.primaryContact} onChange={(value) => updateDraft({ ...draft, primaryContact: value })} />
-                  <AccountDraftField label="Active risk" value={draft.activeRisk} onChange={(value) => updateDraft({ ...draft, activeRisk: value })} />
-                  <AccountDraftField label="Open opportunity" value={draft.openOpportunity} onChange={(value) => updateDraft({ ...draft, openOpportunity: value })} />
-                  <AccountDraftField label="Next touchpoint" value={draft.nextTouchpoint} onChange={(value) => updateDraft({ ...draft, nextTouchpoint: value })} />
+                  <AccountDraftField field="name" label="Account name" value={draft.name} onChange={(value) => updateDraft({ ...draft, name: value })} />
+                  <AccountDraftField field="industry" label="Industry" value={draft.industry} onChange={(value) => updateDraft({ ...draft, industry: value })} />
+                  <AccountDraftField field="segment" label="Domain" value={draft.segment} onChange={(value) => updateDraft({ ...draft, segment: value })} />
+                  <AccountDraftField field="arr" label="ARR" value={draft.arr} onChange={(value) => updateDraft({ ...draft, arr: value })} />
+                  <AccountDraftField field="location" label="Location" value={draft.location} onChange={(value) => updateDraft({ ...draft, location: value })} />
+                  <AccountDraftField field="contractRenewal" label="Contract renewal" value={draft.contractRenewal} onChange={(value) => updateDraft({ ...draft, contractRenewal: value })} />
+                  <AccountDraftField field="kamOwner" label="KAM owner" value={draft.kamOwner} onChange={(value) => updateDraft({ ...draft, kamOwner: value })} />
+                  <AccountDraftField field="associateOwner" label="Associate owner" value={draft.associateOwner} onChange={(value) => updateDraft({ ...draft, associateOwner: value })} />
+                  <AccountDraftField field="primaryContact" label="Client POC" value={draft.primaryContact} onChange={(value) => updateDraft({ ...draft, primaryContact: value })} />
+                  <AccountDraftField field="activeRisk" label="Active risk" value={draft.activeRisk} onChange={(value) => updateDraft({ ...draft, activeRisk: value })} />
+                  <AccountDraftField field="openOpportunity" label="Open opportunity" value={draft.openOpportunity} onChange={(value) => updateDraft({ ...draft, openOpportunity: value })} />
+                  <AccountDraftField field="nextTouchpoint" label="Next touchpoint" value={draft.nextTouchpoint} onChange={(value) => updateDraft({ ...draft, nextTouchpoint: value })} />
                   </div>
                 </div>
 
@@ -7061,7 +7498,7 @@ function AccountOnboardingWorkspace({
   onConfirmDismissSuggestion: () => void;
   onCancelDismissSuggestion: () => void;
   onDocumentDraftChange: (draft: OnboardingDocumentDraft) => void;
-  onAddDocument: () => void;
+  onAddDocument: (activeStep: AccountOnboardingStep) => void;
   onKycSectionsChange: (sections: KycDraftSection[]) => void;
   onJourneyChange: (itemId: string, field: keyof OnboardingJourneyDraftItem, value: string) => void;
   onAddJourneyItem: () => void;
@@ -7071,7 +7508,7 @@ function AccountOnboardingWorkspace({
   onSubmitKycForKam: () => void;
   onApproveKycDocument: () => void;
   onPromptChange: (prompt: string) => void;
-  onApplyPrompt: () => void;
+  onApplyPrompt: (activeStep: AccountOnboardingStep) => void;
   onSaveDraft: () => void;
   onFinalizeAccount: () => void | Promise<void>;
 }) {
@@ -7080,11 +7517,16 @@ function AccountOnboardingWorkspace({
   const [acceptedKycSections, setAcceptedKycSections] = useState<Set<string>>(() => new Set());
   const [dismissedKycSections, setDismissedKycSections] = useState<Set<string>>(() => new Set());
   const [assistantCollapsed, setAssistantCollapsed] = useState(false);
+  const [finalizingAccount, setFinalizingAccount] = useState(false);
   const steps = onboardingSteps(sourceFileNames.length, draft, suggestions, documents, journey);
   const dismissedSuggestion = dismissalDraft ? suggestions.find((suggestion) => suggestion.id === dismissalDraft.suggestionId) : undefined;
   const isKam = role === "KAM";
   const acceptedSuggestions = suggestions.filter((suggestion) => suggestion.status === "Accepted");
   const pendingSuggestions = suggestions.filter((suggestion) => suggestion.status === "Pending");
+  const draftValidationErrors = (Object.keys(accountDraftFieldLabels) as Array<keyof AccountDraft>)
+    .map((field) => accountDraftValidationError(field, draft[field] ?? ""))
+    .filter(Boolean);
+  const canFinalizeAccount = draftValidationErrors.length === 0 && !finalizingAccount;
   const setupTabs: Array<{ id: AccountOnboardingStep; label: string }> = [
     { id: "profile", label: "Profile" },
     { id: "scoring", label: "Scoring" },
@@ -7092,6 +7534,16 @@ function AccountOnboardingWorkspace({
     { id: "journey", label: "Journey" },
     { id: "review", label: "Review" },
   ];
+
+  async function handleFinalizeAccount() {
+    if (finalizingAccount) return;
+    setFinalizingAccount(true);
+    try {
+      await onFinalizeAccount();
+    } finally {
+      setFinalizingAccount(false);
+    }
+  }
 
   function updateKycSection(sectionId: string, status: "accepted" | "dismissed") {
     if (status === "accepted") {
@@ -7123,18 +7575,18 @@ function AccountOnboardingWorkspace({
     return (
       <div className="space-y-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <AccountDraftField label="Account name" value={draft.name} onChange={(value) => onDraftChange({ ...draft, name: value })} />
-          <AccountDraftField label="Industry" value={draft.industry} onChange={(value) => onDraftChange({ ...draft, industry: value })} />
-          <AccountDraftField label="Segment" value={draft.segment} onChange={(value) => onDraftChange({ ...draft, segment: value })} />
-          <AccountDraftField label="ARR" value={draft.arr} onChange={(value) => onDraftChange({ ...draft, arr: value })} />
-          <AccountDraftField label="Location" value={draft.location} onChange={(value) => onDraftChange({ ...draft, location: value })} />
-          <AccountDraftField label="Contract renewal" value={draft.contractRenewal} onChange={(value) => onDraftChange({ ...draft, contractRenewal: value })} />
-          <AccountDraftField label="KAM owner" value={draft.kamOwner} onChange={(value) => onDraftChange({ ...draft, kamOwner: value })} />
-          <AccountDraftField label="Associate owner" value={draft.associateOwner} onChange={(value) => onDraftChange({ ...draft, associateOwner: value })} />
-          <AccountDraftField label="Primary contact" value={draft.primaryContact} onChange={(value) => onDraftChange({ ...draft, primaryContact: value })} />
-          <AccountDraftField label="Active risk" value={draft.activeRisk} onChange={(value) => onDraftChange({ ...draft, activeRisk: value })} />
-          <AccountDraftField label="Open opportunity" value={draft.openOpportunity} onChange={(value) => onDraftChange({ ...draft, openOpportunity: value })} />
-          <AccountDraftField label="Next touchpoint" value={draft.nextTouchpoint} onChange={(value) => onDraftChange({ ...draft, nextTouchpoint: value })} />
+          <AccountDraftField field="name" label="Account name" value={draft.name} onChange={(value) => onDraftChange({ ...draft, name: value })} />
+          <AccountDraftField field="industry" label="Industry" value={draft.industry} onChange={(value) => onDraftChange({ ...draft, industry: value })} />
+          <AccountDraftField field="segment" label="Domain" value={draft.segment} onChange={(value) => onDraftChange({ ...draft, segment: value })} />
+          <AccountDraftField field="arr" label="ARR" value={draft.arr} onChange={(value) => onDraftChange({ ...draft, arr: value })} />
+          <AccountDraftField field="location" label="Location" value={draft.location} onChange={(value) => onDraftChange({ ...draft, location: value })} />
+          <AccountDraftField field="contractRenewal" label="Contract renewal" value={draft.contractRenewal} onChange={(value) => onDraftChange({ ...draft, contractRenewal: value })} />
+          <AccountDraftField field="kamOwner" label="KAM owner" value={draft.kamOwner} onChange={(value) => onDraftChange({ ...draft, kamOwner: value })} />
+          <AccountDraftField field="associateOwner" label="Associate owner" value={draft.associateOwner} onChange={(value) => onDraftChange({ ...draft, associateOwner: value })} />
+          <AccountDraftField field="primaryContact" label="Client POC" value={draft.primaryContact} onChange={(value) => onDraftChange({ ...draft, primaryContact: value })} />
+          <AccountDraftField field="activeRisk" label="Active risk" value={draft.activeRisk} onChange={(value) => onDraftChange({ ...draft, activeRisk: value })} />
+          <AccountDraftField field="openOpportunity" label="Open opportunity" value={draft.openOpportunity} onChange={(value) => onDraftChange({ ...draft, openOpportunity: value })} />
+          <AccountDraftField field="nextTouchpoint" label="Next touchpoint" value={draft.nextTouchpoint} onChange={(value) => onDraftChange({ ...draft, nextTouchpoint: value })} />
         </div>
       </div>
     );
@@ -7285,14 +7737,19 @@ function AccountOnboardingWorkspace({
           </div>
         ) : null}
         <div className="grid gap-2">
-          {journey.map((item) => (
-            <div key={item.id} className="grid gap-2 rounded-2xl border border-[#E5DACD] bg-white/60 p-3 md:grid-cols-[130px_1fr_160px_130px_auto]">
+          {journey.map((item) => {
+            const isNewJourneyItem = item.id.startsWith("agent-journey-") || item.id.startsWith("review-journey-") || item.id.startsWith("journey-new-") || item.id.startsWith("journey-agent-");
+            return (
+            <div key={item.id} className={`grid gap-2 rounded-2xl border p-3 md:grid-cols-[130px_1fr_160px_130px_auto] ${isNewJourneyItem ? "border-[#9BCBA8] bg-[#F2FAF2] shadow-[0_16px_34px_-30px_rgba(31,39,34,0.58)]" : "border-[#E5DACD] bg-white/60"}`}>
               <select value={item.type} onChange={(event) => onJourneyChange(item.id, "type", event.target.value)} className="h-10 rounded-xl border border-[#E1D7CA] bg-[#FFF9EF]/80 px-3 text-[12px] font-bold text-[#25352E]">
                 <option value="To-do">To-do</option>
                 <option value="Meeting">Meeting</option>
                 <option value="QBR">QBR</option>
               </select>
-              <input value={item.title} onChange={(event) => onJourneyChange(item.id, "title", event.target.value)} className="h-10 rounded-xl border border-[#E1D7CA] bg-[#FFF9EF]/80 px-3 text-[13px] font-bold text-[#25352E]" />
+              <div className="relative">
+                <input value={item.title} onChange={(event) => onJourneyChange(item.id, "title", event.target.value)} className="h-10 w-full rounded-xl border border-[#E1D7CA] bg-[#FFF9EF]/80 px-3 text-[13px] font-bold text-[#25352E]" />
+                {isNewJourneyItem ? <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-[#A9D4B2] bg-[#EAF8ED] px-2 py-0.5 text-[10px] font-black text-[#1F6C42]">New</span> : null}
+              </div>
               <input type="date" value={item.dueDate} onChange={(event) => onJourneyChange(item.id, "dueDate", event.target.value)} className="h-10 rounded-xl border border-[#E1D7CA] bg-[#FFF9EF]/80 px-3 text-[12px] font-bold text-[#25352E]" />
               <select value={normalizedJourneyRecurrence(item.recurrence)} onChange={(event) => onJourneyChange(item.id, "recurrence", event.target.value)} className="h-10 rounded-xl border border-[#E1D7CA] bg-[#FFF9EF]/80 px-3 text-[12px] font-bold text-[#25352E]">
                 {journeyRecurrenceOptions.map((option) => (
@@ -7303,7 +7760,8 @@ function AccountOnboardingWorkspace({
                 <X className="h-4 w-4" />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -7407,19 +7865,26 @@ function AccountOnboardingWorkspace({
 
           <div className={`grid min-h-0 flex-1 gap-4 overflow-hidden p-4 ${assistantCollapsed ? "lg:grid-cols-[1fr_auto]" : "lg:grid-cols-[minmax(0,1fr)_390px]"}`}>
             <div className="flex min-h-0 min-w-0 flex-col">
-              <div className="mb-3 flex flex-wrap gap-2">
-                {setupTabs.map((tab) => (
+              <div className="mb-3 rounded-3xl border border-[#E5DACD] bg-[#FFF9EF]/70 p-2">
+                <div className="grid gap-2 md:grid-cols-5">
+                {setupTabs.map((tab, index) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveStep(tab.id)}
-                    className={`rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${
-                      activeStep === tab.id ? "bg-[#25352E] text-[#FFF9EF]" : "border border-[#D8CAB9] bg-white/64 text-[#6F6254] hover:text-[#25352E]"
+                    className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-left text-[12px] font-black transition-colors ${
+                      activeStep === tab.id ? "bg-[#25352E] text-[#FFF9EF] shadow-[0_14px_28px_-22px_rgba(31,39,34,0.55)]" : "border border-[#D8CAB9] bg-white/64 text-[#6F6254] hover:text-[#25352E]"
                     }`}
                   >
-                    {tab.label}
+                    <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                      activeStep === tab.id ? "bg-[#FFF9EF] text-[#25352E]" : "border border-[#D8CAB9] text-[#8A7A69]"
+                    }`}>
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 truncate">{tab.label}</span>
                   </button>
                 ))}
+                </div>
               </div>
 
               <section className="min-h-0 flex-1 overflow-y-auto rounded-3xl border border-[#E5DACD] bg-white/50 p-4">
@@ -7565,12 +8030,12 @@ function AccountOnboardingWorkspace({
                         type="button"
                         onClick={() => {
                           if (documentDraft.fileName) {
-                            onAddDocument();
+                            onAddDocument(activeStep);
                             return;
                           }
-                          onApplyPrompt();
+                          onApplyPrompt(activeStep);
                         }}
-                        disabled={!prompt.trim() && !documentDraft.fileName}
+                        disabled={assistantLoading || (!prompt.trim() && !documentDraft.fileName)}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
                         aria-label="Send setup assistant message"
                       >
@@ -7578,12 +8043,17 @@ function AccountOnboardingWorkspace({
                       </button>
                     </div>
                   </div>
+                  {draftValidationErrors[0] ? (
+                    <p className="mt-2 rounded-xl border border-[#EAB3A9] bg-[#FFF0ED] px-3 py-2 text-[11px] font-bold text-[#B33D32]">
+                      {draftValidationErrors[0]}
+                    </p>
+                  ) : null}
                   <div className="mt-3 flex gap-2">
                     <button type="button" onClick={onSaveDraft} className="flex-1 rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-2 text-[12px] font-bold text-[#6F6254]">
                       Save draft
                     </button>
-                    <button type="button" onClick={onFinalizeAccount} className="flex-1 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF]">
-                      {isKam ? "Create account" : "Submit to KAM"}
+                    <button type="button" onClick={handleFinalizeAccount} disabled={!canFinalizeAccount} className="flex-1 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+                      {finalizingAccount ? (isKam ? "Creating..." : "Submitting...") : isKam ? "Create account" : "Submit to KAM"}
                     </button>
                   </div>
                 </div>
@@ -7720,12 +8190,12 @@ function AccountOnboardingWorkspace({
                   type="button"
                   onClick={() => {
                     if (documentDraft.fileName) {
-                      onAddDocument();
+                      onAddDocument(activeStep);
                       return;
                     }
-                    onApplyPrompt();
+                    onApplyPrompt(activeStep);
                   }}
-                  disabled={!prompt.trim() && !documentDraft.fileName}
+                  disabled={assistantLoading || (!prompt.trim() && !documentDraft.fileName)}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
                   aria-label="Send setup assistant message"
                 >
@@ -7733,12 +8203,17 @@ function AccountOnboardingWorkspace({
                 </button>
               </div>
             </div>
+            {draftValidationErrors[0] ? (
+              <p className="mt-2 rounded-xl border border-[#EAB3A9] bg-[#FFF0ED] px-3 py-2 text-[11px] font-bold text-[#B33D32]">
+                {draftValidationErrors[0]}
+              </p>
+            ) : null}
             <div className="mt-3 flex gap-2">
               <button type="button" onClick={onSaveDraft} className="flex-1 rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-2 text-[12px] font-bold text-[#6F6254]">
                 Save draft
               </button>
-              <button type="button" onClick={onFinalizeAccount} className="flex-1 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF]">
-                {isKam ? "Create account" : "Submit to KAM"}
+              <button type="button" onClick={handleFinalizeAccount} disabled={!canFinalizeAccount} className="flex-1 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+                {finalizingAccount ? (isKam ? "Creating..." : "Submitting...") : isKam ? "Create account" : "Submit to KAM"}
               </button>
             </div>
           </div>
@@ -7760,7 +8235,7 @@ function CammiePanel({
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [thread, setThread] = useState<CammieMessage[]>([
-    { role: "assistant", content: "Hey, T Man here, what're we working on today?" },
+    { role: "assistant", content: "Hey, T-Man here, what're we working on today?" },
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -7804,7 +8279,7 @@ function CammiePanel({
       });
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload.error || "T Man could not respond");
+        throw new Error(payload.error || "T-Man could not respond");
       }
       setThread((items) => [
         ...items,
@@ -7823,7 +8298,7 @@ function CammiePanel({
         },
       ]);
     } catch (caught) {
-      const messageText = caught instanceof Error ? caught.message : "T Man could not respond";
+      const messageText = caught instanceof Error ? caught.message : "T-Man could not respond";
       setError(messageText);
       setThread((items) => [...items, { role: "assistant", content: "I could not reach the V2 assistant route. Try again after the server is ready." }]);
     } finally {
@@ -7845,11 +8320,11 @@ function CammiePanel({
                   <div className="absolute left-4 top-4 h-4 w-4 rounded-full bg-[#A7C7B4]" />
                 </div>
                 <div>
-                  <h3 className="text-[18px] font-black tracking-[-0.05em] text-[#1F2722]">T Man</h3>
+                  <h3 className="text-[18px] font-black tracking-[-0.05em] text-[#1F2722]">T-Man</h3>
                   <p className="text-[12px] font-bold text-[#7D6E5F]">Portfolio and research assistant</p>
                 </div>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254]" aria-label="Close T Man">
+              <button type="button" onClick={() => setOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254]" aria-label="Close T-Man">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -7902,7 +8377,7 @@ function CammiePanel({
                 className="h-10 min-w-0 flex-1 bg-transparent px-3 text-[13px] font-bold text-[#25352E] outline-none placeholder:text-[#A69A8B]"
                 placeholder="Ask about accounts, documents, or the web"
               />
-              <button type="button" onClick={sendMessage} disabled={loading} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send T Man message">
+              <button type="button" onClick={sendMessage} disabled={loading} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send T-Man message">
                 <Sparkles className="h-4 w-4" />
               </button>
             </div>
@@ -7913,14 +8388,14 @@ function CammiePanel({
         type="button"
         onClick={() => setOpen((current) => !current)}
         className="group inline-flex h-14 items-center gap-3 rounded-full border border-[#D8CAB9] bg-[#FFF9EF] pl-3 pr-5 text-[#25352E] shadow-[0_18px_42px_-24px_rgba(31,39,34,0.82)] transition-transform hover:-translate-y-0.5"
-        aria-label="Open T Man"
+        aria-label="Open T-Man"
       >
         <span className="relative h-9 w-9 rounded-2xl bg-[#25352E]">
           <span className="absolute left-1.5 top-1.5 h-4 w-4 rounded-full bg-[#FFF9EF]" />
           <span className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 rounded-full bg-[#E8BE86]" />
           <span className="absolute left-3 top-3 h-3.5 w-3.5 rounded-full bg-[#A7C7B4]" />
         </span>
-        <span className="text-[13px] font-black tracking-[-0.02em]">Ask T Man</span>
+        <span className="text-[13px] font-black tracking-[-0.02em]">Ask T-Man</span>
       </button>
     </div>
   );
@@ -7936,10 +8411,11 @@ export function PortfolioPage() {
     loading: accountHydrationPending,
     upsertAccount,
   } = useAccountCache();
-  const [query, setQuery] = useState("");
-  const [healthFilter, setHealthFilter] = useState<PortfolioHealth | "ALL">("ALL");
-  const [selectedAccount, setSelectedAccount] = useState<PortfolioAccount | null>(null);
-  const [selectedAccountTab, setSelectedAccountTab] = useState<AccountWorkspaceTab>("overview");
+	  const [query, setQuery] = useState("");
+	  const [healthFilter, setHealthFilter] = useState<PortfolioHealth | "ALL">("ALL");
+	  const [selectedAccount, setSelectedAccount] = useState<PortfolioAccount | null>(null);
+	  const [selectedAccountTab, setSelectedAccountTab] = useState<AccountWorkspaceTab>("overview");
+	  const [selectedAccountFocus, setSelectedAccountFocus] = useState<string | null>(null);
   const [accountCreationRequests, setAccountCreationRequests] = useState<PendingAccountCreationRequest[]>([]);
   const [accountCreationRequestsLoaded, setAccountCreationRequestsLoaded] = useState(false);
   const [selectedAccountCreationRequestId, setSelectedAccountCreationRequestId] = useState<string | null>(null);
@@ -7987,10 +8463,11 @@ export function PortfolioPage() {
   }, [healthFilter, query, roleAccounts]);
 
   const totalArr = visibleAccounts.reduce((sum, account) => sum + account.arr, 0);
-  const upcomingRenewals = visibleAccounts.filter((account) => account.renewalDays <= 90).length;
-  const sourceFileNames = sourceDocuments.map((document) => document.fileName);
-  const routeFocus = searchParams.get("focus");
-  const routeTarget = searchParams.get("target") ?? searchParams.get("account");
+	  const upcomingRenewals = visibleAccounts.filter((account) => account.renewalDays <= 90).length;
+	  const sourceFileNames = sourceDocuments.map((document) => document.fileName);
+	  const routeFocus = searchParams.get("focus");
+	  const routeTab = normalizeWorkspaceTab(searchParams.get("tab"));
+	  const routeTarget = searchParams.get("target") ?? searchParams.get("account");
   const visibleAccountCreationRequests = role === "ASSOCIATE"
     ? accountCreationRequests.filter((request) => request.creatorRole === "ASSOCIATE" || request.submittedBy === "Aisha Khan" || request.id.endsWith("-associate"))
     : accountCreationRequests;
@@ -8098,10 +8575,11 @@ export function PortfolioPage() {
       journey: request.journey ?? [],
     });
     setAccountCreationRequests((requests) => requests.filter((item) => item.id !== request.id));
-    setSelectedAccountCreationRequestId(null);
-    setPendingAccountReviewOpen(false);
-    setSelectedAccountTab("overview");
-    setSelectedAccount(nextAccount);
+	    setSelectedAccountCreationRequestId(null);
+	    setPendingAccountReviewOpen(false);
+	    setSelectedAccountTab("overview");
+	    setSelectedAccountFocus(null);
+	    setSelectedAccount(nextAccount);
     fireNotification({
       id: `account-approved-${request.id}`,
       title: `${nextAccount.name} account approved`,
@@ -8150,30 +8628,28 @@ export function PortfolioPage() {
 
   }, [accountCreationRequests, fireNotification, role, roleAccounts]);
 
-  useEffect(() => {
-    if (routeFocus === "pending-account-draft") {
-      setSelectedAccount(null);
-      setPendingAccountReviewOpen(true);
-      return;
-    }
-  }, [routeFocus]);
+	  useEffect(() => {
+	    if (routeFocus === "pending-account-draft") {
+	      setSelectedAccount(null);
+	      setSelectedAccountFocus(null);
+	      setPendingAccountReviewOpen(true);
+	      return;
+	    }
+	  }, [routeFocus]);
 
-  useEffect(() => {
-    if (!routeTarget || routeFocus === "pending-account-draft") return;
-    const normalizedTarget = routeTarget.replace(/^acc-/, "").toLowerCase();
-    const account = roleAccounts.find((item) => (
-      item.id === routeTarget ||
-      item.name.toLowerCase().replace(/\s+/g, "-") === normalizedTarget
-    ));
-    if (account) {
-      setQuery("");
-      setHealthFilter("ALL");
-      setSelectedAccountCreationRequestId(null);
-      setPendingAccountReviewOpen(false);
-      setSelectedAccountTab("overview");
-      setSelectedAccount(account);
-      return;
-    }
+	  useEffect(() => {
+	    if (!routeTarget || routeFocus === "pending-account-draft") return;
+	    const account = roleAccounts.find((item) => accountMatchesRouteTarget(item, routeTarget));
+	    if (account) {
+	      setQuery("");
+	      setHealthFilter("ALL");
+	      setSelectedAccountCreationRequestId(null);
+	      setPendingAccountReviewOpen(false);
+	      setSelectedAccountTab(routeTab);
+	      setSelectedAccountFocus(routeFocus);
+	      setSelectedAccount(account);
+	      return;
+	    }
 
     let cancelled = false;
     async function loadRouteAccount() {
@@ -8187,42 +8663,43 @@ export function PortfolioPage() {
         const payload = await response.json();
         if (!response.ok || cancelled) return;
         setQuery("");
-        setHealthFilter("ALL");
-        setSelectedAccountCreationRequestId(null);
-        setPendingAccountReviewOpen(false);
-        setSelectedAccountTab("overview");
-        setSelectedAccount(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
-      } catch {
-        // Route targets are optional deep links; leave the portfolio list intact on miss.
+	        setHealthFilter("ALL");
+	        setSelectedAccountCreationRequestId(null);
+	        setPendingAccountReviewOpen(false);
+	        setSelectedAccountTab(routeTab);
+	        setSelectedAccountFocus(routeFocus);
+	        setSelectedAccount(mapApiAccountToPortfolioAccount(payload.data as Record<string, unknown>));
+	      } catch {
+	        // Route targets are optional deep links; leave the portfolio list intact on miss.
       }
     }
     void loadRouteAccount();
-    return () => {
-      cancelled = true;
-    };
-  }, [role, roleAccounts, routeFocus, routeTarget, userId]);
+	    return () => {
+	      cancelled = true;
+	    };
+	  }, [role, roleAccounts, routeFocus, routeTab, routeTarget, userId]);
 
   useEffect(() => {
     function openFromNotification(event: Event) {
       const href = (event as CustomEvent<{ href?: string }>).detail?.href;
       if (!href) return;
       const target = new URL(href, window.location.origin);
-      const focusTarget = target.searchParams.get("focus");
-      if (focusTarget === "pending-account-draft") {
-        setSelectedAccount(null);
-        setPendingAccountReviewOpen(true);
-        return;
-      }
+	      const focusTarget = target.searchParams.get("focus");
+	      if (focusTarget === "pending-account-draft") {
+	        setSelectedAccount(null);
+	        setSelectedAccountFocus(null);
+	        setPendingAccountReviewOpen(true);
+	        return;
+	      }
 
-      const accountTarget = target.searchParams.get("target") ?? target.searchParams.get("account");
-      if (!accountTarget) return;
-      const account = roleAccounts.find((item) => (
-        item.id === accountTarget || item.name.toLowerCase().replace(/\s+/g, "-") === accountTarget.replace(/^acc-/, "")
-      ));
-      if (!account) return;
-      setSelectedAccountTab("overview");
-      setSelectedAccount(account);
-    }
+	      const accountTarget = target.searchParams.get("target") ?? target.searchParams.get("account");
+	      if (!accountTarget) return;
+	      const account = roleAccounts.find((item) => accountMatchesRouteTarget(item, accountTarget));
+	      if (!account) return;
+	      setSelectedAccountTab(normalizeWorkspaceTab(target.searchParams.get("tab")));
+	      setSelectedAccountFocus(focusTarget);
+	      setSelectedAccount(account);
+	    }
 
     window.addEventListener("kam:notification-selected", openFromNotification);
     return () => window.removeEventListener("kam:notification-selected", openFromNotification);
@@ -8299,7 +8776,7 @@ export function PortfolioPage() {
     }
     setOnboardingStage("workspace");
     setSourceUploadLoading(false);
-    void runOnboardingAssistant("Review the uploaded source files and propose the first account profile, KYC, and journey updates.", onboardingDocuments, uploadedSources);
+    void runOnboardingAssistant("Review the uploaded source files and propose the first account profile, KYC, and journey updates.", onboardingDocuments, uploadedSources, "profile");
   }
 
   function acceptOnboardingSuggestion(suggestion: OnboardingSuggestion) {
@@ -8324,6 +8801,32 @@ export function PortfolioPage() {
   function confirmDismissSuggestion() {
     const reason = suggestionDismissalDraft?.reason.trim();
     if (!suggestionDismissalDraft || !reason) return;
+    const dismissedSuggestion = onboardingSuggestions.find((suggestion) => suggestion.id === suggestionDismissalDraft.suggestionId);
+    const correctedValue = correctionFromDismissalReason(reason);
+    if (dismissedSuggestion && correctedValue) {
+      const correctedSuggestion: OnboardingSuggestion = {
+        ...dismissedSuggestion,
+        id: `corrected-suggest-${Date.now()}`,
+        proposedValue: correctedValue,
+        source: "User correction from dismissal reason",
+        status: "Pending",
+      };
+      setAccountDraft((draft) => ({ ...draft, [dismissedSuggestion.field]: correctedValue }));
+      setOnboardingSuggestions((items) => [
+        correctedSuggestion,
+        ...items.map((item) =>
+          item.id === suggestionDismissalDraft.suggestionId
+            ? { ...item, status: "Dismissed" as OnboardingSuggestionStatus, dismissalReason: reason }
+            : item,
+        ),
+      ]);
+      setOnboardingAssistantMessages((messages) => [
+        `Updated ${accountDraftFieldLabels[dismissedSuggestion.field]} from your correction: ${correctedValue}`,
+        ...messages,
+      ]);
+      setSuggestionDismissalDraft(null);
+      return;
+    }
     setOnboardingSuggestions((items) =>
       items.map((item) =>
         item.id === suggestionDismissalDraft.suggestionId
@@ -8334,7 +8837,12 @@ export function PortfolioPage() {
     setSuggestionDismissalDraft(null);
   }
 
-  async function runOnboardingAssistant(promptOverride?: string, documentsOverride?: OnboardingDocument[], sourceDocumentsOverride?: OnboardingDocument[]) {
+  async function runOnboardingAssistant(
+    promptOverride?: string,
+    documentsOverride?: OnboardingDocument[],
+    sourceDocumentsOverride?: OnboardingDocument[],
+    activeStepOverride: AccountOnboardingStep = "profile",
+  ) {
     const prompt = (promptOverride ?? onboardingPrompt).trim();
     const activeSourceDocuments = sourceDocumentsOverride ?? sourceDocuments;
     setOnboardingAssistantLoading(true);
@@ -8345,6 +8853,7 @@ export function PortfolioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role,
+          activeStep: activeStepOverride,
           sourceFiles: activeSourceDocuments.map((document) => document.fileName),
           prompt,
           draft: accountDraft,
@@ -8389,17 +8898,29 @@ export function PortfolioPage() {
         ]);
       }
       if (Array.isArray(payload.suggestions) && payload.suggestions.length > 0) {
-        setOnboardingSuggestions((items) => [
-          ...payload.suggestions.map((suggestion: Partial<OnboardingSuggestion>, index: number) => ({
+        const timestamp = Date.now();
+        const incomingSuggestions = payload.suggestions
+          .map((suggestion: Partial<OnboardingSuggestion>, index: number) => {
+            const field = normalizeAccountDraftField(suggestion.field);
+            return {
             id: `agent-suggest-${Date.now()}-${index}`,
-            field: normalizeAccountDraftField(suggestion.field),
-            label: suggestion.label ?? "Suggested update",
+              field,
+              label: suggestion.label ?? accountDraftFieldLabels[field],
             proposedValue: suggestion.proposedValue ?? "",
             source: suggestion.source ?? "V2 setup assistant",
             status: "Pending" as OnboardingSuggestionStatus,
-          })),
-          ...items,
-        ]);
+            };
+          })
+          .filter((suggestion: OnboardingSuggestion) => shouldKeepOnboardingSuggestion(suggestion, accountDraft, prompt));
+        if (incomingSuggestions.length > 0) {
+          setOnboardingSuggestions((items) => [
+            ...incomingSuggestions.map((suggestion: OnboardingSuggestion, index: number) => ({
+              ...suggestion,
+              id: `agent-suggest-${timestamp}-${index}`,
+            })),
+            ...items,
+          ]);
+        }
       }
       if (Array.isArray(payload.kycSections) && payload.kycSections.length > 0) {
         const timestamp = Date.now();
@@ -8447,7 +8968,7 @@ export function PortfolioPage() {
     }
   }
 
-  async function addOnboardingDocument() {
+  async function addOnboardingDocument(activeStepOverride: AccountOnboardingStep = "profile") {
     if (!onboardingDocumentDraft.fileName) return;
     const draftFile = onboardingDocumentDraft.file;
     let uploadedDocuments: OnboardingDocument[] = [];
@@ -8476,7 +8997,7 @@ export function PortfolioPage() {
       fileUrl: "",
       file: undefined,
     });
-    void runOnboardingAssistant(`Review the newly attached ${onboardingDocumentDraft.type}: ${documentName}. Propose only updates that are supported by this document metadata and current draft context.`, nextDocuments);
+    void runOnboardingAssistant(`Review the newly attached ${onboardingDocumentDraft.type}: ${documentName}. Propose only updates that are supported by this document metadata and current draft context.`, nextDocuments, undefined, activeStepOverride);
   }
 
   function updateJourneyItem(itemId: string, field: keyof OnboardingJourneyDraftItem, value: string) {
@@ -8618,8 +9139,8 @@ export function PortfolioPage() {
     });
   }
 
-  function applyOnboardingPrompt() {
-    void runOnboardingAssistant();
+  function applyOnboardingPrompt(activeStepOverride: AccountOnboardingStep = "profile") {
+    void runOnboardingAssistant(undefined, undefined, undefined, activeStepOverride);
   }
 
   function saveOnboardingDraft() {
@@ -8654,7 +9175,7 @@ export function PortfolioPage() {
       renewalDays: 180,
       kamOwner: draftInput.kamOwner.trim() || "Sarah Chen",
       associateOwner: draftInput.associateOwner.trim() || "Aisha Khan",
-      contactName: draftInput.primaryContact.trim() || "Primary contact not set",
+      contactName: draftInput.primaryContact.trim() || "Client POC not set",
       deliveryModel: draftInput.segment.trim() || "Delivery model not set",
       currentWork: draftInput.openOpportunity.trim() || "Account setup in progress",
       relationshipSignal: draftInput.nextTouchpoint.trim() || "Next touchpoint not set",
@@ -8725,9 +9246,10 @@ export function PortfolioPage() {
         source: "account-onboarding",
         severity: "success",
       });
-      setOnboardingOpen(false);
-      setSelectedAccountTab("overview");
-      setSelectedAccount(nextAccount);
+	    setOnboardingOpen(false);
+	    setSelectedAccountTab("overview");
+	    setSelectedAccountFocus(null);
+	    setSelectedAccount(nextAccount);
       return;
     }
     const submittedRequest = pendingRequestFromDraft("Submitted to KAM");
@@ -8750,15 +9272,17 @@ export function PortfolioPage() {
     return (
       <AccountModal
         account={selectedAccount}
-        open={Boolean(selectedAccount)}
-        initialTab={selectedAccountTab}
-        onAccountUpdate={updatePortfolioAccount}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedAccount(null);
-            router.push("/portfolio");
-          }
-        }}
+	        open={Boolean(selectedAccount)}
+	        initialTab={selectedAccountTab}
+	        initialFocus={selectedAccountFocus}
+	        onAccountUpdate={updatePortfolioAccount}
+	        onOpenChange={(open) => {
+	          if (!open) {
+	            setSelectedAccount(null);
+	            setSelectedAccountFocus(null);
+	            router.push("/portfolio");
+	          }
+	        }}
       />
     );
   }
@@ -8888,10 +9412,11 @@ export function PortfolioPage() {
                     key={account.id}
                     account={account}
                     readonly={isExecutive}
-                    onOpen={(nextAccount) => {
-                      setSelectedAccountTab("overview");
-                      setSelectedAccount(nextAccount);
-                    }}
+	                    onOpen={(nextAccount) => {
+	                      setSelectedAccountTab("overview");
+	                      setSelectedAccountFocus(null);
+	                      setSelectedAccount(nextAccount);
+	                    }}
                   />
                 ))}
               </div>

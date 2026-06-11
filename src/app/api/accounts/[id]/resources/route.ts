@@ -17,15 +17,18 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const body = await req.json();
     if (!body.name) return badRequest("name is required");
+    const podName = typeof body.pod === "string" ? body.pod.trim() : "";
+    const sowName = typeof body.sowName === "string" ? body.sowName.trim() : "";
+    const pod = sowName ? `${podName || "Unassigned pod"} · SOW: ${sowName}` : podName || null;
 
     await prisma.accountResource.create({
       data: {
         accountId,
-        name: body.name,
-        role: body.role ?? null,
-        pod: body.pod ?? null,
-        location: body.location ?? null,
-        startDate: body.startDate ?? null,
+        name: String(body.name).trim(),
+        role: typeof body.role === "string" ? body.role.trim() || null : null,
+        pod,
+        location: typeof body.location === "string" ? body.location.trim() || null : null,
+        startDate: typeof body.startDate === "string" ? body.startDate.trim() || null : null,
       },
     });
 

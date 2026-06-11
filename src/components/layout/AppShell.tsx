@@ -161,12 +161,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           <div className="flex items-start justify-between gap-3">
                             <button
                               type="button"
-                              onClick={() => {
-                                setNotificationsOpen(false);
-                                markRead(item.id);
-                                window.dispatchEvent(new CustomEvent("kam:notification-selected", { detail: item }));
-                                router.push(item.href);
-                              }}
+	                              onClick={() => {
+	                                setNotificationsOpen(false);
+	                                markRead(item.id);
+	                                router.push(item.href);
+	                                window.setTimeout(() => {
+	                                  window.dispatchEvent(new CustomEvent("kam:notification-selected", { detail: item }));
+	                                }, 40);
+	                              }}
                               className="min-w-0 flex-1 text-left"
                             >
                               <p className="text-[13px] font-black text-[#25352E]">{item.title}</p>

@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
 import { getRoleFromRequest, ok, badRequest, notFound, serverError, guard } from "@/lib/api";
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 // POST /api/ai/qbr  { sessionId }
 export async function POST(req: NextRequest) {
   try {
@@ -32,7 +38,7 @@ The summary should: recap key outcomes, highlight risks discussed, list committe
 Write 3-4 sentences in a professional, executive tone.
 
 Session: ${session.title} (${session.type})
-Account: ${session.account.name} | Health: ${session.account.health} | Score: ${session.account.kamScores[0]?.overall ?? "N/A"}/100
+Account: ${session.account.name} | Health: ${session.account.health} | Score: ${scoreOutOfFiveLabel(session.account.kamScores[0]?.overall)}/5
 Conducted: ${session.conductedAt?.toISOString().split("T")[0] ?? "In progress"}
 Attendees: ${session.attendees ? JSON.parse(session.attendees as string).join(", ") : "N/A"}
 

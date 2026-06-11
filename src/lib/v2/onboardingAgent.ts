@@ -19,6 +19,7 @@ export type V2OnboardingTaskType = "Meeting" | "QBR" | "To-do";
 
 export interface V2OnboardingAgentInput {
   role: string;
+  activeStep?: string;
   sourceFiles: string[];
   prompt: string;
   draft: Record<string, string>;
@@ -131,7 +132,7 @@ export async function runV2OnboardingAssistant(input: V2OnboardingAgentInput): P
       {
         role: "system",
         content:
-          "You are the V2 Tkxel KAM account onboarding setup assistant. You help create a new account from uploaded source-file metadata, Salesforce-mock context, user prompts, and current draft fields. Use only the supplied context. Do not claim that you read file body text unless body text is explicitly provided. Return valid JSON only.",
+          "You are the V2 Tkxel KAM account onboarding setup assistant. You help create a new account from uploaded source-file metadata, user prompts, and current draft fields. Use only the supplied context. Do not claim that you read file body text unless body text is explicitly provided. Return valid JSON only.",
       },
       {
         role: "user",
@@ -139,6 +140,9 @@ export async function runV2OnboardingAssistant(input: V2OnboardingAgentInput): P
 
 Role:
 ${input.role}
+
+Active setup step:
+${input.activeStep || "profile"}
 
 Initial source files:
 ${JSON.stringify(input.sourceFiles, null, 2)}
@@ -167,7 +171,7 @@ Return JSON:
       "field": "one of: name, industry, segment, arr, location, contractRenewal, kamOwner, associateOwner, primaryContact, activeRisk, openOpportunity, nextTouchpoint",
       "label": "human label",
       "proposedValue": "specific value to place into the account profile",
-      "source": "source file, support document, Salesforce mock, or user message",
+      "source": "source file, support document, user message, or current draft",
       "confidence": 0.0,
       "reasoningSummary": "2-4 sentence explanation covering source evidence, why the value/score fits, what is still uncertain, and what confirmation would change it",
       "approvalState": "draft | proposed | needs_user_confirmation | associate_requested | kam_review | approved | denied | dismissed"
@@ -196,8 +200,14 @@ ${v2AgentBehaviorPrompt}
 
 Onboarding-specific rules:
 - Do not use old KYC/playbook-agent assumptions.
+- Never use Salesforce mock data, Salesforce exports, Salesforce assumptions, or implied CRM records in this flow. If a source file name mentions Salesforce, treat it only as an uploaded file name unless extracted text is provided.
+- Scope every response to the active setup step. Profile step answers should focus on account fields. Scoring step answers should focus on KPI/sub-parameter evidence and scoring logic. KYC step answers should focus on KYC sections. Journey step answers should focus on journey items. Review step answers should summarize readiness and approval blockers.
 - Use extracted document text when provided.
 - Treat non-empty current account draft fields as already supplied; do not ask missing questions for those fields.
+- Do not propose account field suggestions for non-empty fields unless the user explicitly asks to change, correct, replace, update, or improve that field.
+- Display field labels as "Domain" for segment and "Client POC" for primaryContact.
+- If a user dismisses a suggestion and says a correction in the prompt, return the corrected value for the same field only, and explain it as a correction from user-provided information.
+- Missing questions must be only for empty, invalid, or ambiguous fields relevant to the active step.
 - Preserve current KYC section titles and draft text unless the user explicitly asks to change them or a new document provides a clearly better supported replacement.
 - If the user asks to enhance one KYC section, return only that updated section and do not erase or replace unrelated KYC sections.
 - Format assistantReply as concise bullets when listing multiple changes.

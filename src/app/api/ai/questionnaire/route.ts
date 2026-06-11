@@ -5,6 +5,12 @@ import { getRoleFromRequest, ok, badRequest, notFound, serverError, guard } from
 
 const VALID_SECTIONS = ["csat", "relationship", "risk", "contract", "whitespace"] as const;
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 // POST /api/ai/questionnaire  { accountId, section }
 export async function POST(req: NextRequest) {
   try {
@@ -30,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     const latestKyc   = account.kycVersions[0];
     const latestScore = account.kamScores[0];
-    const scoreDisplay = latestScore ? `${latestScore.overall}/100` : "unknown";
+    const scoreDisplay = latestScore ? `${scoreOutOfFiveLabel(latestScore.overall)}/5` : "unknown";
     const signals = account.signals.map((s) => `${s.type} [${s.severity}]: ${s.title}`).join("\n");
 
     // Section-specific question definitions
@@ -76,7 +82,7 @@ Health: ${account.health}
 ARR: ${account.arr != null ? `$${account.arr.toLocaleString()}` : "unknown"}
 Contract end: ${account.contractEnd ? new Date(account.contractEnd).toLocaleDateString() : "unknown"}
 Industry: ${account.industry ?? "unknown"}
-Latest KAM score: ${latestScore ? `${latestScore.overall}/100` : "unknown"}
+Latest KAM score: ${scoreDisplay}
 
 Active signals:
 ${signals || "None"}

@@ -42,11 +42,11 @@ declare global {
 
 type TManMood = "laptop" | "greeting" | "thinking" | "answering" | "eager";
 const T_MAN_POSES: Record<TManMood, { src: string; label: string }> = {
-  laptop: { src: "/tman/laptop-clean-v2.png", label: "T Man with laptop" },
-  greeting: { src: "/tman/greeting-clean-v2.png", label: "T Man greeting" },
-  thinking: { src: "/tman/thinking-clean-v2.png", label: "T Man thinking" },
-  answering: { src: "/tman/answering-clean-v2.png", label: "T Man answering" },
-  eager: { src: "/tman/eager-clean-v2.png", label: "T Man eager" },
+  laptop: { src: "/tman/laptop-clean-v2.png", label: "T-Man with laptop" },
+  greeting: { src: "/tman/greeting-clean-v2.png", label: "T-Man greeting" },
+  thinking: { src: "/tman/thinking-clean-v2.png", label: "T-Man thinking" },
+  answering: { src: "/tman/answering-clean-v2.png", label: "T-Man answering" },
+  eager: { src: "/tman/eager-clean-v2.png", label: "T-Man eager" },
 };
 
 function money(value: number) {
@@ -87,7 +87,7 @@ function accountPayload(account: CachedApiAccount) {
     renewalDays: daysUntil(account.contractEnd as string | null | undefined),
     kamOwner: kam?.name ?? "KAM not set",
     associateOwner: associateOwner?.name ?? "Account owner not set",
-    contactName: String(contacts.find((contact) => contact.isPrimary)?.name ?? contacts[0]?.name ?? "Primary contact not set"),
+    contactName: String(contacts.find((contact) => contact.isPrimary)?.name ?? contacts[0]?.name ?? "Client POC not set"),
   };
 }
 
@@ -267,7 +267,7 @@ export function CammiePanel() {
   const [expanded, setExpanded] = useState(false);
   const [message, setMessage] = useState("");
   const [thread, setThread] = useState<CammieMessage[]>([
-    { role: "assistant", content: "Hey, T Man here, what're we working on today?" },
+    { role: "assistant", content: "Hey, T-Man here, what're we working on today?" },
   ]);
   const [avatarMood, setAvatarMood] = useState<TManMood>("greeting");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -299,7 +299,7 @@ export function CammiePanel() {
     try {
       const formData = new FormData();
       selectedFiles.forEach((file) => formData.append("files", file));
-      formData.append("type", "T Man attachment");
+      formData.append("type", "T-Man attachment");
       const response = await fetch("/api/v2/onboarding/documents/upload", {
         method: "POST",
         body: formData,
@@ -360,7 +360,7 @@ export function CammiePanel() {
         }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "T Man could not respond");
+      if (!response.ok) throw new Error(payload.error || "T-Man could not respond");
       if (
         payload.intent === "document_request" &&
         payload.documentRequest &&
@@ -392,7 +392,7 @@ export function CammiePanel() {
       playAssistantSuccessTone();
       setAvatarMood("answering");
     } catch (caught) {
-      const messageText = caught instanceof Error ? caught.message : "T Man could not respond";
+      const messageText = caught instanceof Error ? caught.message : "T-Man could not respond";
       setError(messageText);
       setThread((items) => [...items, { role: "assistant", content: "I could not reach the V2 assistant route. Try again after the server is ready." }]);
       setAvatarMood("eager");
@@ -413,14 +413,14 @@ export function CammiePanel() {
             <div className="pointer-events-none absolute right-[-4rem] top-[-5rem] h-36 w-36 rounded-full bg-[#A7C7B4]/45 blur-2xl" />
             <div className="relative z-10 flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-[18px] font-black tracking-[-0.05em] text-[#1F2722]">T Man</h3>
+                <h3 className="text-[18px] font-black tracking-[-0.05em] text-[#1F2722]">T-Man</h3>
                 <p className="text-[12px] font-bold text-[#7D6E5F]">DotKAM assistant</p>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setExpanded((current) => !current)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]" aria-label={expanded ? "Restore T Man" : "Expand T Man"}>
+                <button type="button" onClick={() => setExpanded((current) => !current)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]" aria-label={expanded ? "Restore T-Man" : "Expand T-Man"}>
                   {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                 </button>
-                <button type="button" onClick={() => setOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]" aria-label="Close T Man">
+                <button type="button" onClick={() => setOpen(false)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254] hover:text-[#25352E]" aria-label="Close T-Man">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -502,7 +502,7 @@ export function CammiePanel() {
                 onPointerDown={primeAssistantAudio}
                 disabled={sending || uploadingAttachment}
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#6F6254] hover:bg-[#F7F1E7] disabled:cursor-not-allowed disabled:opacity-55"
-                aria-label="Attach file for T Man"
+                aria-label="Attach file for T-Man"
               >
                 {uploadingAttachment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
               </button>
@@ -517,7 +517,7 @@ export function CammiePanel() {
                 className="h-10 min-w-0 flex-1 bg-transparent px-3 text-[13px] font-bold text-[#25352E] outline-none placeholder:text-[#A69A8B]"
                 placeholder="Ask about accounts, documents, or the web"
               />
-              <button type="button" onPointerDown={primeAssistantAudio} onClick={sendMessage} disabled={sending || uploadingAttachment || (!message.trim() && attachments.length === 0)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send T Man message">
+              <button type="button" onPointerDown={primeAssistantAudio} onClick={sendMessage} disabled={sending || uploadingAttachment || (!message.trim() && attachments.length === 0)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#25352E] text-[#FFF9EF] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Send T-Man message">
                 <Sparkles className="h-4 w-4" />
               </button>
             </div>
@@ -535,11 +535,11 @@ export function CammiePanel() {
           });
         }}
         className="group flex flex-col items-center gap-0 px-2 py-1 text-[#25352E] transition-transform hover:-translate-y-1"
-        aria-label="Open T Man"
+        aria-label="Open T-Man"
       >
         <TManAvatar mood={launcherMood} size="lg" />
         <span className="-mt-3 rounded-full border border-[#D8CAB9] bg-[#FFF9EF]/95 px-3 py-1 text-[12px] font-black tracking-[-0.02em] shadow-[0_14px_30px_-24px_rgba(31,39,34,0.7)] backdrop-blur">
-          Ask T Man
+          Ask T-Man
         </span>
       </button>
     </div>

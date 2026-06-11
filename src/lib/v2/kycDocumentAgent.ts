@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { complete } from "@/lib/ai";
 import { v2AgentBehaviorPrompt } from "@/lib/v2/agentBehavior";
+import { buildDocxDataUrl } from "@/lib/v2/documentGenerator";
 
 export interface V2KycDocumentInput {
   role: string;
@@ -41,10 +42,6 @@ function parseJson(content: string): { title?: string; summary?: string; markdow
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "kyc";
-}
-
-function markdownDataUrl(markdown: string) {
-  return `data:text/markdown;charset=utf-8;base64,${Buffer.from(markdown, "utf-8").toString("base64")}`;
 }
 
 export async function generateV2KycDocument(input: V2KycDocumentInput): Promise<V2GeneratedKycDocument> {
@@ -104,12 +101,12 @@ KYC-specific rules:
   const title = String(parsed.title || `${input.draft.name || "Account"} KYC draft`).slice(0, 100);
   const markdown = String(parsed.markdown || `# ${title}\n\nNo supported KYC content was returned.`);
   const summary = String(parsed.summary || "Generated KYC draft.").slice(0, 180);
-  const fileName = `${slugify(title)}-${randomUUID().slice(0, 8)}.md`;
+  const fileName = `${slugify(title)}-${randomUUID().slice(0, 8)}.docx`;
 
   return {
     title,
     fileName,
-    fileUrl: markdownDataUrl(markdown),
+    fileUrl: await buildDocxDataUrl(markdown, title),
     summary,
     approvalStatus: input.role === "KAM" ? "Approved" : "Draft",
   };

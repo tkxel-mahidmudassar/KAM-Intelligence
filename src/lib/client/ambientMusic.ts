@@ -33,28 +33,28 @@ function buildAmbientMusic() {
   const context = new AudioContextClass();
   const master = context.createGain();
   const lowpass = context.createBiquadFilter();
-  const shimmerBus = context.createGain();
+  const orchestraBus = context.createGain();
   const now = context.currentTime;
-  const nodes: AmbientMusicState["nodes"] = [master, lowpass, shimmerBus];
+  const nodes: AmbientMusicState["nodes"] = [master, lowpass, orchestraBus];
   const timers: number[] = [];
 
   lowpass.type = "lowpass";
-  lowpass.frequency.setValueAtTime(1120, now);
-  lowpass.Q.setValueAtTime(0.65, now);
+  lowpass.frequency.setValueAtTime(940, now);
+  lowpass.Q.setValueAtTime(0.42, now);
 
   master.gain.setValueAtTime(0.0001, now);
-  master.gain.linearRampToValueAtTime(0.058, now + 2.8);
-  shimmerBus.gain.setValueAtTime(0.34, now);
+  master.gain.linearRampToValueAtTime(0.052, now + 3.6);
+  orchestraBus.gain.setValueAtTime(0.24, now);
   lowpass.connect(master);
-  shimmerBus.connect(master);
+  orchestraBus.connect(master);
   master.connect(context.destination);
 
   const voices = [
-    { frequency: 65.41, type: "sine" as OscillatorType, gain: 0.34, pan: -0.18 },
-    { frequency: 130.81, type: "triangle" as OscillatorType, gain: 0.22, pan: -0.32 },
-    { frequency: 196.0, type: "triangle" as OscillatorType, gain: 0.18, pan: 0.2 },
-    { frequency: 261.63, type: "sine" as OscillatorType, gain: 0.11, pan: 0.38 },
-    { frequency: 392.0, type: "sine" as OscillatorType, gain: 0.045, pan: -0.06 },
+    { frequency: 73.42, type: "sine" as OscillatorType, gain: 0.3, pan: -0.2 },
+    { frequency: 146.83, type: "triangle" as OscillatorType, gain: 0.19, pan: -0.34 },
+    { frequency: 220.0, type: "triangle" as OscillatorType, gain: 0.15, pan: 0.18 },
+    { frequency: 293.66, type: "sine" as OscillatorType, gain: 0.075, pan: 0.34 },
+    { frequency: 440.0, type: "sine" as OscillatorType, gain: 0.032, pan: -0.08 },
   ];
   const activeVoices: Array<{ oscillator: OscillatorNode; gain: GainNode; baseGain: number; pan: StereoPannerNode }> = [];
 
@@ -75,14 +75,14 @@ function buildAmbientMusic() {
     panner.pan.setValueAtTime(voice.pan, now);
 
     lfo.type = "sine";
-    lfo.frequency.setValueAtTime(0.045 + index * 0.01, now);
-    lfoGain.gain.setValueAtTime(voice.gain * 0.24, now);
+    lfo.frequency.setValueAtTime(0.028 + index * 0.007, now);
+    lfoGain.gain.setValueAtTime(voice.gain * 0.18, now);
     lfo.connect(lfoGain);
     lfoGain.connect(voiceGain.gain);
 
     detuneLfo.type = "sine";
-    detuneLfo.frequency.setValueAtTime(0.02 + index * 0.005, now);
-    detuneGain.gain.setValueAtTime(5 + index, now);
+    detuneLfo.frequency.setValueAtTime(0.014 + index * 0.004, now);
+    detuneGain.gain.setValueAtTime(3.5 + index * 0.5, now);
     detuneLfo.connect(detuneGain);
     detuneGain.connect(oscillator.detune);
 
@@ -98,10 +98,11 @@ function buildAmbientMusic() {
   });
 
   const chordProgression = [
+    [73.42, 146.83, 220.0, 293.66, 440.0],
+    [58.27, 116.54, 174.61, 233.08, 349.23],
+    [87.31, 174.61, 261.63, 349.23, 523.25],
     [65.41, 130.81, 196.0, 261.63, 392.0],
-    [87.31, 174.61, 220.0, 329.63, 440.0],
-    [73.42, 146.83, 220.0, 293.66, 392.0],
-    [98.0, 196.0, 246.94, 392.0, 493.88],
+    [69.3, 138.59, 207.65, 277.18, 415.3],
   ];
   let chordIndex = 0;
   const advanceChord = () => {
@@ -113,20 +114,20 @@ function buildAmbientMusic() {
       voice.oscillator.frequency.cancelScheduledValues(changeAt);
       voice.oscillator.frequency.setTargetAtTime(nextChord[index], changeAt, 2.3);
       voice.gain.gain.cancelScheduledValues(changeAt);
-      voice.gain.gain.setTargetAtTime(voice.baseGain * (chordIndex === 1 ? 1.12 : 0.9), changeAt, 1.2);
-      voice.gain.gain.setTargetAtTime(voice.baseGain, changeAt + 3.4, 1.8);
-      voice.pan.pan.setTargetAtTime((index % 2 === 0 ? -0.22 : 0.22) * (chordIndex + 1), changeAt, 2.8);
+      voice.gain.gain.setTargetAtTime(voice.baseGain * (chordIndex === 2 ? 1.18 : 0.92), changeAt, 1.6);
+      voice.gain.gain.setTargetAtTime(voice.baseGain, changeAt + 4.2, 2.4);
+      voice.pan.pan.setTargetAtTime((index % 2 === 0 ? -0.18 : 0.18) * Math.min(chordIndex + 1, 3), changeAt, 3.1);
     });
 
     lowpass.frequency.cancelScheduledValues(changeAt);
-    lowpass.frequency.setTargetAtTime(chordIndex === 1 ? 1480 : chordIndex === 3 ? 980 : 1180, changeAt, 2.2);
-    shimmerBus.gain.setTargetAtTime(chordIndex === 1 ? 0.48 : 0.31, changeAt, 1.4);
+    lowpass.frequency.setTargetAtTime(chordIndex === 2 ? 1380 : chordIndex === 4 ? 820 : 980, changeAt, 2.8);
+    orchestraBus.gain.setTargetAtTime(chordIndex === 2 ? 0.33 : 0.22, changeAt, 1.9);
   };
 
   const motifVariants = [
-    [523.25, 659.25, 783.99, 1046.5, 987.77, 783.99],
-    [392.0, 493.88, 659.25, 783.99, 739.99, 587.33],
-    [440.0, 554.37, 659.25, 880.0, 830.61, 659.25],
+    [293.66, 440.0, 523.25, 587.33, 523.25, 440.0],
+    [261.63, 392.0, 493.88, 523.25, 493.88, 392.0],
+    [349.23, 440.0, 523.25, 659.25, 587.33, 440.0],
   ];
   let motifIndex = 0;
   const playMotif = () => {
@@ -137,107 +138,115 @@ function buildAmbientMusic() {
       const oscillator = context.createOscillator();
       const noteGain = context.createGain();
       const panner = context.createStereoPanner();
-      const start = base + index * 0.42;
-      const end = start + 1.25;
+      const start = base + index * 0.58;
+      const end = start + 1.65;
 
-      oscillator.type = index % 2 === 0 ? "triangle" : "sine";
+      oscillator.type = "triangle";
       oscillator.frequency.setValueAtTime(frequency, start);
       oscillator.detune.setValueAtTime(index % 2 === 0 ? -2 : 3, start);
 
       noteGain.gain.setValueAtTime(0.0001, start);
-      noteGain.gain.exponentialRampToValueAtTime(0.085, start + 0.08);
+      noteGain.gain.exponentialRampToValueAtTime(0.062, start + 0.035);
       noteGain.gain.exponentialRampToValueAtTime(0.0001, end);
-      panner.pan.setValueAtTime(index % 2 === 0 ? -0.34 : 0.34, start);
+      panner.pan.setValueAtTime(index % 2 === 0 ? -0.24 : 0.24, start);
 
       oscillator.connect(noteGain);
       noteGain.connect(panner);
-      panner.connect(shimmerBus);
+      panner.connect(orchestraBus);
       oscillator.start(start);
       oscillator.stop(end + 0.08);
       nodes.push(oscillator, noteGain, panner);
     });
   };
 
-  const playPulse = () => {
+  const playCelloOstinato = () => {
     const start = context.currentTime + 0.03;
-    const oscillator = context.createOscillator();
-    const pulseGain = context.createGain();
-    const pulseFilter = context.createBiquadFilter();
     const root = chordProgression[chordIndex][0];
+    const pattern = [0, 0.82, 1.64, 2.46, 3.7, 4.52];
 
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(root / 2, start);
-    oscillator.frequency.exponentialRampToValueAtTime(root / 2.5, start + 0.42);
-    pulseFilter.type = "lowpass";
-    pulseFilter.frequency.setValueAtTime(180, start);
-    pulseGain.gain.setValueAtTime(0.0001, start);
-    pulseGain.gain.exponentialRampToValueAtTime(0.2, start + 0.04);
-    pulseGain.gain.exponentialRampToValueAtTime(0.0001, start + 1.15);
+    pattern.forEach((offset, index) => {
+      const oscillator = context.createOscillator();
+      const pulseGain = context.createGain();
+      const pulseFilter = context.createBiquadFilter();
+      const noteAt = start + offset;
+      const frequency = root / (index % 3 === 2 ? 1.5 : 2);
 
-    oscillator.connect(pulseFilter);
-    pulseFilter.connect(pulseGain);
-    pulseGain.connect(lowpass);
-    oscillator.start(start);
-    oscillator.stop(start + 1.25);
-    nodes.push(oscillator, pulseFilter, pulseGain);
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(frequency, noteAt);
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.92, noteAt + 0.56);
+      pulseFilter.type = "lowpass";
+      pulseFilter.frequency.setValueAtTime(210, noteAt);
+      pulseGain.gain.setValueAtTime(0.0001, noteAt);
+      pulseGain.gain.exponentialRampToValueAtTime(index === 0 ? 0.15 : 0.09, noteAt + 0.035);
+      pulseGain.gain.exponentialRampToValueAtTime(0.0001, noteAt + 0.72);
+
+      oscillator.connect(pulseFilter);
+      pulseFilter.connect(pulseGain);
+      pulseGain.connect(lowpass);
+      oscillator.start(noteAt);
+      oscillator.stop(noteAt + 0.82);
+      nodes.push(oscillator, pulseFilter, pulseGain);
+    });
   };
 
-  const playSparkRun = () => {
+  const playPianoArpeggio = () => {
     const base = context.currentTime + 0.03;
     const root = chordProgression[chordIndex][0];
-    const run = [root * 4, root * 5, root * 6, root * 8, root * 10, root * 12, root * 16, root * 12];
+    const run = [root * 4, root * 6, root * 8, root * 12, root * 8, root * 6, root * 5, root * 4];
 
     run.forEach((frequency, index) => {
       const oscillator = context.createOscillator();
       const noteGain = context.createGain();
       const panner = context.createStereoPanner();
-      const start = base + index * 0.105;
-      const end = start + 0.28;
+      const start = base + index * 0.22;
+      const end = start + 1.15;
 
-      oscillator.type = index % 3 === 0 ? "triangle" : "sine";
-      oscillator.frequency.setValueAtTime(Math.min(frequency, 1567.98), start);
-      oscillator.detune.setValueAtTime(index % 2 === 0 ? -5 : 5, start);
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(Math.min(frequency, 1318.51), start);
+      oscillator.detune.setValueAtTime(index % 2 === 0 ? -3 : 3, start);
       noteGain.gain.setValueAtTime(0.0001, start);
-      noteGain.gain.exponentialRampToValueAtTime(0.11, start + 0.018);
+      noteGain.gain.exponentialRampToValueAtTime(0.07, start + 0.018);
       noteGain.gain.exponentialRampToValueAtTime(0.0001, end);
-      panner.pan.setValueAtTime(index % 2 === 0 ? -0.42 : 0.42, start);
+      panner.pan.setValueAtTime(index % 2 === 0 ? -0.28 : 0.28, start);
 
       oscillator.connect(noteGain);
       noteGain.connect(panner);
-      panner.connect(shimmerBus);
+      panner.connect(orchestraBus);
       oscillator.start(start);
       oscillator.stop(end + 0.04);
       nodes.push(oscillator, noteGain, panner);
     });
   };
 
-  const playCinematicLift = () => {
+  const playStringSwell = () => {
     const start = context.currentTime + 0.02;
     const root = chordProgression[chordIndex][0];
-    const oscillator = context.createOscillator();
-    const liftGain = context.createGain();
-    const liftFilter = context.createBiquadFilter();
-    const panner = context.createStereoPanner();
+    [root * 2, root * 3, root * 4].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const liftGain = context.createGain();
+      const liftFilter = context.createBiquadFilter();
+      const panner = context.createStereoPanner();
 
-    oscillator.type = "sawtooth";
-    oscillator.frequency.setValueAtTime(root * 1.5, start);
-    oscillator.frequency.exponentialRampToValueAtTime(root * 8, start + 2.6);
-    liftFilter.type = "lowpass";
-    liftFilter.frequency.setValueAtTime(320, start);
-    liftFilter.frequency.exponentialRampToValueAtTime(2400, start + 2.6);
-    liftFilter.Q.setValueAtTime(0.75, start);
-    liftGain.gain.setValueAtTime(0.0001, start);
-    liftGain.gain.exponentialRampToValueAtTime(0.085, start + 1.4);
-    liftGain.gain.exponentialRampToValueAtTime(0.0001, start + 2.9);
-    panner.pan.setValueAtTime(chordIndex % 2 === 0 ? -0.22 : 0.22, start);
+      oscillator.type = index === 1 ? "triangle" : "sine";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.setTargetAtTime(frequency * 1.005, start + 0.4, 3.5);
+      liftFilter.type = "lowpass";
+      liftFilter.frequency.setValueAtTime(420, start);
+      liftFilter.frequency.exponentialRampToValueAtTime(1450, start + 4.6);
+      liftFilter.Q.setValueAtTime(0.38, start);
+      liftGain.gain.setValueAtTime(0.0001, start);
+      liftGain.gain.exponentialRampToValueAtTime(0.055 / (index + 1), start + 2.1);
+      liftGain.gain.exponentialRampToValueAtTime(0.0001, start + 5.5);
+      panner.pan.setValueAtTime(index === 0 ? -0.28 : index === 1 ? 0 : 0.28, start);
 
-    oscillator.connect(liftFilter);
-    liftFilter.connect(liftGain);
-    liftGain.connect(panner);
-    panner.connect(shimmerBus);
-    oscillator.start(start);
-    oscillator.stop(start + 3.05);
-    nodes.push(oscillator, liftFilter, liftGain, panner);
+      oscillator.connect(liftFilter);
+      liftFilter.connect(liftGain);
+      liftGain.connect(panner);
+      panner.connect(orchestraBus);
+      oscillator.start(start);
+      oscillator.stop(start + 5.7);
+      nodes.push(oscillator, liftFilter, liftGain, panner);
+    });
   };
 
   const playPercussiveAccent = () => {
@@ -251,15 +260,15 @@ function buildAmbientMusic() {
       const filter = context.createBiquadFilter();
       const hitAt = start + offset;
 
-      oscillator.type = "triangle";
+      oscillator.type = "sine";
       oscillator.frequency.setValueAtTime(root * (index === hits.length - 1 ? 1.5 : 1), hitAt);
       oscillator.frequency.exponentialRampToValueAtTime(root * 0.42, hitAt + 0.22);
       filter.type = "lowpass";
-      filter.frequency.setValueAtTime(index === hits.length - 1 ? 620 : 360, hitAt);
+      filter.frequency.setValueAtTime(index === hits.length - 1 ? 390 : 250, hitAt);
       filter.Q.setValueAtTime(0.9, hitAt);
       gain.gain.setValueAtTime(0.0001, hitAt);
-      gain.gain.exponentialRampToValueAtTime(index === hits.length - 1 ? 0.16 : 0.095, hitAt + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.0001, hitAt + 0.34);
+      gain.gain.exponentialRampToValueAtTime(index === hits.length - 1 ? 0.18 : 0.11, hitAt + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, hitAt + 0.46);
 
       oscillator.connect(filter);
       filter.connect(gain);
@@ -273,26 +282,26 @@ function buildAmbientMusic() {
   const playHeroFlourish = () => {
     const base = context.currentTime + 0.04;
     const root = chordProgression[chordIndex][0];
-    const notes = [root * 4, root * 6, root * 8, root * 10, root * 12, root * 16];
+    const notes = [root * 3, root * 4, root * 6, root * 8, root * 6, root * 4];
 
     notes.forEach((frequency, index) => {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const panner = context.createStereoPanner();
-      const start = base + index * 0.18;
-      const end = start + 1.5;
+      const start = base + index * 0.34;
+      const end = start + 2.1;
 
       oscillator.type = index % 2 === 0 ? "sine" : "triangle";
-      oscillator.frequency.setValueAtTime(Math.min(frequency, 1760), start);
+      oscillator.frequency.setValueAtTime(Math.min(frequency, 1174.66), start);
       oscillator.detune.setValueAtTime(index % 2 === 0 ? -4 : 4, start);
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.13, start + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.075, start + 0.06);
       gain.gain.exponentialRampToValueAtTime(0.0001, end);
-      panner.pan.setValueAtTime(-0.48 + index * 0.19, start);
+      panner.pan.setValueAtTime(-0.32 + index * 0.13, start);
 
       oscillator.connect(gain);
       gain.connect(panner);
-      panner.connect(shimmerBus);
+      panner.connect(orchestraBus);
       oscillator.start(start);
       oscillator.stop(end + 0.08);
       nodes.push(oscillator, gain, panner);
@@ -300,16 +309,16 @@ function buildAmbientMusic() {
   };
 
   playMotif();
-  window.setTimeout(playSparkRun, 1800);
-  window.setTimeout(playCinematicLift, 4200);
-  window.setTimeout(playHeroFlourish, 5800);
-  timers.push(window.setInterval(advanceChord, 8500));
-  timers.push(window.setInterval(playMotif, 12200));
-  timers.push(window.setInterval(playPulse, 6400));
-  timers.push(window.setInterval(playSparkRun, 7200));
-  timers.push(window.setInterval(playCinematicLift, 17800));
-  timers.push(window.setInterval(playPercussiveAccent, 5200));
-  timers.push(window.setInterval(playHeroFlourish, 21400));
+  window.setTimeout(playPianoArpeggio, 2200);
+  window.setTimeout(playStringSwell, 4400);
+  window.setTimeout(playHeroFlourish, 9800);
+  timers.push(window.setInterval(advanceChord, 11200));
+  timers.push(window.setInterval(playMotif, 16800));
+  timers.push(window.setInterval(playCelloOstinato, 5600));
+  timers.push(window.setInterval(playPianoArpeggio, 9400));
+  timers.push(window.setInterval(playStringSwell, 22400));
+  timers.push(window.setInterval(playPercussiveAccent, 7200));
+  timers.push(window.setInterval(playHeroFlourish, 31200));
 
   return { context, master, nodes, timers };
 }
@@ -320,7 +329,7 @@ export function startAmbientMusic() {
     const existing = window.__kamazingAmbientMusic;
     if (existing) {
       void existing.context.resume().catch(() => undefined);
-      existing.master.gain.setTargetAtTime(0.058, existing.context.currentTime, 0.9);
+      existing.master.gain.setTargetAtTime(0.052, existing.context.currentTime, 0.9);
       return;
     }
 

@@ -49,62 +49,67 @@ interface TriggerRule {
   descFn: (score: number) => string;
 }
 
+function scoreOutOfFiveLabel(score: number) {
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 const RULES: TriggerRule[] = [
   {
     kpiKey:             "csat",
     signalType:         "NPS_DECLINE",
     criticalThreshold:  40,
     warningThreshold:   62,
-    titleFn: (s) => `Customer success at risk (${s}/100)`,
-    descFn:  (s) => `Customer Success scored ${s}/100 — customer feedback, confidence, delivery satisfaction, communication satisfaction, or issue resolution is below benchmark.`,
+    titleFn: (s) => `Customer success at risk (${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `Customer Success scored ${scoreOutOfFiveLabel(s)}/5 — customer feedback, confidence, delivery satisfaction, communication satisfaction, or issue resolution is below benchmark.`,
   },
   {
     kpiKey:             "risk",
     signalType:         "CHURN_RISK",
     criticalThreshold:  35,
     warningThreshold:   58,
-    titleFn: (s) => `Churn risk elevated (risk score ${s}/100)`,
-    descFn:  (s) => `Risk dimension scored ${s}/100. Elevated open ticket count or critical issues detected. Review support health immediately.`,
+    titleFn: (s) => `Churn risk elevated (risk score ${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `Risk dimension scored ${scoreOutOfFiveLabel(s)}/5. Elevated open ticket count or critical issues detected. Review support health immediately.`,
   },
   {
     kpiKey:             "risk",
     signalType:         "TICKET_SPIKE",
     criticalThreshold:  25,
     warningThreshold:   45,
-    titleFn: (s) => `Support ticket volume spiking (risk ${s}/100)`,
-    descFn:  (s) => `The risk dimension dropped to ${s}/100, likely driven by a spike in open or critical support tickets. Escalation review recommended.`,
+    titleFn: (s) => `Support ticket volume spiking (risk ${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `The risk dimension dropped to ${scoreOutOfFiveLabel(s)}/5, likely driven by a spike in open or critical support tickets. Escalation review recommended.`,
   },
   {
     kpiKey:             "contractHealth",
     signalType:         "CONTRACT_EXPIRY",
     criticalThreshold:  38,
     warningThreshold:   60,
-    titleFn: (s) => `Contract health deteriorating (${s}/100)`,
-    descFn:  (s) => `Contract health scored ${s}/100. Review ARR utilisation, overdue invoices, and renewal timeline to prevent lapse.`,
+    titleFn: (s) => `Contract health deteriorating (${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `Contract health scored ${scoreOutOfFiveLabel(s)}/5. Review ARR utilisation, overdue invoices, and renewal timeline to prevent lapse.`,
   },
   {
     kpiKey:             "financial",
     signalType:         "REVENUE_DROP",
     criticalThreshold:  40,
     warningThreshold:   60,
-    titleFn: (s) => `Revenue health flagged (financial ${s}/100)`,
-    descFn:  (s) => `Financial dimension scored ${s}/100. Possible causes: overdue invoices, under-utilised ARR, or billing anomalies.`,
+    titleFn: (s) => `Revenue health flagged (financial ${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `Financial dimension scored ${scoreOutOfFiveLabel(s)}/5. Possible causes: overdue invoices, under-utilised ARR, or billing anomalies.`,
   },
   {
     kpiKey:             "relationship",
     signalType:         "RELATIONSHIP_CHANGE",
     criticalThreshold:  null,
     warningThreshold:   50,
-    titleFn: (s) => `Relationship health needs attention (${s}/100)`,
-    descFn:  (s) => `Relationship Health scored ${s}/100. Review executive engagement, stakeholder coverage, relationship penetration, champion strength, and engagement cadence.`,
+    titleFn: (s) => `Relationship health needs attention (${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `Relationship Health scored ${scoreOutOfFiveLabel(s)}/5. Review executive engagement, stakeholder coverage, relationship penetration, champion strength, and engagement cadence.`,
   },
   {
     kpiKey:             "resourceHealth",
     signalType:         "ENGAGEMENT_LOW",
     criticalThreshold:  null,
     warningThreshold:   50,
-    titleFn: (s) => `Resource health below benchmark (${s}/100)`,
-    descFn:  (s) => `Resource Health scored ${s}/100. Review dependency risk, critical coverage, team stability, skill alignment, and backup readiness.`,
+    titleFn: (s) => `Resource health below benchmark (${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `Resource Health scored ${scoreOutOfFiveLabel(s)}/5. Review dependency risk, critical coverage, team stability, skill alignment, and backup readiness.`,
   },
 ];
 
@@ -224,8 +229,8 @@ async function runUpsellTrigger(
         accountId,
         type:          "UPSELL_OPPORTUNITY",
         severity:      "INFO",
-        title:         `Upsell / expansion opportunity (whitespace ${scores.whitespace}/100)`,
-        description:   `Whitespace scored ${scores.whitespace}/100 with CSAT at ${scores.csat}/100 — strong candidate for an upsell or cross-sell conversation. Recommend scheduling an expansion review.`,
+        title:         `Upsell / expansion opportunity (whitespace ${scoreOutOfFiveLabel(scores.whitespace)}/5)`,
+        description:   `Whitespace scored ${scoreOutOfFiveLabel(scores.whitespace)}/5 with CSAT at ${scoreOutOfFiveLabel(scores.csat)}/5 — strong candidate for an upsell or cross-sell conversation. Recommend scheduling an expansion review.`,
         source:        "KAM_SCORE_ENGINE",
         pendingReview: true,
       },

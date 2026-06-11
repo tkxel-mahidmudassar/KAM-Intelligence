@@ -14,6 +14,12 @@ import { applyCriteriaOverrideToDimension, scoreDimensionFromKey } from "@/lib/s
 import { logAudit } from "@/lib/audit";
 import { runMasterOrchestrator } from "@/lib/ai/agents/masterOrchestrator";
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 // ─── Load weights from DB (fallback to defaults) ─────────────────────────────
 
 async function loadWeights(): Promise<Record<string, number>> {
@@ -218,15 +224,15 @@ export async function POST(req: NextRequest) {
     const breakdownLines = (Object.keys(scoreBreakdown) as KpiScoreKey[])
       .map((key) => {
         const item = scoreBreakdown[key];
-        const drivers = item.drivers.map((d) => `${d.label}: ${d.value}${typeof d.score === "number" ? ` (${d.score}/100)` : ""}`).join("; ");
-        return `${item.label}: ${item.score}/100, weight ${item.weight}%, rationale: ${item.rationale}. Drivers: ${drivers}`;
+        const drivers = item.drivers.map((d) => `${d.label}: ${d.value}${typeof d.score === "number" ? ` (${scoreOutOfFiveLabel(d.score)}/5)` : ""}`).join("; ");
+        return `${item.label}: ${scoreOutOfFiveLabel(item.score)}/5, weight ${item.weight}%, rationale: ${item.rationale}. Drivers: ${drivers}`;
       })
       .join("\n");
 
     const prompt = `You are a DotKAM engine. Write a 2-3 sentence executive narrative for this account health score. Be specific, factual, and action-oriented. No bullet points.
 
 Account: ${account.name}
-Overall Score: ${overall}/100 (${health})
+Overall Score: ${scoreOutOfFiveLabel(overall)}/5 (${health})
 KPI breakdown:
 ${breakdownLines}
 Contract ends: ${account.contractEnd?.toISOString().split("T")[0] ?? "N/A"}
@@ -255,7 +261,7 @@ ${questionnaireContributed ? "(Scores include blending with confirmed questionna
         scoredContractHealth < 60 ? "contract health" : null,
         scoredRelationship < 60 ? "relationship health" : null,
       ].filter(Boolean);
-      aiNarrative = `${account.name} scored ${overall}/100 (${health}).`
+      aiNarrative = `${account.name} scored ${scoreOutOfFiveLabel(overall)}/5 (${health}).`
         + (weakDims.length > 0 ? ` Key concerns: ${weakDims.join(", ")}.` : " All dimensions are within acceptable range.")
         + ` Contract ${account.contractEnd ? `ends ${account.contractEnd.toISOString().split("T")[0]}` : "end date not set"}.`;
     }

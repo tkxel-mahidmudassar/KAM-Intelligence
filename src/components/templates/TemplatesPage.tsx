@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileText, FolderOpen, Upload, X } from "lucide-react";
+import { FileText, FolderOpen, Loader2, Upload, X } from "lucide-react";
 import { documentGenerationTypes, documentOutputFormats } from "@/lib/v2/configuration";
 
 interface TemplateRecord {
@@ -40,6 +40,8 @@ export function TemplatesPage() {
   const [tag, setTag] = useState(documentGenerationTypes[0]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [status, setStatus] = useState("");
+  const [templateUploading, setTemplateUploading] = useState(false);
+  const [removingTemplateId, setRemovingTemplateId] = useState("");
 
   useEffect(() => {
     setTemplates(loadTemplates());
@@ -64,24 +66,36 @@ export function TemplatesPage() {
   const selectedTagCount = templates.filter((template) => template.tag === tag).length;
 
   async function addTemplate(file: File | undefined) {
-    if (!file) return;
-    const extension = file.name.split(".").pop()?.toLowerCase() || "file";
-    const fileUrl = await readTemplateFile(file);
-    const nextTemplate: TemplateRecord = {
-      id: `template-${Date.now()}-${file.name}`,
-      name: file.name,
-      tag,
-      format: extension,
-      uploadedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      fileUrl,
-    };
-    setTemplates((current) => [nextTemplate, ...current]);
-    setStatus(`${file.name} is now available as a ${tag} template.`);
-    setUploadOpen(false);
+    if (!file || templateUploading) return;
+    setTemplateUploading(true);
+    try {
+      const extension = file.name.split(".").pop()?.toLowerCase() || "file";
+      const fileUrl = await readTemplateFile(file);
+      const nextTemplate: TemplateRecord = {
+        id: `template-${Date.now()}-${file.name}`,
+        name: file.name,
+        tag,
+        format: extension,
+        uploadedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        fileUrl,
+      };
+      setTemplates((current) => [nextTemplate, ...current]);
+      setStatus(`${file.name} is now available as a ${tag} template.`);
+      setUploadOpen(false);
+    } finally {
+      setTemplateUploading(false);
+    }
   }
 
-  function removeTemplate(id: string) {
-    setTemplates((current) => current.filter((template) => template.id !== id));
+  async function removeTemplate(id: string) {
+    if (removingTemplateId) return;
+    setRemovingTemplateId(id);
+    try {
+      setTemplates((current) => current.filter((template) => template.id !== id));
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    } finally {
+      setRemovingTemplateId("");
+    }
   }
 
   return (
@@ -136,8 +150,8 @@ export function TemplatesPage() {
                       </a>
                       <span className="rounded-full bg-[#F2E8DA] px-2 py-1 text-[11px] font-black text-[#6F6254]">{template.format}</span>
                       <span className="hidden text-[12px] font-bold text-[#8A7B6D] sm:inline">{template.uploadedAt}</span>
-                      <button type="button" onClick={() => removeTemplate(template.id)} className="rounded-full p-1 text-[#9B9084] hover:bg-[#F7E5E0] hover:text-[#B33D32]" aria-label={`Remove ${template.name}`}>
-                        <X className="h-4 w-4" />
+                      <button type="button" disabled={removingTemplateId === template.id} onClick={() => void removeTemplate(template.id)} className="rounded-full p-1 text-[#9B9084] hover:bg-[#F7E5E0] hover:text-[#B33D32] disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Remove ${template.name}`}>
+                        {removingTemplateId === template.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                       </button>
                     </div>
                   ))}
@@ -163,7 +177,7 @@ export function TemplatesPage() {
           <div className="w-full max-w-xl rounded-[30px] border border-[#D8CAB9] bg-[#FFF9EF] p-5 shadow-[0_34px_110px_-56px_rgba(43,32,19,0.78)]">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[28px] font-black tracking-[-0.06em] text-[#1F2722]">Upload template</h2>
-              <button type="button" onClick={() => setUploadOpen(false)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D8CAB9] text-[#6F6254]" aria-label="Close template upload">
+              <button type="button" disabled={templateUploading} onClick={() => setUploadOpen(false)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D8CAB9] text-[#6F6254] disabled:cursor-not-allowed disabled:opacity-50" aria-label="Close template upload">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -171,8 +185,9 @@ export function TemplatesPage() {
               <span className="text-[13px] font-black text-[#25352E]">Document tag</span>
               <select
                 value={tag}
+                disabled={templateUploading}
                 onChange={(event) => setTag(event.target.value)}
-                className="mt-2 h-12 w-full rounded-2xl border border-[#D8CAB9] bg-white/70 px-4 text-[14px] font-black text-[#25352E] outline-none"
+                className="mt-2 h-12 w-full rounded-2xl border border-[#D8CAB9] bg-white/70 px-4 text-[14px] font-black text-[#25352E] outline-none disabled:opacity-60"
               >
                 {documentGenerationTypes.map((type) => (
                   <option key={type} value={type}>{type}</option>
@@ -181,11 +196,11 @@ export function TemplatesPage() {
             </label>
             <label className="mt-4 flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-[#CDBEAE] bg-white/55 px-5 py-6 text-center transition hover:border-[#25352E] hover:bg-white">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#25352E] text-[#FFF9EF]">
-                <Upload className="h-5 w-5" />
+                {templateUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
               </span>
-              <span className="mt-3 text-[16px] font-black text-[#1F2722]">Choose any template file</span>
+              <span className="mt-3 text-[16px] font-black text-[#1F2722]">{templateUploading ? "Uploading template..." : "Choose any template file"}</span>
               <span className="mt-1 text-[12px] font-bold text-[#7D6E5F]">{selectedTagCount} currently saved for {tag}</span>
-              <input className="sr-only" type="file" onChange={(event) => addTemplate(event.target.files?.[0])} />
+              <input className="sr-only" type="file" disabled={templateUploading} onChange={(event) => void addTemplate(event.target.files?.[0])} />
             </label>
           </div>
         </div>

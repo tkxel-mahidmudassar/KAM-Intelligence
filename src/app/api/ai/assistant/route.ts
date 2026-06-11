@@ -13,6 +13,14 @@ function isQuotaError(err: unknown): boolean {
   return msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED");
 }
 
+function scoreOutOfFiveLabel(score: number | string | null | undefined) {
+  if (score == null || score === "N/A") return "N/A";
+  const numeric = typeof score === "number" ? score : Number(score);
+  if (!Number.isFinite(numeric)) return "N/A";
+  const normalized = numeric <= 5 ? numeric : numeric / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 function demoFallback(userQuestion: string, systemContext: string): string {
   const q = userQuestion.toLowerCase();
 
@@ -28,17 +36,17 @@ function demoFallback(userQuestion: string, systemContext: string): string {
     const atRisk    = lines.filter((l) => l.includes("AT_RISK"));
     const healthy   = lines.filter((l) => l.includes("HEALTHY"));
 
-    // Parse name + score + ARR per line: "Name: HEALTH, Score N/100, ARR $X"
+    // Parse name + score + ARR per line: "Name: HEALTH, Score N/5, ARR $X"
     type AccLine = { name: string; health: string; score: number; arr: number };
     const parsed: AccLine[] = lines.map((l) => {
       const nameM  = l.match(/^(.+?):/);
       const healthM= l.match(/:\s*(CRITICAL|AT_RISK|HEALTHY)/);
-      const scoreM = l.match(/Score\s+(\d+)/);
+      const scoreM = l.match(/Score\s+([\d.]+)/);
       const arrM   = l.match(/ARR \$([\d,]+)/);
       return {
         name:   nameM  ? nameM[1].trim()                          : l,
         health: healthM? healthM[1]                               : "UNKNOWN",
-        score:  scoreM ? parseInt(scoreM[1])                      : 0,
+        score:  scoreM ? Number(scoreM[1])                        : 0,
         arr:    arrM   ? parseInt(arrM[1].replace(/,/g, ""))      : 0,
       };
     });
@@ -52,8 +60,8 @@ function demoFallback(userQuestion: string, systemContext: string): string {
 
     if (q.includes("health") || q.includes("portfolio") || q.includes("summar")) {
       const totalARR = parsed.reduce((s, a) => s + a.arr, 0);
-      const avgScore = parsed.length ? Math.round(parsed.reduce((s, a) => s + a.score, 0) / parsed.length) : 0;
-      return `## 📊 Portfolio Health Summary\n\n**Overall Status:**\n\n- 🔴 Critical: **${criticals.length}** account${criticals.length !== 1 ? "s" : ""}\n- 🟡 At Risk: **${atRisk.length}** account${atRisk.length !== 1 ? "s" : ""}\n- 🟢 Healthy: **${healthy.length}** account${healthy.length !== 1 ? "s" : ""}\n\n**Total Portfolio ARR:** $${totalARR.toLocaleString()} | **Average KAM Score:** ${avgScore}/100\n\n**Account Breakdown:**\n\n${parsed.map((a) => `- **${a.name}**: ${a.health} | Score ${a.score}/100 | ARR $${a.arr.toLocaleString()}`).join("\n")}\n\n---\n\n**Priorities this week:** Focus on critical and at-risk accounts. Ensure all open news items have assigned owners and target completion dates.`;
+      const avgScore = parsed.length ? parsed.reduce((s, a) => s + a.score, 0) / parsed.length : 0;
+      return `## 📊 Portfolio Health Summary\n\n**Overall Status:**\n\n- 🔴 Critical: **${criticals.length}** account${criticals.length !== 1 ? "s" : ""}\n- 🟡 At Risk: **${atRisk.length}** account${atRisk.length !== 1 ? "s" : ""}\n- 🟢 Healthy: **${healthy.length}** account${healthy.length !== 1 ? "s" : ""}\n\n**Total Portfolio ARR:** $${totalARR.toLocaleString()} | **Average KAM Score:** ${scoreOutOfFiveLabel(avgScore)}/5\n\n**Account Breakdown:**\n\n${parsed.map((a) => `- **${a.name}**: ${a.health} | Score ${scoreOutOfFiveLabel(a.score)}/5 | ARR $${a.arr.toLocaleString()}`).join("\n")}\n\n---\n\n**Priorities this week:** Focus on critical and at-risk accounts. Ensure all open news items have assigned owners and target completion dates.`;
     }
 
     if (q.includes("arr") || q.includes("revenue")) {
@@ -65,15 +73,15 @@ function demoFallback(userQuestion: string, systemContext: string): string {
     if (q.includes("action") || q.includes("this week") || q.includes("priority") || q.includes("top 3")) {
       const urgent = parsed.filter((a) => a.health !== "HEALTHY").slice(0, 3);
       if (urgent.length === 0) return "✅ All accounts are healthy this week. Continue regular cadence and ensure upcoming renewals are tracked.";
-      return `## ✅ Top Actions This Week\n\n${urgent.map((a, i) => `**${i + 1}. ${a.name}** *(${a.health}, Score: ${a.score}/100)*\n- Review all unresolved news items and assign owners\n- Schedule a check-in call within 7 days\n- Ensure open actions have clear due dates`).join("\n\n")}\n\n---\n\n**General hygiene:**\n\n- Close out any overdue actions\n- Review upcoming contract renewals in the next 90 days\n- Update KYC documents for accounts with EXPIRED status`;
+      return `## ✅ Top Actions This Week\n\n${urgent.map((a, i) => `**${i + 1}. ${a.name}** *(${a.health}, Score: ${scoreOutOfFiveLabel(a.score)}/5)*\n- Review all unresolved news items and assign owners\n- Schedule a check-in call within 7 days\n- Ensure open actions have clear due dates`).join("\n\n")}\n\n---\n\n**General hygiene:**\n\n- Close out any overdue actions\n- Review upcoming contract renewals in the next 90 days\n- Update KYC documents for accounts with EXPIRED status`;
     }
 
     if (q.includes("kam") || q.includes("manager")) {
-      return `## 👤 KAM Performance View\n\nBased on current portfolio data:\n\n${parsed.map((a) => `- **${a.name}:** Score ${a.score}/100 — ${a.health}`).join("\n")}\n\nFor detailed KAM-level breakdowns including engagement scores and action completion rates, visit the **Command Centre** from the sidebar.`;
+      return `## 👤 KAM Performance View\n\nBased on current portfolio data:\n\n${parsed.map((a) => `- **${a.name}:** Score ${scoreOutOfFiveLabel(a.score)}/5 — ${a.health}`).join("\n")}\n\nFor detailed KAM-level breakdowns including engagement scores and action completion rates, visit the **Command Centre** from the sidebar.`;
     }
 
     // Generic portfolio answer
-    return `Based on your portfolio data:\n\n${parsed.map((a) => `- **${a.name}**: ${a.health}, Score ${a.score}/100, ARR $${a.arr.toLocaleString()}`).join("\n")}\n\nWould you like me to drill deeper into any specific account, risk analysis, or action planning?`;
+    return `Based on your portfolio data:\n\n${parsed.map((a) => `- **${a.name}**: ${a.health}, Score ${scoreOutOfFiveLabel(a.score)}/5, ARR $${a.arr.toLocaleString()}`).join("\n")}\n\nWould you like me to drill deeper into any specific account, risk analysis, or action planning?`;
   }
 
   // ── Account-level answers ────────────────────────────────────────────────────
@@ -83,7 +91,7 @@ function demoFallback(userQuestion: string, systemContext: string): string {
     const nameM    = ctx.match(/Name:\s*(.+)/);
     const healthM  = ctx.match(/Health:\s*(\w+)/);
     const arrM     = ctx.match(/ARR:\s*\$([\d,]+)/);
-    const scoreM   = ctx.match(/KAM Score:\s*(\d+)/);
+    const scoreM   = ctx.match(/KAM Score:\s*([\d.]+)/);
     const narM     = ctx.match(/AI Narrative:\s*(.+)/);
     const kpisM    = ctx.match(/KPIs:\n([\s\S]*?)\n\nActive News/);
     const signalsM = ctx.match(/Active News \((\d+)\):\n([\s\S]*?)\n\nOpen Actions/);
@@ -101,11 +109,11 @@ function demoFallback(userQuestion: string, systemContext: string): string {
     const actLines= actionsM ? actionsM[2].trim() : "None";
 
     if (q.includes("summar") || q.includes("overview") || q.includes("status")) {
-      return `## 📋 ${name} — Account Summary\n\n**Health:** ${health} | **KAM Score:** ${score}/100 | **ARR:** $${arr}\n\n${narr ? `> ${narr}\n\n` : ""}**KPIs:**\n\n${kpis || "No KPI data available."}\n\n**Active News (${sigCount}):**\n\n${sigLines || "None"}\n\n**Open Actions (${actCount}):**\n\n${actLines || "None"}`;
+      return `## 📋 ${name} — Account Summary\n\n**Health:** ${health} | **KAM Score:** ${scoreOutOfFiveLabel(score)}/5 | **ARR:** $${arr}\n\n${narr ? `> ${narr}\n\n` : ""}**KPIs:**\n\n${kpis || "No KPI data available."}\n\n**Active News (${sigCount}):**\n\n${sigLines || "None"}\n\n**Open Actions (${actCount}):**\n\n${actLines || "None"}`;
     }
 
     if (q.includes("risk") || q.includes("signal") || q.includes("concern")) {
-      return `## ⚠️ Risk & News — ${name}\n\n**Account Health:** ${health} | **Score:** ${score}/100\n\n**Active News (${sigCount}):**\n\n${sigLines || "No active news."}\n\n${health !== "HEALTHY" ? "**Recommendation:** Schedule an executive review, address the highest-severity news items immediately, and update the account recovery plan." : "✅ Account is in good standing. Continue regular cadence."}`;
+      return `## ⚠️ Risk & News — ${name}\n\n**Account Health:** ${health} | **Score:** ${scoreOutOfFiveLabel(score)}/5\n\n**Active News (${sigCount}):**\n\n${sigLines || "No active news."}\n\n${health !== "HEALTHY" ? "**Recommendation:** Schedule an executive review, address the highest-severity news items immediately, and update the account recovery plan." : "✅ Account is in good standing. Continue regular cadence."}`;
     }
 
     if (q.includes("action") || q.includes("next step") || q.includes("do")) {
@@ -113,10 +121,10 @@ function demoFallback(userQuestion: string, systemContext: string): string {
     }
 
     if (q.includes("kpi") || q.includes("metric") || q.includes("performance")) {
-      return `## 📈 KPIs & Metrics — ${name}\n\n**Overall Score:** ${score}/100\n\n${kpis || "No KPI data available."}\n\nCompare against benchmarks and identify dimensions scoring below 60 for immediate attention.`;
+      return `## 📈 KPIs & Metrics — ${name}\n\n**Overall Score:** ${scoreOutOfFiveLabel(score)}/5\n\n${kpis || "No KPI data available."}\n\nCompare against benchmarks and identify dimensions scoring below 3/5 for immediate attention.`;
     }
 
-    return `## ${name} — Quick Overview\n\n**Health:** ${health} | **Score:** ${score}/100 | **ARR:** $${arr}\n\n${narr ? `> *${narr}*\n\n` : ""}**News:** ${sigCount} active | **Actions:** ${actCount} open\n\nAsk me about specific news, actions, KPIs, or risks for a deeper dive.`;
+    return `## ${name} — Quick Overview\n\n**Health:** ${health} | **Score:** ${scoreOutOfFiveLabel(score)}/5 | **ARR:** $${arr}\n\n${narr ? `> *${narr}*\n\n` : ""}**News:** ${sigCount} active | **Actions:** ${actCount} open\n\nAsk me about specific news, actions, KPIs, or risks for a deeper dive.`;
   }
 
   return "I don't have enough context to answer that question. Please select an account or portfolio context and try again.";
@@ -165,7 +173,7 @@ Industry: ${account.industry ?? "N/A"} | Region: ${account.region ?? "N/A"}
 ARR: $${account.arr.toLocaleString()} | Health: ${account.health}
 Contract: ${account.contractStart?.toISOString().split("T")[0] ?? "N/A"} → ${account.contractEnd?.toISOString().split("T")[0] ?? "N/A"}
 
-KAM Score: ${score?.overall ?? "N/A"}/100 (CSAT: ${score?.csat ?? "N/A"}, Relationship: ${score?.relationship ?? "N/A"}, Risk: ${score?.risk ?? "N/A"}, Contract Health: ${score?.contractHealth ?? "N/A"}, Project Health: ${score?.projectHealth ?? "N/A"}, Financial: ${score?.financial ?? "N/A"})
+KAM Score: ${scoreOutOfFiveLabel(score?.overall)}/5 (CSAT: ${scoreOutOfFiveLabel(score?.csat)}/5, Relationship: ${scoreOutOfFiveLabel(score?.relationship)}/5, Risk: ${scoreOutOfFiveLabel(score?.risk)}/5, Contract Health: ${scoreOutOfFiveLabel(score?.contractHealth)}/5, Project Health: ${scoreOutOfFiveLabel(score?.projectHealth)}/5, Financial: ${scoreOutOfFiveLabel(score?.financial)}/5)
 AI Narrative: ${score?.aiNarrative ?? "Not yet computed"}
 
 Key Contacts: ${account.contacts.map((c) => `${c.name} (${c.title})`).join(", ")}
@@ -191,7 +199,7 @@ KYC Summary: ${account.kycVersions[0]?.executiveSummary ?? "Not yet completed"}`
       systemContext += `
 
 === PORTFOLIO CONTEXT ===
-${accounts.map((a) => `${a.name}: ${a.health}, Score ${a.kamScores[0]?.overall ?? "N/A"}/100, ARR $${a.arr.toLocaleString()}`).join("\n")}`;
+${accounts.map((a) => `${a.name}: ${a.health}, Score ${scoreOutOfFiveLabel(a.kamScores[0]?.overall)}/5, ARR $${a.arr.toLocaleString()}`).join("\n")}`;
     }
 
     const fullMessages: LLMMessage[] = [

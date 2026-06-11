@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
 import { getRoleFromRequest, ok, badRequest, notFound, serverError, guard } from "@/lib/api";
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 // POST /api/ai/qbr/generate  { accountId, title?, type? }
 // Uses the configured AI provider to generate a full QBR/DBR session with agenda items, saves to DB, returns session.
 export async function POST(req: NextRequest) {
@@ -37,7 +43,7 @@ export async function POST(req: NextRequest) {
     const prompt = `You are a DotKAM engine. Generate a structured ${sessionType} (${sessionType === "QBR" ? "Quarterly Business Review" : sessionType === "DBR" ? "Daily Business Review" : "Executive Business Review"}) agenda for the account below.
 
 Account: ${account.name} | Industry: ${account.industry ?? "N/A"} | ARR: $${account.arr.toLocaleString()}
-Health: ${account.health} | Score: ${account.kamScores[0]?.overall ?? "N/A"}/100
+Health: ${account.health} | Score: ${scoreOutOfFiveLabel(account.kamScores[0]?.overall)}/5
 Contract ends: ${account.contractEnd?.toISOString().split("T")[0] ?? "N/A"}
 Open news: ${account.signals.map((s) => `${s.type}: ${s.title}`).join("; ") || "none"}
 Open actions: ${account.actions.map((a) => a.title).join("; ") || "none"}

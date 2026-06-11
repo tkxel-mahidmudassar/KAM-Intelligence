@@ -80,6 +80,12 @@ export interface EvidenceClaim {
   sourceType: "internal" | "public" | "inference";
 }
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 const GENERIC_COMPANY_TOKENS = new Set([
   "and", "the", "inc", "llc", "ltd", "limited", "corp", "corporation", "company",
   "group", "holdings", "solutions", "systems", "services", "technology", "technologies",
@@ -119,7 +125,7 @@ function buildInternalEvidence(account: AccountContext): EvidenceSource[] {
       id: `int:${account.id}:health-score`,
       type: "internal_metric",
       title: "Account health and score",
-      detail: `${account.name} has ${account.health} health and score ${account.latestScore ?? "N/A"}/100.`,
+      detail: `${account.name} has ${account.health} health and score ${scoreOutOfFiveLabel(account.latestScore)}/5.`,
     },
     {
       id: `int:${account.id}:action-count`,
@@ -142,7 +148,7 @@ function buildInternalEvidence(account: AccountContext): EvidenceSource[] {
   if (account.kpiScores) {
     const kpiDetail = Object.entries(account.kpiScores)
       .filter(([, value]) => value !== null)
-      .map(([key, value]) => `${key}: ${value}/100`)
+      .map(([key, value]) => `${key}: ${scoreOutOfFiveLabel(value)}/5`)
       .join(", ");
 
     evidence.push({
@@ -277,7 +283,7 @@ function buildPortfolioContext(accounts: AccountContext[]): string {
 
     return `
 === ${a.name} ===
-Health: ${a.health} | Score: ${a.latestScore ?? "N/A"}/100 | ARR: $${a.arr.toLocaleString()} | ${renewal}
+Health: ${a.health} | Score: ${scoreOutOfFiveLabel(a.latestScore)}/5 | ARR: $${a.arr.toLocaleString()} | ${renewal}
 Industry: ${a.industry ?? "Unknown"}
 KPIs: ${kpis}
 Open signals:
@@ -520,14 +526,14 @@ function buildFallbackInsights(
       riskAccount,
       InsightType.RISK,
       `${riskAccount.name} needs immediate risk attention`,
-      `${riskAccount.name} is the highest-risk account in the current portfolio view with ${riskAccount.health} health, score ${riskAccount.latestScore ?? "N/A"}/100, ${riskAccount.openActions} open action${riskAccount.openActions === 1 ? "" : "s"}, and ${riskAccount.openSignals.length} unresolved signal${riskAccount.openSignals.length === 1 ? "" : "s"}. Prioritise executive alignment and close the most critical open action before the next review cycle.`,
+      `${riskAccount.name} is the highest-risk account in the current portfolio view with ${riskAccount.health} health, score ${scoreOutOfFiveLabel(riskAccount.latestScore)}/5, ${riskAccount.openActions} open action${riskAccount.openActions === 1 ? "" : "s"}, and ${riskAccount.openSignals.length} unresolved signal${riskAccount.openSignals.length === 1 ? "" : "s"}. Prioritise executive alignment and close the most critical open action before the next review cycle.`,
       [`int:${riskAccount.id}:health-score`, `int:${riskAccount.id}:action-count`],
     ),
     make(
       opportunityAccount,
       InsightType.OPPORTUNITY,
       `${opportunityAccount.name} has the clearest expansion signal`,
-      `${opportunityAccount.name} has whitespace score ${opportunityAccount.kpiScores?.whitespace ?? "N/A"} and ARR $${opportunityAccount.arr.toLocaleString()}, making it the strongest internal expansion candidate. Review open opportunities and prepare a scoped commercial proposal tied to the account's current operating priorities.`,
+      `${opportunityAccount.name} has whitespace score ${scoreOutOfFiveLabel(opportunityAccount.kpiScores?.whitespace)}/5 and ARR $${opportunityAccount.arr.toLocaleString()}, making it the strongest internal expansion candidate. Review open opportunities and prepare a scoped commercial proposal tied to the account's current operating priorities.`,
       [`int:${opportunityAccount.id}:kpi-breakdown`, `int:${opportunityAccount.id}:opportunity-1`],
     ),
     make(
@@ -542,7 +548,7 @@ function buildFallbackInsights(
       anomalyAccount,
       InsightType.ANOMALY,
       `${anomalyAccount.name} shows a score-to-whitespace mismatch`,
-      `${anomalyAccount.name} combines score ${anomalyAccount.latestScore ?? "N/A"}/100 with whitespace ${anomalyAccount.kpiScores?.whitespace ?? "N/A"}, which suggests opportunity exists but execution or relationship health may be limiting conversion. Validate whether the blocker is stakeholder access, delivery confidence, or commercial timing.`,
+      `${anomalyAccount.name} combines score ${scoreOutOfFiveLabel(anomalyAccount.latestScore)}/5 with whitespace ${scoreOutOfFiveLabel(anomalyAccount.kpiScores?.whitespace)}/5, which suggests opportunity exists but execution or relationship health may be limiting conversion. Validate whether the blocker is stakeholder access, delivery confidence, or commercial timing.`,
       [`int:${anomalyAccount.id}:health-score`, `int:${anomalyAccount.id}:kpi-breakdown`],
       0.62,
     ),
@@ -690,7 +696,7 @@ export async function runPulseInsightsAgent(kamId?: string): Promise<AgentResult
     output:         { count: toCreate.length },
     sources:        accountContexts.map((a) => ({
       type:  "score" as const,
-      label: `${a.name} — ${a.health} (${a.latestScore ?? "N/A"}/100)`,
+      label: `${a.name} — ${a.health} (${scoreOutOfFiveLabel(a.latestScore)}/5)`,
       value: `ARR $${a.arr.toLocaleString()}`,
     })),
     steps,

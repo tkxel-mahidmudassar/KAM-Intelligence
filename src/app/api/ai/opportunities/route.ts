@@ -4,6 +4,12 @@ import { complete } from "@/lib/ai";
 import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
 import { getRoleFromRequest, ok, badRequest, notFound, serverError, guard } from "@/lib/api";
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 // POST /api/ai/opportunities  { accountId }
 export async function POST(req: NextRequest) {
   try {
@@ -51,9 +57,9 @@ Account Context:
 Name: ${account.name}
 Industry: ${account.industry ?? "N/A"} | Region: ${account.region ?? "N/A"}
 ARR: $${account.arr.toLocaleString()} | Health: ${account.health}
-Overall Score: ${score?.overall ?? "N/A"}/100
-Whitespace Score: ${score?.whitespace ?? "N/A"}/100
-CSAT: ${score?.csat ?? "N/A"}/100
+Overall Score: ${scoreOutOfFiveLabel(score?.overall)}/5
+Whitespace Score: ${scoreOutOfFiveLabel(score?.whitespace)}/5
+CSAT: ${scoreOutOfFiveLabel(score?.csat)}/5
 
 Key Stakeholders: ${account.contacts.slice(0, 4).map((c) => `${c.name} (${c.title})`).join(", ")}
 

@@ -4,6 +4,12 @@ import { complete } from "@/lib/ai";
 import { getRoleFromRequest, ok, badRequest, serverError, guard } from "@/lib/api";
 import { InsightType } from "@prisma/client";
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 // POST /api/ai/pulse  { accountId? }
 // Generates AI Pulse insights. Pass accountId for account-specific, omit for portfolio-wide.
 export async function POST(req: NextRequest) {
@@ -35,7 +41,7 @@ export async function POST(req: NextRequest) {
       const latestScore = account.kamScores[0];
       context = `
 Account: ${account.name} | Industry: ${account.industry} | ARR: $${account.arr.toLocaleString()}
-Health: ${account.health} | Score: ${latestScore?.overall ?? "N/A"}/100
+Health: ${account.health} | Score: ${scoreOutOfFiveLabel(latestScore?.overall)}/5
 Contract ends: ${account.contractEnd?.toISOString().split("T")[0] ?? "N/A"}
 Open signals: ${account.signals.length}
 Open actions: ${account.actions.length}
@@ -50,7 +56,7 @@ ${account.kpiDimensions.map((k) => `  - ${k.name}: ${k.value}${k.unit ?? ""} (ta
       });
 
       context = `Portfolio of ${accounts.length} accounts:
-${accounts.map((a) => `  - ${a.name}: ${a.health}, Score ${a.kamScores[0]?.overall ?? "N/A"}/100, ARR $${a.arr.toLocaleString()}, renewal ${a.contractEnd?.toISOString().split("T")[0] ?? "N/A"}`).join("\n")}`;
+${accounts.map((a) => `  - ${a.name}: ${a.health}, Score ${scoreOutOfFiveLabel(a.kamScores[0]?.overall)}/5, ARR $${a.arr.toLocaleString()}, renewal ${a.contractEnd?.toISOString().split("T")[0] ?? "N/A"}`).join("\n")}`;
     }
 
     const prompt = `You are a DotKAM engine. Based on the data below, generate a concise, specific, and actionable insight.

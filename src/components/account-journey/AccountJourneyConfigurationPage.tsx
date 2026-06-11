@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Bot, CalendarDays, Check, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, CalendarDays, Check, Loader2, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import {
   defaultAccountJourneyItems,
   journeyOffsetLabel,
@@ -55,6 +55,10 @@ export function AccountJourneyConfigurationPage() {
   const [pendingChanges, setPendingChanges] = useState<PendingJourneyChange[]>([]);
   const [status, setStatus] = useState("");
   const [assistantBusy, setAssistantBusy] = useState(false);
+  const [savingJourney, setSavingJourney] = useState(false);
+  const [savingItem, setSavingItem] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState("");
+  const [applyingChanges, setApplyingChanges] = useState(false);
 
   useEffect(() => {
     const loaded = loadJourney();
@@ -66,55 +70,90 @@ export function AccountJourneyConfigurationPage() {
     return [...items].map(normalizeJourneyTemplateItem).sort((a, b) => a.offsetDays - b.offsetDays);
   }, [items]);
 
-  function saveJourney() {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(storageKey, JSON.stringify(items));
+  async function saveJourney() {
+    if (savingJourney) return;
+    setSavingJourney(true);
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(storageKey, JSON.stringify(items));
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+      setSavedItems(items);
+      setStatus("Account journey configuration saved.");
+    } finally {
+      setSavingJourney(false);
     }
-    setSavedItems(items);
-    setStatus("Account journey configuration saved.");
   }
 
   function cancelChanges() {
+    if (savingJourney) return;
     setItems(savedItems);
     setStatus("Unsaved changes discarded.");
   }
 
-  function upsertItem(item: DefaultJourneyItem) {
+  async function upsertItem(item: DefaultJourneyItem) {
+    if (savingItem) return;
     const cleanTitle = item.title.trim();
     if (!cleanTitle) return;
-    setItems((current) => {
-      const exists = current.some((journeyItem) => journeyItem.id === item.id);
-      if (exists) return current.map((journeyItem) => (journeyItem.id === item.id ? { ...item, title: cleanTitle } : journeyItem));
-      return [{ ...item, title: cleanTitle }, ...current];
-    });
-    setEditingItem(null);
-  }
-
-  function deleteItem(id: string) {
-    setItems((current) => current.filter((item) => item.id !== id));
-  }
-
-  function applyPendingChanges() {
-    if (pendingChanges.length === 0) return;
-    setItems((current) => {
-      let nextItems = [...current];
-      pendingChanges.forEach((change) => {
-        if (change.kind === "add") {
-          nextItems = [normalizeJourneyTemplateItem(change.item), ...nextItems];
-        }
-        if (change.kind === "remove") {
-          nextItems = nextItems.filter((item) => item.id !== change.id);
-        }
-        if (change.kind === "update") {
-          nextItems = nextItems.map((item) => (
-            item.id === change.id ? normalizeJourneyTemplateItem({ ...item, ...change.patch }) : item
-          ));
-        }
+    setSavingItem(true);
+    try {
+      setItems((current) => {
+        const exists = current.some((journeyItem) => journeyItem.id === item.id);
+        if (exists) return current.map((journeyItem) => (journeyItem.id === item.id ? { ...item, title: cleanTitle } : journeyItem));
+        return [{ ...item, title: cleanTitle }, ...current];
       });
-      return nextItems;
-    });
-    setChatMessages((current) => [...current, { role: "assistant", text: `Applied ${pendingChanges.length} journey change${pendingChanges.length === 1 ? "" : "s"} to the draft.` }]);
-    setPendingChanges([]);
+      if (typeof window !== "undefined") {
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+      }
+      setEditingItem(null);
+    } finally {
+      setSavingItem(false);
+    }
+  }
+
+  async function deleteItem(id: string) {
+    if (deletingItemId) return;
+    setDeletingItemId(id);
+    try {
+      setItems((current) => current.filter((item) => item.id !== id));
+      if (typeof window !== "undefined") {
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+      }
+    } finally {
+      setDeletingItemId("");
+    }
+  }
+
+  async function applyPendingChanges() {
+    if (applyingChanges) return;
+    if (pendingChanges.length === 0) return;
+    setApplyingChanges(true);
+    try {
+      setItems((current) => {
+        let nextItems = [...current];
+        pendingChanges.forEach((change) => {
+          if (change.kind === "add") {
+            nextItems = [normalizeJourneyTemplateItem(change.item), ...nextItems];
+          }
+          if (change.kind === "remove") {
+            nextItems = nextItems.filter((item) => item.id !== change.id);
+          }
+          if (change.kind === "update") {
+            nextItems = nextItems.map((item) => (
+              item.id === change.id ? normalizeJourneyTemplateItem({ ...item, ...change.patch }) : item
+            ));
+          }
+        });
+        return nextItems;
+      });
+      if (typeof window !== "undefined") {
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+      setChatMessages((current) => [...current, { role: "assistant", text: `Applied ${pendingChanges.length} journey change${pendingChanges.length === 1 ? "" : "s"} to the draft.` }]);
+      setPendingChanges([]);
+    } finally {
+      setApplyingChanges(false);
+    }
   }
 
   function valueToOffsetDays(value: unknown) {
@@ -180,7 +219,7 @@ export function AccountJourneyConfigurationPage() {
     if ((lower.includes("apply") || lower.includes("accept") || lower.includes("yes")) && pendingChanges.length > 0) {
       setChatMessages((current) => [...current, { role: "user", text: prompt }]);
       setChatPrompt("");
-      applyPendingChanges();
+      void applyPendingChanges();
       return;
     }
 
@@ -285,12 +324,12 @@ export function AccountJourneyConfigurationPage() {
                 <Plus className="h-4 w-4" />
                 Add item
               </button>
-              <button type="button" onClick={cancelChanges} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-3 text-[13px] font-black text-[#6F6254] hover:bg-white">
+              <button type="button" onClick={cancelChanges} disabled={savingJourney} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-3 text-[13px] font-black text-[#6F6254] hover:bg-white disabled:cursor-not-allowed disabled:opacity-55">
                 Cancel
               </button>
-              <button type="button" onClick={saveJourney} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-3 text-[13px] font-black text-[#FFF9EF]">
-                <Check className="h-4 w-4" />
-                Save
+              <button type="button" onClick={() => void saveJourney()} disabled={savingJourney} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-3 text-[13px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/45">
+                {savingJourney ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {savingJourney ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
@@ -319,8 +358,8 @@ export function AccountJourneyConfigurationPage() {
                       <button type="button" onClick={() => setEditingItem(item)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#D8CAB9] bg-white/70 text-[#6F6254] hover:text-[#25352E]" aria-label={`Edit ${item.title}`}>
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
-                      <button type="button" onClick={() => deleteItem(item.id)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#E2B7AF] bg-white/70 text-[#B33D32]" aria-label={`Delete ${item.title}`}>
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <button type="button" onClick={() => void deleteItem(item.id)} disabled={Boolean(deletingItemId)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#E2B7AF] bg-white/70 text-[#B33D32] disabled:cursor-not-allowed disabled:opacity-55" aria-label={`Delete ${item.title}`}>
+                        {deletingItemId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                       </button>
                     </div>
                   </div>
@@ -376,10 +415,11 @@ export function AccountJourneyConfigurationPage() {
                     ))}
                   </div>
                   <div className="mt-3 flex gap-2">
-                    <button type="button" onClick={applyPendingChanges} className="rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-black text-[#FFF9EF]">
-                      Apply suggestion
+                    <button type="button" onClick={() => void applyPendingChanges()} disabled={applyingChanges} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-2 text-[12px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/45">
+                      {applyingChanges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                      {applyingChanges ? "Applying..." : "Apply suggestion"}
                     </button>
-                    <button type="button" onClick={() => setPendingChanges([])} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-2 text-[12px] font-black text-[#6F6254]">
+                    <button type="button" onClick={() => setPendingChanges([])} disabled={applyingChanges} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-2 text-[12px] font-black text-[#6F6254] disabled:cursor-not-allowed disabled:opacity-55">
                       Dismiss
                     </button>
                   </div>
@@ -409,7 +449,7 @@ export function AccountJourneyConfigurationPage() {
           <div className="w-full max-w-2xl rounded-[28px] border border-[#D8CAB9] bg-[#FFF9EF] p-5 shadow-[0_34px_110px_-56px_rgba(43,32,19,0.78)]">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[24px] font-black tracking-[-0.05em] text-[#1F2722]">Journey item</h2>
-              <button type="button" onClick={() => setEditingItem(null)} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#D8CAB9] text-[#6F6254]" aria-label="Close journey item editor">
+              <button type="button" onClick={() => setEditingItem(null)} disabled={savingItem} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#D8CAB9] text-[#6F6254] disabled:cursor-not-allowed disabled:opacity-55" aria-label="Close journey item editor">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -450,8 +490,11 @@ export function AccountJourneyConfigurationPage() {
               </label>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setEditingItem(null)} className="rounded-full border border-[#D8CAB9] px-4 py-2 text-[13px] font-black text-[#6F6254]">Cancel</button>
-              <button type="button" onClick={() => upsertItem(editingItem)} className="rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-black text-[#FFF9EF]">Save item</button>
+              <button type="button" onClick={() => setEditingItem(null)} disabled={savingItem} className="rounded-full border border-[#D8CAB9] px-4 py-2 text-[13px] font-black text-[#6F6254] disabled:cursor-not-allowed disabled:opacity-55">Cancel</button>
+              <button type="button" onClick={() => void upsertItem(editingItem)} disabled={savingItem} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/45">
+                {savingItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {savingItem ? "Saving..." : "Save item"}
+              </button>
             </div>
           </div>
         </div>

@@ -17,6 +17,11 @@ function weightedOverall(scores: Record<WeightKey, number>, weights: Record<Weig
   )));
 }
 
+function scoreOutOfFiveLabel(score: number) {
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 function normalizeLegacyBaselineScores(scores: Record<WeightKey, number>, overall: number, weights: Record<WeightKey, number>) {
   const weighted = weightedOverall(scores, weights);
   if (Math.abs(weighted - overall) <= 5) return scores;
@@ -68,7 +73,7 @@ export async function createApprovedOverrideScoreSnapshot(accountId: string, kpi
       financial: nextScores.financial,
       whitespace: nextScores.whitespace,
       health,
-      aiNarrative: `Manual override approved for ${dimension}. Score recalculated from ${latest.overall}/100 to ${overall}/100.`,
+      aiNarrative: `Manual override approved for ${dimension}. Score recalculated from ${scoreOutOfFiveLabel(latest.overall)}/5 to ${scoreOutOfFiveLabel(overall)}/5.`,
     },
   });
 

@@ -45,6 +45,12 @@ interface AiFallbackRecommendation {
   category: string;
 }
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 function lowestScoreCategory(score: Awaited<ReturnType<typeof prisma.kamScore.findFirst>>): string {
   if (!score) return "RELATIONSHIP";
   const dimensions = [
@@ -80,7 +86,7 @@ function deterministicFallbackRecommendations(
       },
       {
         title: `Update ${account.name} control plan`,
-        summary: `Use the latest KAM score (${overall}/100) to refresh the next account control checkpoint.`,
+        summary: `Use the latest KAM score (${scoreOutOfFiveLabel(overall)}/5) to refresh the next account control checkpoint.`,
         recommendedAction: `Review the weakest KPI area (${lowestCategory}), confirm whether it needs action, and document the next customer touchpoint.`,
         priority: 2,
         category: lowestCategory,

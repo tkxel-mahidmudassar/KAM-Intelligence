@@ -12,6 +12,12 @@ interface ActionSuggestion {
   rationale: string;
 }
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (score == null || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
 export async function runScoreActionsAgent(
   accountId: string,
   scores: KpiScores,
@@ -34,7 +40,7 @@ export async function runScoreActionsAgent(
   const scoreHistory = account.kamScores.map((s) => s.overall).join(", ");
   const weakDims = Object.entries(scores)
     .filter(([, v]) => v < 60)
-    .map(([k, v]) => `${k}: ${v}/100`)
+    .map(([k, v]) => `${k}: ${scoreOutOfFiveLabel(v)}/5`)
     .join(", ");
 
   const sources: AgentSource[] = [

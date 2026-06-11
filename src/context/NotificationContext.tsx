@@ -93,6 +93,23 @@ function isDerivedNotificationId(id: string) {
   return id.startsWith("kamazing-live-alert-") || id.startsWith("kamazing-live-v2-alert-") || id.startsWith("kamazing-alert-");
 }
 
+function scoreOutOfFiveLabel(score: number | null | undefined) {
+  if (typeof score !== "number" || !Number.isFinite(score)) return "N/A";
+  const normalized = score <= 5 ? score : score / 20;
+  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(1);
+}
+
+const scoreFocusByDimension: Record<string, string> = {
+  csat: "customer-success",
+  relationship: "relationship",
+  risk: "risk",
+  contractHealth: "contract-health",
+  projectHealth: "project-health",
+  resourceHealth: "resource-health",
+  financial: "financial-health",
+  whitespace: "whitespace",
+};
+
 function buildDerivedPortfolioNotifications(role: Role): AppNotification[] {
   if (typeof window === "undefined") return [];
 
@@ -113,7 +130,7 @@ function buildDerivedPortfolioNotifications(role: Role): AppNotification[] {
     derived.push({
       id,
       title: `${account.name} is critical`,
-      detail: `Score is ${account.healthScore}/100. Review the account workspace and proposed recovery steps.`,
+      detail: `Score is ${scoreOutOfFiveLabel(account.healthScore)}/5. Review the account workspace and proposed recovery steps.`,
       href: accountFocusFor(account.id),
       source: "portfolio-health",
       severity: "warning",
@@ -129,12 +146,12 @@ function buildDerivedPortfolioNotifications(role: Role): AppNotification[] {
     const weakestScore = Object.entries(account.scoreDimensions ?? {})
       .filter(([, value]) => typeof value === "number")
       .sort((a, b) => Number(a[1]) - Number(b[1]))[0]?.[0];
-    const focus = weakestScore ? `&focus=${weakestScore.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)}` : "";
+    const focus = weakestScore ? `&focus=${scoreFocusByDimension[weakestScore] ?? weakestScore.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)}` : "";
     const id = `kamazing-live-v2-alert-risk-${account.id}`;
     derived.push({
       id,
       title: `${account.name} needs attention`,
-      detail: `Score is ${account.healthScore}/100${weakestScore ? ` with ${weakestScore.replace(/([A-Z])/g, " $1").toLowerCase()} under pressure` : ""}.`,
+      detail: `Score is ${scoreOutOfFiveLabel(account.healthScore)}/5${weakestScore ? ` with ${weakestScore.replace(/([A-Z])/g, " $1").toLowerCase()} under pressure` : ""}.`,
       href: `${accountFocusFor(account.id)}${focus}`,
       source: "portfolio-health",
       severity: "warning",
