@@ -26,7 +26,6 @@ const DEFAULT_INTEGRATION_SETTINGS = {
   Worksphere: "connected",
   "Finance Invoice Tracking": "connected",
   LLM: "connected",
-  "AI Note Taker": "connected",
 };
 
 async function getSettingsRole(req: NextRequest): Promise<Role | null> {

@@ -35,6 +35,7 @@ export interface V2GeneratedDocument {
   fileUrl: string;
   format: "DOCX" | "PPTX" | "PDF" | "XLSX" | "Markdown";
   summary: string;
+  markdown: string;
 }
 
 type GeneratedFormat = V2GeneratedDocument["format"];
@@ -585,5 +586,6 @@ export async function generateV2Document(input: V2DocumentGenerationInput): Prom
     fileUrl: dataUrl(artifact, format),
     format,
     summary,
+    markdown,
   };
 }

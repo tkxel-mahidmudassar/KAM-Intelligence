@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Bell, FileText, Link2, Loader2, Music2, ShieldAlert, Trash2, Upload, UserPlus } from "lucide-react";
+import { Archive, Bell, FileText, Link2, Loader2, Music2, Plus, ShieldAlert, Trash2, Upload, UserPlus, X } from "lucide-react";
 import { defaultKpiWeights, integrationMocks } from "@/lib/v2/workspaceData";
 import { useAccountCache } from "@/context/AccountCacheContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { useRole } from "@/context/RoleContext";
 import type { Role } from "@/types";
 import { isAmbientMusicMuted, setAmbientMusicMuted } from "@/lib/client/ambientMusic";
+import type { AiRule } from "@/lib/v2/aiRuleHeuristics";
 
 type SettingsWeight = { id: string; name: string; weight: number };
 type TeamUser = {
@@ -74,12 +75,6 @@ const auditEvents = [
   { actor: "Omar Farooq", action: "Maersk recovery plan task dismissed with reason", when: "Jun 7, 2:02 PM", source: "Account journey" },
 ];
 
-const aiRules = [
-  "Do not repeat a recommendation when the same user dismissed it because the sponsor is already engaged.",
-  "When Project Health drops from delivery cadence, prefer pod-level recovery tasks before commercial escalation.",
-  "If finance denies a document-derived ARR update because invoice evidence is missing, wait for invoice support before proposing it again.",
-];
-
 export function SettingsPage() {
   const { role, userId, userName } = useRole();
   const { accounts, refreshAccounts, upsertAccount } = useAccountCache();
@@ -104,6 +99,10 @@ export function SettingsPage() {
   const [archivingPlaybookId, setArchivingPlaybookId] = useState("");
   const [jingleMuted, setJingleMuted] = useState(false);
   const [ambientMusicMuted, setAmbientMusicMutedState] = useState(false);
+  const [aiRules, setAiRules] = useState<AiRule[]>([]);
+  const [addingAiRule, setAddingAiRule] = useState(false);
+  const [aiRuleDraft, setAiRuleDraft] = useState("");
+  const [savingAiRule, setSavingAiRule] = useState(false);
 
   const canAccessSettings = role === "KAM" || role === "EXECUTIVE";
   const associates = useMemo(() => team.filter((user) => user.role === "ASSOCIATE"), [team]);
@@ -117,6 +116,10 @@ export function SettingsPage() {
   const canSaveWeights = totalWeight === 100 && !savingWeights;
   const inviteRoleOptions: Role[] = role === "EXECUTIVE" ? ["KAM"] : ["ASSOCIATE"];
   const defaultInviteRole: Role = role === "EXECUTIVE" ? "KAM" : "ASSOCIATE";
+  const displayedPlaybooks = useMemo(
+    () => (showArchived ? playbooks : playbooks.filter((playbook) => playbook.status !== "ARCHIVED")),
+    [playbooks, showArchived],
+  );
 
   useEffect(() => {
     if (!canAccessSettings || !userId) return;
@@ -127,22 +130,26 @@ export function SettingsPage() {
       setError("");
       try {
         const headers = userHeaders(role, userId);
-        const [settingsResponse, usersResponse, playbooksResponse] = await Promise.all([
+        const [settingsResponse, usersResponse, playbooksResponse, aiRulesResponse] = await Promise.all([
           fetch("/api/settings", { headers }),
           fetch("/api/users", { headers }),
           fetch(`/api/playbooks?includeArchived=${showArchived ? "true" : "false"}`, { headers }),
+          fetch("/api/v2/ai-rules", { headers }),
         ]);
         const settingsPayload = await settingsResponse.json();
         const usersPayload = await usersResponse.json();
         const playbooksPayload = await playbooksResponse.json();
+        const aiRulesPayload = await aiRulesResponse.json();
         if (!settingsResponse.ok) throw new Error(settingsPayload.error || "Settings could not be loaded");
         if (!usersResponse.ok) throw new Error(usersPayload.error || "Users could not be loaded");
         if (!playbooksResponse.ok) throw new Error(playbooksPayload.error || "Playbooks could not be loaded");
+        if (!aiRulesResponse.ok) throw new Error(aiRulesPayload.error || "AI rules could not be loaded");
         if (cancelled) return;
         setWeights(toSettingsWeights(settingsPayload.data.scoreWeights ?? {}));
         setIntegrationStatuses(Object.fromEntries(integrationMocks.map((name) => [name, "connected"])));
         setTeam((usersPayload.data?.users ?? []) as TeamUser[]);
         setPlaybooks((playbooksPayload.data ?? []) as PlaybookRow[]);
+        setAiRules((aiRulesPayload.data ?? []) as AiRule[]);
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Settings could not be loaded");
       } finally {
@@ -213,6 +220,31 @@ export function SettingsPage() {
       setError(saveError instanceof Error ? saveError.message : "Weights could not be saved");
     } finally {
       setSavingWeights(false);
+    }
+  }
+
+  async function createAiRule() {
+    const text = aiRuleDraft.trim();
+    if (!text || savingAiRule) return;
+    setSavingAiRule(true);
+    setError("");
+    setStatus("");
+    try {
+      const response = await fetch("/api/v2/ai-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...userHeaders(role, userId) },
+        body: JSON.stringify({ text, source: "manual" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "AI rule could not be saved");
+      if (payload.data?.rule) setAiRules((rules) => [payload.data.rule as AiRule, ...rules]);
+      setAiRuleDraft("");
+      setAddingAiRule(false);
+      setStatus("AI rule saved.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "AI rule could not be saved");
+    } finally {
+      setSavingAiRule(false);
     }
   }
 
@@ -567,7 +599,7 @@ export function SettingsPage() {
             </div>
           </Panel>
 
-          <Panel title="Global playbooks" aside={`${playbooks.length} shown`}>
+          <Panel title="Global playbooks" aside={`${displayedPlaybooks.length} shown`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-2 text-[12px] font-black text-[#25352E]">
                 {playbookUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
@@ -584,12 +616,14 @@ export function SettingsPage() {
               </label>
             </div>
             <div className="mt-3 max-h-[520px] space-y-2 overflow-y-auto pr-1">
-              {playbooks.length === 0 ? (
+              {displayedPlaybooks.length === 0 ? (
                 <div className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3 text-[13px] font-bold text-[#75685A]">
-                  Upload PDF, DOCX, TXT, Markdown, XLS, or XLSX playbooks. Global playbooks apply to all accounts automatically.
+                  {showArchived
+                    ? "Upload PDF, DOCX, TXT, Markdown, XLS, or XLSX playbooks. Global playbooks apply to all accounts automatically."
+                    : "No active playbooks are available. Turn on Show archived only if you need to review archived uploads."}
                 </div>
               ) : null}
-              {playbooks.map((playbook) => (
+              {displayedPlaybooks.map((playbook) => (
                 <div key={playbook.id} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -616,14 +650,63 @@ export function SettingsPage() {
           <div className="rounded-[28px] border border-[#E1D3C2] bg-[#FFFCF6] p-4 shadow-[0_20px_55px_-48px_rgba(32,38,32,0.55)]">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[20px] font-black text-[#25352E]">AI rules playbook</h2>
-              <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{aiRules.length} rules</span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-1 text-[12px] font-black text-[#6F6254]">{aiRules.length} rules</span>
+                <button
+                  type="button"
+                  onClick={() => setAddingAiRule(true)}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-black text-[#FFF9EF]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add rule
+                </button>
+              </div>
             </div>
+            {addingAiRule ? (
+              <div className="mt-4 rounded-2xl border border-[#D8C7B4] bg-[#FFF8ED] p-3">
+                <div className="flex items-start gap-2">
+                  <textarea
+                    value={aiRuleDraft}
+                    onChange={(event) => setAiRuleDraft(event.target.value)}
+                    rows={3}
+                    className="min-h-24 flex-1 resize-none rounded-2xl border border-[#D8C7B4] bg-[#FFFCF6] px-3 py-2 text-[13px] font-bold leading-relaxed text-[#25352E] outline-none focus:border-[#25352E]"
+                    placeholder="Example: Do not suggest executive escalation when the sponsor is already actively engaged."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (savingAiRule) return;
+                      setAddingAiRule(false);
+                      setAiRuleDraft("");
+                    }}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#D8C7B4] text-[#6F6254]"
+                    aria-label="Cancel adding AI rule"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void createAiRule()}
+                    disabled={!aiRuleDraft.trim() || savingAiRule}
+                    className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-black text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35"
+                  >
+                    {savingAiRule ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    {savingAiRule ? "Saving..." : "Save rule"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="mt-4 space-y-3">
               {aiRules.map((rule, index) => (
-                <article key={rule} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
+                <article key={rule.id} className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3">
                   <div className="flex items-start gap-3">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#25352E] text-[11px] font-black text-[#FFF9EF]">{index + 1}</span>
-                    <p className="text-[13px] font-bold leading-relaxed text-[#25352E]">{rule}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-bold leading-relaxed text-[#25352E]">{rule.text}</p>
+                      <p className="mt-1 text-[11px] font-black capitalize text-[#8A7A69]">{rule.source}</p>
+                    </div>
                   </div>
                 </article>
               ))}

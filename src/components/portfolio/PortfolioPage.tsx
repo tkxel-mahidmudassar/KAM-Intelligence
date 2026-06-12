@@ -20,6 +20,7 @@ import {
 } from "@/lib/v2/configuration";
 import { type PortfolioAccount, type PortfolioHealth } from "@/lib/v2/portfolioData";
 import { defaultKpiWeights } from "@/lib/v2/workspaceData";
+import { buildLearningRuleText, shouldCreateLearningRule, suppressesRecommendation, type AiRule } from "@/lib/v2/aiRuleHeuristics";
 import type { Role } from "@/types";
 
 const healthLabel: Record<PortfolioHealth, string> = {
@@ -191,7 +192,7 @@ interface UploadedAccountDocument {
   status: "Processed" | "Pending review" | "Draft";
   affected: string;
   url: string;
-  kind?: "uploaded" | "generated-kyc";
+  kind?: "uploaded" | "generated" | "generated-kyc";
   draftContent?: string;
   kycPayload?: GeneratedWorkspaceKycPayload;
   acceptedAt?: string;
@@ -961,6 +962,21 @@ function applyRecommendationOverlays(rows: KpiOverviewRow[], overlays: Record<st
       task: overlay.task,
       taskType: overlay.taskType,
       dueInDays: overlay.dueInDays,
+    };
+  });
+}
+
+function applyAiRuleSuppressions(rows: KpiOverviewRow[], rules: AiRule[], account: PortfolioAccount | null) {
+  if (rules.length === 0) return rows;
+  return rows.map((row) => {
+    const targetText = [account?.name, row.name, row.why, row.task, row.taskType].filter(Boolean).join(" ");
+    if (!targetText || !suppressesRecommendation(rules, targetText)) return row;
+    return {
+      ...row,
+      why: undefined,
+      task: undefined,
+      taskType: undefined,
+      dueInDays: undefined,
     };
   });
 }
@@ -2324,6 +2340,16 @@ function triggerDownload(fileName: string, blob: Blob) {
 
 function downloadTextArtifact(fileName: string, content: string) {
   triggerDownload(fileName, new Blob([content], { type: "text/markdown;charset=utf-8" }));
+}
+
+function downloadUrlArtifact(url: string, fileName: string) {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 function AccountLogo({ account, size = "md" }: { account: PortfolioAccount; size?: "md" | "lg" }) {
@@ -3993,11 +4019,13 @@ function DocumentsTab({
   onAccountUpdate,
   generatedKycDraftDocument,
   onGeneratedKycAccepted,
+  onGeneratedKycDismissed,
 }: {
   account: PortfolioAccount;
   onAccountUpdate: (account: PortfolioAccount) => void;
   generatedKycDraftDocument?: UploadedAccountDocument | null;
   onGeneratedKycAccepted?: (documentId: string) => void;
+  onGeneratedKycDismissed?: (documentId: string, reason: string) => void;
 }) {
   const { role, userId } = useRole();
   const { upsertAccount } = useAccountCache();
@@ -4032,13 +4060,14 @@ function DocumentsTab({
   const [draftDocumentEditor, setDraftDocumentEditor] = useState<UploadedAccountDocument | null>(null);
   const [savingDraftDocument, setSavingDraftDocument] = useState(false);
   const [qbrOpen, setQbrOpen] = useState(false);
-  const [qbrDraftReady, setQbrDraftReady] = useState(false);
   const [qbrDeckUrl, setQbrDeckUrl] = useState("");
   const [qbrGenerating, setQbrGenerating] = useState(false);
   const [qbrError, setQbrError] = useState("");
   const [proposalResolutionDraft, setProposalResolutionDraft] = useState<ProposalResolutionDraft | null>(null);
   const [proposalResolutionSaving, setProposalResolutionSaving] = useState(false);
   const [acceptingKycDraftId, setAcceptingKycDraftId] = useState<string | null>(null);
+  const [kycDismissDraft, setKycDismissDraft] = useState<{ documentId: string; reason: string } | null>(null);
+  const [dismissingKycDraft, setDismissingKycDraft] = useState(false);
   const [uploadDraft, setUploadDraft] = useState<DocumentUploadDraft>({
     type: documentTypes[0].type,
     fileName: "",
@@ -4056,7 +4085,39 @@ function DocumentsTab({
   const canApproveDirectly = role === "KAM";
   const canReviewProposals = role === "ASSOCIATE" || role === "KAM";
   const proposalUnderReview = proposalResolutionDraft ? signalProposals.find((proposal) => proposal.id === proposalResolutionDraft.proposalId) : undefined;
+
+  async function recordDocumentLearningRule(input: { reason: string; itemTitle?: string | null; category?: string | null }) {
+    const reason = input.reason.trim();
+    if (!shouldCreateLearningRule(reason)) return;
+    try {
+      await fetch("/api/v2/ai-rules", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-role": role,
+          ...(userId ? { "x-user-id": userId } : {}),
+        },
+        body: JSON.stringify({
+          source: "dismissal",
+          reason,
+          accountId: account.id,
+          accountName: account.name,
+          itemTitle: input.itemTitle,
+          category: input.category,
+          text: buildLearningRuleText({
+            reason,
+            accountName: account.name,
+            itemTitle: input.itemTitle,
+            category: input.category,
+          }),
+        }),
+      });
+    } catch {
+      // Do not block document review if the learning-rule capture fails.
+    }
+  }
   const recentDocuments = [...uploadedDocuments].sort((a, b) => b.uploadedAtMs - a.uploadedAtMs);
+  const kycDraftUnderDismissal = kycDismissDraft ? uploadedDocuments.find((document) => document.id === kycDismissDraft.documentId) : undefined;
 
   useEffect(() => {
     const nextMetadata = getAccountRuntimeMetadata(account);
@@ -4086,7 +4147,6 @@ function DocumentsTab({
     setSignalProposals([]);
     setProposalResolutionDraft(null);
     setDocumentUploadError("");
-    setQbrDraftReady(false);
     setQbrDeckUrl("");
   }, [account.id]);
 
@@ -4145,8 +4205,12 @@ function DocumentsTab({
     if (document.draftContent) {
       if (document.name.toLowerCase().endsWith(".docx")) {
         await downloadDocxArtifact(document.name, document.draftContent);
-      } else {
+      } else if (/\.(md|markdown|txt)$/i.test(document.name)) {
         downloadTextArtifact(document.name, document.draftContent);
+      } else if (document.url) {
+        downloadUrlArtifact(document.url, document.name);
+      } else {
+        downloadTextArtifact(document.name.replace(/\.[^.]+$/, ".md"), document.draftContent);
       }
       return;
     }
@@ -4168,9 +4232,32 @@ function DocumentsTab({
   }
 
   async function acceptKycDraft(document: UploadedAccountDocument) {
-    if (!document.kycPayload || acceptingKycDraftId) return;
+    if (document.kind !== "generated" && document.kind !== "generated-kyc") return;
+    if (acceptingKycDraftId) return;
     setAcceptingKycDraftId(document.id);
+    const acceptedAtMs = new Date().getTime();
     const kyc = document.kycPayload;
+    if (!kyc) {
+      try {
+        await settleUiAction();
+        setUploadedDocuments((documents) =>
+          documents.map((item) =>
+            item.id === document.id
+              ? {
+                  ...item,
+                  status: "Processed",
+                  type: item.type.replace(/\bdraft\b/i, "accepted").trim() || "Accepted generated document",
+                  acceptedAt: "Today",
+                  uploadedAtMs: acceptedAtMs,
+                }
+              : item,
+          ),
+        );
+      } finally {
+        setAcceptingKycDraftId(null);
+      }
+      return;
+    }
     const financialOverview = asPlainRecord(kyc.financialOverview);
     const parsedArr = Number(financialOverview.arr);
     const contractEnd = String(financialOverview.contractEnd ?? "").trim();
@@ -4195,7 +4282,7 @@ function DocumentsTab({
                 status: "Processed",
                 type: "Accepted KYC",
                 acceptedAt: "Today",
-                uploadedAtMs: Date.now(),
+                uploadedAtMs: acceptedAtMs,
               }
             : item,
         ),
@@ -4226,6 +4313,26 @@ function DocumentsTab({
       setDocumentUploadError(error instanceof Error ? error.message : "Accepted KYC could not update account information");
     } finally {
       setAcceptingKycDraftId(null);
+    }
+  }
+
+  async function dismissKycDraft() {
+    if (!kycDismissDraft || !kycDismissDraft.reason.trim() || dismissingKycDraft) return;
+    setDismissingKycDraft(true);
+    try {
+      await settleUiAction();
+      setUploadedDocuments((documents) => documents.filter((document) => document.id !== kycDismissDraft.documentId));
+      if (kycDraftUnderDismissal?.kind === "generated-kyc") {
+        onGeneratedKycDismissed?.(kycDismissDraft.documentId, kycDismissDraft.reason.trim());
+      }
+      void recordDocumentLearningRule({
+        reason: kycDismissDraft.reason.trim(),
+        itemTitle: kycDraftUnderDismissal?.name ?? "Generated KYC",
+        category: "KYC",
+      });
+      setKycDismissDraft(null);
+    } finally {
+      setDismissingKycDraft(false);
     }
   }
 
@@ -4372,6 +4479,13 @@ function DocumentsTab({
           void refreshAccountFromApi();
         }
       }
+      if (proposalResolutionDraft.action === "deny" && currentProposal) {
+        void recordDocumentLearningRule({
+          reason,
+          itemTitle: `${currentProposal.field}: ${currentProposal.proposedValue}`,
+          category: currentProposal.kind ?? "Document proposal",
+        });
+      }
       await settleUiAction();
       setSignalProposals((proposals) =>
         proposals.map((proposal) => {
@@ -4439,12 +4553,56 @@ function DocumentsTab({
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Document generation failed");
-        if (!payload.generatedDocument?.fileUrl) {
+        const generatedDocument = payload.generatedDocument as
+          | { title?: unknown; documentType?: unknown; fileName?: unknown; fileUrl?: unknown; format?: unknown; summary?: unknown; markdown?: unknown }
+          | undefined;
+        if (!generatedDocument?.fileUrl) {
           throw new Error(payload.reply || "T-Man needs more input before generating this document.");
         }
-        if (qbrDeckUrl && qbrDeckUrl.startsWith("blob:")) URL.revokeObjectURL(qbrDeckUrl);
-        setQbrDeckUrl(String(payload.generatedDocument.fileUrl));
-        setQbrDraftReady(true);
+        const generatedMarkdown = String(generatedDocument.markdown || "");
+        const generatedTitle = String(generatedDocument.title || `${account.name} ${qbrDraft.documentType}`);
+        const generatedFileName = String(generatedDocument.fileName || `${generatedTitle}.${qbrDraft.outputFormat}`);
+        const generatedAt = new Date();
+        const generatedAtMs = generatedAt.getTime();
+        if (qbrDraft.documentType.toLowerCase() === "kyc") {
+          const kycDocument: UploadedAccountDocument = {
+            id: `generated-kyc-${account.id}-${generatedAtMs}`,
+            name: generatedFileName.toLowerCase().endsWith(".docx") ? generatedFileName : `${account.name} KYC.docx`,
+            type: "KYC draft",
+            uploadedBy: "T-Man",
+            uploadedAt: "Today",
+            uploadedAtMs: generatedAtMs,
+            status: "Draft",
+            affected: "KYC review and account profile",
+            url: String(generatedDocument.fileUrl),
+            kind: "generated-kyc",
+            draftContent: generatedMarkdown || `# ${generatedTitle}\n\n${String(generatedDocument.summary || "Generated KYC draft.")}`,
+            kycPayload: {
+              version: 1,
+              status: "DRAFT",
+              createdAt: generatedAt.toISOString(),
+              executiveSummary: generatedMarkdown || String(generatedDocument.summary || "Generated KYC draft."),
+            },
+          };
+          setUploadedDocuments((documents) => [kycDocument, ...documents.filter((document) => document.id !== kycDocument.id)]);
+          setQbrDeckUrl("");
+        } else {
+          const generatedDraftDocument: UploadedAccountDocument = {
+            id: `generated-${qbrDraft.documentType.toLowerCase()}-${account.id}-${generatedAtMs}`,
+            name: generatedFileName,
+            type: `${qbrDraft.documentType} draft`,
+            uploadedBy: "T-Man",
+            uploadedAt: "Today",
+            uploadedAtMs: generatedAtMs,
+            status: "Draft",
+            affected: `${qbrDraft.documentType} review and account context`,
+            url: String(generatedDocument.fileUrl),
+            kind: "generated",
+            draftContent: generatedMarkdown || `# ${generatedTitle}\n\n${String(generatedDocument.summary || "Generated document draft.")}`,
+          };
+          setUploadedDocuments((documents) => [generatedDraftDocument, ...documents.filter((document) => document.id !== generatedDraftDocument.id)]);
+          setQbrDeckUrl("");
+        }
         setQbrOpen(false);
         return;
       }
@@ -4488,9 +4646,23 @@ function DocumentsTab({
       }
 
       const blob = await response.blob();
+      const generatedAtMs = new Date().getTime();
       if (qbrDeckUrl && qbrDeckUrl.startsWith("blob:")) URL.revokeObjectURL(qbrDeckUrl);
-      setQbrDeckUrl(URL.createObjectURL(blob));
-      setQbrDraftReady(true);
+      const blobUrl = URL.createObjectURL(blob);
+      const qbrDocument: UploadedAccountDocument = {
+        id: `generated-qbr-${account.id}-${generatedAtMs}`,
+        name: `${account.name} QBR.pptx`,
+        type: "QBR draft",
+        uploadedBy: "T-Man",
+        uploadedAt: "Today",
+        uploadedAtMs: generatedAtMs,
+        status: "Draft",
+        affected: "QBR review and account context",
+        url: blobUrl,
+        kind: "generated",
+      };
+      setUploadedDocuments((documents) => [qbrDocument, ...documents.filter((document) => document.id !== qbrDocument.id)]);
+      setQbrDeckUrl("");
       setQbrOpen(false);
     } catch (error) {
       setQbrError(error instanceof Error ? error.message : "Document generation failed");
@@ -4532,40 +4704,52 @@ function DocumentsTab({
         ) : (
           <div className="grid gap-2">
             {recentDocuments.map((document) => {
-            const documentProposals = signalProposals.filter((proposal) => proposal.sourceDocument === document.name);
-            const reviewStatus = document.status === "Draft" ? "Draft" : document.acceptedAt ? "Accepted" : documentReviewStatus(documentProposals);
+              const documentProposals = signalProposals.filter((proposal) => proposal.sourceDocument === document.name);
+              const reviewStatus = document.status === "Draft" ? "Draft" : document.acceptedAt ? "Accepted" : documentReviewStatus(documentProposals);
+              const isGeneratedDraft = (document.kind === "generated" || document.kind === "generated-kyc") && document.status === "Draft";
+              const approvalLabel = document.kind === "generated-kyc" ? "Approve KYC" : "Approve";
 
-            return (
-              <article key={document.id} className="grid gap-3 rounded-2xl border border-[#E5DACD] bg-[#FFF9EF]/72 p-3 lg:grid-cols-[0.9fr_1.1fr]">
-                <div>
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <button type="button" onClick={() => previewDocument(document)} className="text-left text-[14px] font-black text-[#1F2722] underline decoration-[#C9BBA9] underline-offset-4">
-                      {document.name}
-                    </button>
-                    <span className="rounded-full border border-[#D8CAB9] bg-white/70 px-2.5 py-1 text-[11px] font-bold text-[#6F6254]">{reviewStatus}</span>
-                  </div>
-                  <p className="mt-1 text-[12px] font-bold text-[#7D6E5F]">{document.type}</p>
-                  <div className="mt-3 grid gap-2 text-[12px] font-bold text-[#6F6254] sm:grid-cols-3">
-                    <span>{document.uploadedAt}</span>
-                    <span>{document.uploadedBy}</span>
-                    <span>{document.affected}</span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => previewDocument(document)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#25352E]">
-                      {document.draftContent ? "Preview / edit" : "Preview"}
-                    </button>
-                    <button type="button" onClick={() => void downloadDocument(document)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#25352E]">
-                      Download
-                    </button>
-                    {document.kind === "generated-kyc" && document.status === "Draft" ? (
-                      <button type="button" onClick={() => void acceptKycDraft(document)} disabled={acceptingKycDraftId === document.id} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
-                        {acceptingKycDraftId === document.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                        {acceptingKycDraftId === document.id ? "Accepting..." : "Accept KYC"}
+              return (
+                <article key={document.id} className="grid gap-3 rounded-2xl border border-[#E5DACD] bg-[#FFF9EF]/72 p-3 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <button type="button" onClick={() => previewDocument(document)} className="text-left text-[14px] font-black text-[#1F2722] underline decoration-[#C9BBA9] underline-offset-4">
+                        {document.name}
                       </button>
-                    ) : null}
+                      <span className="rounded-full border border-[#D8CAB9] bg-white/70 px-2.5 py-1 text-[11px] font-bold text-[#6F6254]">{reviewStatus}</span>
+                    </div>
+                    <p className="mt-1 text-[12px] font-bold text-[#7D6E5F]">{document.type}</p>
+                    <div className="mt-3 grid gap-2 text-[12px] font-bold text-[#6F6254] sm:grid-cols-3">
+                      <span>{document.uploadedAt}</span>
+                      <span>{document.uploadedBy}</span>
+                      <span>{document.affected}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => previewDocument(document)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#25352E]">
+                        Preview
+                      </button>
+                      {document.draftContent ? (
+                        <button type="button" onClick={() => previewDocument(document)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#25352E]">
+                          Edit
+                        </button>
+                      ) : null}
+                      <button type="button" onClick={() => void downloadDocument(document)} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#25352E]">
+                        Download
+                      </button>
+                      {isGeneratedDraft ? (
+                        <>
+                          <button type="button" onClick={() => void acceptKycDraft(document)} disabled={acceptingKycDraftId === document.id} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+                            {acceptingKycDraftId === document.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                            {acceptingKycDraftId === document.id ? "Approving..." : approvalLabel}
+                          </button>
+                          <button type="button" onClick={() => setKycDismissDraft({ documentId: document.id, reason: "" })} className="rounded-full border border-[#D8CAB9] bg-white/70 px-3 py-1.5 text-[12px] font-bold text-[#6F6254]">
+                            Dismiss
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-                <div className="grid gap-2">
+                  <div className="grid gap-2">
                   {documentProposals.map((proposal) => (
                     <div key={proposal.id} className="rounded-2xl border border-[#E5DACD] bg-white/62 p-3">
                       <div className="grid gap-3 md:grid-cols-[0.8fr_1fr_1fr]">
@@ -4606,25 +4790,13 @@ function DocumentsTab({
                       ) : null}
                     </div>
                   ))}
-                </div>
-              </article>
-            );
+                  </div>
+                </article>
+              );
             })}
           </div>
         )}
       </section>
-
-      {qbrDraftReady ? (
-        <section className="rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF]/72 p-4">
-          <h3 className="text-[18px] font-black tracking-[-0.04em] text-[#1F2722]">Generated document</h3>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E5DACD] bg-white/64 p-3">
-            <p className="text-[14px] font-black text-[#1F2722]">{account.name} {qbrDraft.documentType}</p>
-            <button type="button" onClick={() => openExternalTab(qbrDeckUrl)} className="rounded-full bg-[#25352E] px-3 py-1.5 text-[12px] font-bold text-[#FFF9EF]">
-              Open document
-            </button>
-          </div>
-        </section>
-      ) : null}
 
       {qbrError ? (
         <div className="rounded-2xl border border-[#E8B8B0] bg-[#FFF0ED] p-3 text-[13px] font-bold text-[#B33D32]">
@@ -4667,8 +4839,12 @@ function DocumentsTab({
                   if (!draftDocumentEditor?.draftContent) return;
                   if (draftDocumentEditor.name.toLowerCase().endsWith(".docx")) {
                     void downloadDocxArtifact(draftDocumentEditor.name, draftDocumentEditor.draftContent);
-                  } else {
+                  } else if (/\.(md|markdown|txt)$/i.test(draftDocumentEditor.name)) {
                     downloadTextArtifact(draftDocumentEditor.name, draftDocumentEditor.draftContent);
+                  } else if (draftDocumentEditor.url) {
+                    downloadUrlArtifact(draftDocumentEditor.url, draftDocumentEditor.name);
+                  } else {
+                    downloadTextArtifact(draftDocumentEditor.name.replace(/\.[^.]+$/, ".md"), draftDocumentEditor.draftContent);
                   }
                 }}
                 className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#25352E]"
@@ -4699,6 +4875,41 @@ function DocumentsTab({
         onConfirm={confirmProposalResolution}
         onCancel={() => setProposalResolutionDraft(null)}
       />
+      <Dialog.Root open={Boolean(kycDismissDraft)} onOpenChange={(nextOpen) => {
+        if (!nextOpen && !dismissingKycDraft) setKycDismissDraft(null);
+      }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[70] bg-[#1B1812]/38 backdrop-blur-[3px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[81] w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-[#D8CAB9] bg-[#FFF9EF] p-4 shadow-[0_28px_70px_-32px_rgba(31,39,34,0.56)] focus:outline-none">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Dialog.Title className="text-[20px] font-black tracking-[-0.05em] text-[#1F2722]">Dismiss generated draft</Dialog.Title>
+                <p className="mt-1 text-[12px] font-bold text-[#7D6E5F]">{kycDraftUnderDismissal?.name ?? "Generated draft"}</p>
+              </div>
+              <Dialog.Close asChild>
+                <button type="button" disabled={dismissingKycDraft} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DED1C1] bg-white/70 text-[#6F6254]" aria-label="Close dismiss KYC dialog">
+                  <X className="h-4 w-4" />
+                </button>
+              </Dialog.Close>
+            </div>
+            <textarea
+              value={kycDismissDraft?.reason ?? ""}
+              onChange={(event) => setKycDismissDraft((draft) => (draft ? { ...draft, reason: event.target.value } : draft))}
+              placeholder="Reason for dismissing this draft"
+              className="mt-4 min-h-28 w-full resize-none rounded-2xl border border-[#E1D7CA] bg-white/75 p-3 text-[13px] font-bold text-[#25352E] outline-none placeholder:text-[#A69A8B] focus:border-[#25352E]/45"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setKycDismissDraft(null)} disabled={dismissingKycDraft} className="rounded-full border border-[#D8CAB9] bg-white/70 px-4 py-2 text-[13px] font-bold text-[#6F6254]">
+                Cancel
+              </button>
+              <button type="button" onClick={() => void dismissKycDraft()} disabled={!kycDismissDraft?.reason.trim() || dismissingKycDraft} className="inline-flex items-center gap-2 rounded-full bg-[#25352E] px-4 py-2 text-[13px] font-bold text-[#FFF9EF] disabled:cursor-not-allowed disabled:bg-[#25352E]/35">
+                {dismissingKycDraft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {dismissingKycDraft ? "Dismissing..." : "Confirm"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }
@@ -4985,10 +5196,44 @@ function ProfileTab({
     setJourneyResolutionDraft({ taskId: itemId, action, reason: "" });
   }
 
+  async function recordJourneyLearningRule(reason: string, itemTitle?: string | null) {
+    if (!shouldCreateLearningRule(reason)) return;
+    try {
+      await fetch("/api/v2/ai-rules", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-role": role,
+          "x-user-id": userId ?? "",
+        },
+        body: JSON.stringify({
+          source: "dismissal",
+          reason,
+          accountId: account.id,
+          accountName: account.name,
+          itemTitle: itemTitle ?? "Account journey item",
+          category: "Account journey",
+          text: buildLearningRuleText({
+            reason,
+            accountName: account.name,
+            itemTitle: itemTitle ?? "Account journey item",
+            category: "Account journey",
+          }),
+        }),
+      });
+    } catch {
+      // Learning capture is non-blocking; the user's task resolution should still succeed.
+    }
+  }
+
   async function confirmJourneyResolution() {
     const reason = journeyResolutionDraft?.reason.trim();
     if (!journeyResolutionDraft || !reason) return;
     const persistedItem = account.journeyItems?.find((item) => item.id === journeyResolutionDraft.taskId);
+    const dismissedItemTitle = resolutionItem?.title ?? persistedItem?.title ?? "Account journey item";
+    if (journeyResolutionDraft.action === "Dismiss") {
+      void recordJourneyLearningRule(reason, dismissedItemTitle);
+    }
     if (persistedItem) {
       try {
         const response = await fetch(`/api/accounts/${account.id}/journey-items`, {
@@ -5471,11 +5716,15 @@ function AccountModal({
   const [kycRegenerationError, setKycRegenerationError] = useState("");
   const [generatedKycDraftDocument, setGeneratedKycDraftDocument] = useState<UploadedAccountDocument | null>(null);
   const [recommendationOverlays, setRecommendationOverlays] = useState<Record<string, PlaybookRecommendationOverlay>>({});
+  const [aiRules, setAiRules] = useState<AiRule[]>([]);
 
   const acceptedTaskIds = useMemo(() => new Set(activeTasks.map((task) => task.id)), [activeTasks]);
   const fallbackKpiRows = useMemo(() => buildAccountKpiRows(account), [account]);
   const baseKpiRows = useMemo(() => dbKpiRows ?? fallbackKpiRows, [dbKpiRows, fallbackKpiRows]);
-  const kpiRows = useMemo(() => applyRecommendationOverlays(baseKpiRows, recommendationOverlays), [baseKpiRows, recommendationOverlays]);
+  const kpiRows = useMemo(
+    () => applyAiRuleSuppressions(applyRecommendationOverlays(baseKpiRows, recommendationOverlays), aiRules, account),
+    [account, aiRules, baseKpiRows, recommendationOverlays],
+  );
   const pendingOverrideRequests = useMemo(() => Object.values(overrideRequests).filter((request) => request.status === "Pending"), [overrideRequests]);
   const overrideRequestLabels = useMemo(() => {
     const labels: Record<string, string> = {};
@@ -5486,6 +5735,64 @@ function AccountModal({
     }
     return labels;
   }, [kpiRows]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function loadAiRules() {
+      try {
+        const response = await fetch("/api/v2/ai-rules", {
+          headers: {
+            "x-role": role,
+            ...(userId ? { "x-user-id": userId } : {}),
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok) return;
+        if (!cancelled) setAiRules((payload.data ?? []) as AiRule[]);
+      } catch {
+        if (!cancelled) setAiRules([]);
+      }
+    }
+    void loadAiRules();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, role, userId]);
+
+  async function recordLearningRule(input: { reason: string; itemTitle?: string | null; category?: string | null }) {
+    const reason = input.reason.trim();
+    if (!shouldCreateLearningRule(reason)) return;
+    try {
+      const response = await fetch("/api/v2/ai-rules", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-role": role,
+          ...(userId ? { "x-user-id": userId } : {}),
+        },
+        body: JSON.stringify({
+          source: "dismissal",
+          reason,
+          accountId: account?.id,
+          accountName: account?.name,
+          itemTitle: input.itemTitle,
+          category: input.category,
+          text: buildLearningRuleText({
+            reason,
+            accountName: account?.name,
+            itemTitle: input.itemTitle,
+            category: input.category,
+          }),
+        }),
+      });
+      const payload = await response.json();
+      if (response.ok && payload.data?.rule) setAiRules((rules) => [payload.data.rule as AiRule, ...rules]);
+    } catch {
+      // Learning capture should not interrupt approval or dismissal workflows.
+    }
+  }
+
   const isAssociate = role === "ASSOCIATE";
   const canOverrideDirectly = role === "KAM";
 
@@ -5719,6 +6026,7 @@ function AccountModal({
   function confirmDeny(row: KpiOverviewRow) {
     const reason = pendingDenials[row.id]?.trim();
     if (!reason) return;
+    void recordLearningRule({ reason, itemTitle: row.task ?? row.name, category: row.name });
     setDeniedReasons((reasons) => ({ ...reasons, [row.id]: reason }));
     setPendingDenials((reasons) => {
       const next = { ...reasons };
@@ -6224,6 +6532,10 @@ function AccountModal({
                   onGeneratedKycAccepted={(documentId) => {
                     setGeneratedKycDraftDocument((document) => document?.id === documentId ? null : document);
                     setKycRegenerationMessage("KYC accepted and added to documents.");
+                  }}
+                  onGeneratedKycDismissed={(documentId) => {
+                    setGeneratedKycDraftDocument((document) => document?.id === documentId ? null : document);
+                    setKycRegenerationMessage("");
                   }}
                 />
               </Tabs.Content>

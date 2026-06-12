@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, ListChecks, X } from "lucide-react";
 import { useAccountCache } from "@/context/AccountCacheContext";
+import { useRole } from "@/context/RoleContext";
+import { buildLearningRuleText, shouldCreateLearningRule, suppressesRecommendation, type AiRule } from "@/lib/v2/aiRuleHeuristics";
 import { money, type WorkspaceAccount, type WorkspaceActionItem, type WorkspaceHealth } from "@/lib/v2/workspaceData";
 
 type CalendarView = "month" | "timeline";
@@ -195,6 +197,7 @@ function reasonPlaceholder(status: ActionStatus) {
 
 export function HomePage() {
   const router = useRouter();
+  const { role, userId } = useRole();
   const { accounts: apiAccountRecords, loading, error: loadError } = useAccountCache();
   const [calendarView, setCalendarView] = useState<CalendarView>("timeline");
   const [monthAnchor, setMonthAnchor] = useState(todayIsoDate());
@@ -202,14 +205,41 @@ export function HomePage() {
   const [expandedHealth, setExpandedHealth] = useState<WorkspaceHealth | "renewals" | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [items, setItems] = useState<WorkspaceActionItem[]>([]);
+  const [aiRules, setAiRules] = useState<AiRule[]>([]);
   const [reasonTarget, setReasonTarget] = useState<{ id: string; status: ActionStatus } | null>(null);
   const [reason, setReason] = useState("");
   const apiAccounts = useMemo(() => apiAccountRecords as ApiAccount[], [apiAccountRecords]);
   const accounts = useMemo(() => apiAccounts.map(mapApiAccount), [apiAccounts]);
 
   useEffect(() => {
-    setItems(buildAccountActions(accounts, apiAccounts));
-  }, [accounts, apiAccounts]);
+    const nextItems = buildAccountActions(accounts, apiAccounts).filter((item) => (
+      !suppressesRecommendation(aiRules, `${item.accountName} ${item.title} ${item.details} ${item.type}`)
+    ));
+    setItems(nextItems);
+  }, [accounts, apiAccounts, aiRules]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAiRules() {
+      try {
+        const response = await fetch("/api/v2/ai-rules", {
+          headers: {
+            "x-role": role,
+            "x-user-id": userId ?? "",
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "AI rules load failed");
+        if (!cancelled) setAiRules((payload.data ?? []) as AiRule[]);
+      } catch {
+        if (!cancelled) setAiRules([]);
+      }
+    }
+    void loadAiRules();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, userId]);
 
   const groupedByDate = useMemo(() => {
     return items.reduce<Record<string, WorkspaceActionItem[]>>((acc, item) => {
@@ -254,8 +284,40 @@ export function HomePage() {
     setSelectedDate(timelineDatePool[0]);
   }, [calendarView, monthHasVisibleItems, timelineDatePool]);
 
+  async function recordLearningRuleFromAction(item: WorkspaceActionItem, actionReason: string) {
+    if (!shouldCreateLearningRule(actionReason)) return;
+    try {
+      await fetch("/api/v2/ai-rules", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-role": role,
+          ...(userId ? { "x-user-id": userId } : {}),
+        },
+        body: JSON.stringify({
+          source: "dismissal",
+          reason: actionReason,
+          accountId: item.accountId,
+          accountName: item.accountName,
+          itemTitle: item.title,
+          category: item.type,
+          text: buildLearningRuleText({
+            reason: actionReason,
+            accountName: item.accountName,
+            itemTitle: item.title,
+            category: item.type,
+          }),
+        }),
+      });
+    } catch {
+      // Learning rules should never block the user's task resolution flow.
+    }
+  }
+
   function submitReason() {
     if (!reasonTarget || !reason.trim()) return;
+    const targetItem = items.find((item) => item.id === reasonTarget.id);
+    if (targetItem && reasonTarget.status === "dismissed") void recordLearningRuleFromAction(targetItem, reason.trim());
     setItems((current) =>
       current.map((item) =>
         item.id === reasonTarget.id

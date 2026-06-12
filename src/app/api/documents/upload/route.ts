@@ -28,12 +28,15 @@ export async function POST(req: NextRequest) {
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "text/plain",
+      "text/csv",
       "image/png",
       "image/jpeg",
     ];
     if (!allowedMimes.includes(file.type)) {
-      return badRequest(`Unsupported file type: ${file.type}. Allowed: PDF, Word, TXT, images.`);
+      return badRequest(`Unsupported file type: ${file.type}. Allowed: PDF, Word, Excel, TXT, CSV, images.`);
     }
 
     // Max 20 MB

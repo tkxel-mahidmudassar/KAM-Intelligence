@@ -129,7 +129,6 @@ export const integrationMocks = [
   "Worksphere",
   "Finance Invoice Tracking",
   "LLM",
-  "AI Note Taker",
 ];
 
 export function money(value: number) {
