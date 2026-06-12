@@ -76,13 +76,71 @@ function parseJson(content: string): V2OnboardingAgentOutput {
   return JSON.parse(raw);
 }
 
-function normalizeOutput(output: V2OnboardingAgentOutput, role: string): V2OnboardingAgentOutput {
+const fieldAliases: Record<V2OnboardingField, string[]> = {
+  name: ["name", "account name", "company"],
+  industry: ["industry", "vertical"],
+  segment: ["segment", "domain"],
+  arr: ["arr", "revenue", "annual recurring revenue"],
+  location: ["location", "country", "region"],
+  contractRenewal: ["contract renewal", "renewal", "contract end", "renewal date"],
+  kamOwner: ["kam", "kam owner", "account owner"],
+  associateOwner: ["associate", "associate owner"],
+  primaryContact: ["primary contact", "client poc", "poc", "main contact"],
+  activeRisk: ["risk", "active risk"],
+  openOpportunity: ["opportunity", "open opportunity"],
+  nextTouchpoint: ["touchpoint", "next touchpoint"],
+};
+
+function draftHasValue(input: V2OnboardingAgentInput, field: V2OnboardingField) {
+  const value = input.draft?.[field];
+  return typeof value === "string" ? value.trim().length > 0 : Boolean(value);
+}
+
+function promptTargetsField(input: V2OnboardingAgentInput, field: V2OnboardingField) {
+  const prompt = input.prompt.toLowerCase();
+  const changeIntent = /\b(change|correct|replace|update|edit|revise|fix|set|make)\b/i.test(input.prompt);
+  return changeIntent && fieldAliases[field].some((alias) => prompt.includes(alias));
+}
+
+function textTargetsFilledField(text: string, input: V2OnboardingAgentInput) {
+  const lower = text.toLowerCase();
+  return (Object.keys(fieldAliases) as V2OnboardingField[]).some((field) =>
+    draftHasValue(input, field) &&
+    !promptTargetsField(input, field) &&
+    fieldAliases[field].some((alias) => lower.includes(alias)),
+  );
+}
+
+function activeStepAllowsKyc(input: V2OnboardingAgentInput) {
+  return input.activeStep === "kyc" ||
+    input.activeStep === "review" ||
+    /\bkyc|profile brief|company history|stakeholder|financial|competitor|executive summary\b/i.test(input.prompt);
+}
+
+function activeStepAllowsJourney(input: V2OnboardingAgentInput) {
+  return input.activeStep === "journey" ||
+    input.activeStep === "review" ||
+    /\bjourney|timeline|task|meeting|qbr|todo|to-do|follow[- ]?up|checkpoint\b/i.test(input.prompt);
+}
+
+function shouldKeepSuggestion(suggestion: V2OnboardingAgentOutput["suggestions"][number], input: V2OnboardingAgentInput) {
+  if (!suggestion.field || !suggestion.proposedValue) return false;
+  if (!draftHasValue(input, suggestion.field)) return true;
+  return promptTargetsField(input, suggestion.field);
+}
+
+function normalizeOutput(output: V2OnboardingAgentOutput, role: string, input: V2OnboardingAgentInput): V2OnboardingAgentOutput {
   return {
     assistantReply: String(output.assistantReply || "I reviewed the account setup context and prepared the next suggested updates."),
-    missingQuestions: Array.isArray(output.missingQuestions) ? output.missingQuestions.map(String).slice(0, 6) : [],
+    missingQuestions: Array.isArray(output.missingQuestions)
+      ? output.missingQuestions
+          .map(String)
+          .filter((question) => !textTargetsFilledField(question, input))
+          .slice(0, 6)
+      : [],
     suggestions: Array.isArray(output.suggestions)
       ? output.suggestions
-          .filter((suggestion) => suggestion.field && suggestion.proposedValue)
+          .filter((suggestion) => shouldKeepSuggestion(suggestion, input))
           .slice(0, 8)
           .map((suggestion) => {
             const confidence = typeof suggestion.confidence === "number" ? Math.max(0, Math.min(1, suggestion.confidence)) : 0.7;
@@ -98,7 +156,7 @@ function normalizeOutput(output: V2OnboardingAgentOutput, role: string): V2Onboa
           })
       : [],
     kycSections: Array.isArray(output.kycSections)
-      ? output.kycSections
+      ? (activeStepAllowsKyc(input) ? output.kycSections : [])
           .filter((section) => section.title && section.draft)
           .slice(0, 9)
           .map((section) => ({
@@ -109,7 +167,7 @@ function normalizeOutput(output: V2OnboardingAgentOutput, role: string): V2Onboa
           }))
       : [],
     journeyItems: Array.isArray(output.journeyItems)
-      ? output.journeyItems
+      ? (activeStepAllowsJourney(input) ? output.journeyItems : [])
           .filter((item) => item.title && item.dueDate)
           .slice(0, 6)
           .map((item) => ({
@@ -201,6 +259,8 @@ ${v2AgentBehaviorPrompt}
 Onboarding-specific rules:
 - Do not use old KYC/playbook-agent assumptions.
 - Never use Salesforce mock data, Salesforce exports, Salesforce assumptions, or implied CRM records in this flow. If a source file name mentions Salesforce, treat it only as an uploaded file name unless extracted text is provided.
+- Use POC-style extraction discipline: only propose values, KYC sections, scores, risks, opportunities, and journey items that are directly supported by extracted text, accepted user input, or current draft data. Return empty arrays or missing questions instead of guesses.
+- If evidence is directional but not conclusive, set confidence below 0.85, mark the item as needing confirmation, and explain the missing proof in reasoningSummary.
 - Scope every response to the active setup step. Profile step answers should focus on account fields. Scoring step answers should focus on KPI/sub-parameter evidence and scoring logic. KYC step answers should focus on KYC sections. Journey step answers should focus on journey items. Review step answers should summarize readiness and approval blockers.
 - Use extracted document text when provided.
 - Treat non-empty current account draft fields as already supplied; do not ask missing questions for those fields.
@@ -227,5 +287,5 @@ Onboarding-specific rules:
     ],
   });
 
-  return normalizeOutput(parseJson(response.content), input.role);
+  return normalizeOutput(parseJson(response.content), input.role, input);
 }

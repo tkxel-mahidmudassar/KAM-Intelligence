@@ -2,8 +2,6 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRoleFromRequest, getUserIdFromRequest, ok, created, badRequest, serverError, guard, kamWhere } from "@/lib/api";
 import { accountResponseInclude, resolveUserId } from "@/lib/accounts/accountApi";
-import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
-import { getJiraAdapter } from "@/lib/adapters/jira";
 
 async function resolveKamId(kamId?: string | null, kamOwnerName?: string | null) {
   return resolveUserId({ userId: kamId, userName: kamOwnerName, role: "KAM", fallbackRole: "KAM" });

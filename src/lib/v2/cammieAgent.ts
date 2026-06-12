@@ -246,7 +246,7 @@ Return JSON:
   "reply": "short, useful answer grounded in the supplied context",
   "intent": "portfolio_question | account_question | document_request | workflow_help | unknown",
   "documentRequest": {
-    "type": "the exact requested document type, for example QBR deck, renewal plan, risk memo, meeting brief, email draft, KYC draft, account brief, escalation note, action plan",
+    "type": "the exact requested document type, for example QBR deck, renewal plan, meeting brief, email draft, KYC draft, account brief, escalation note, action plan",
     "targetAccount": "account name if clear",
     "missingInputs": ["only inputs required before generation"],
     "nextAction": "what T-Man should generate or which specialist V2 agent/route should be called next",

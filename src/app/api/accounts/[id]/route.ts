@@ -4,7 +4,6 @@ import { accountResponseInclude, resolveUserId } from "@/lib/accounts/accountApi
 import {
   getRoleFromRequest, ok, badRequest, notFound, serverError, guard,
 } from "@/lib/api";
-import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
 import { getJiraAdapter } from "@/lib/adapters/jira";
 import { getWorksphereAdapter } from "@/lib/adapters/worksphere";
 import { getFinanceAdapter } from "@/lib/adapters/finance";
@@ -56,9 +55,9 @@ export async function GET(req: NextRequest, { params }: Params) {
 
     if (!account) return notFound("Account");
 
-    // Fetch adapter data in parallel
-    const [sf, jira, worksphere, finance] = await Promise.all([
-      getSalesforceAdapter().fetch(id),
+    // Fetch operational adapter data in parallel. Salesforce is intentionally
+    // excluded from V2 account setup because mock CRM values polluted drafts.
+    const [jira, worksphere, finance] = await Promise.all([
       getJiraAdapter().fetch(id),
       getWorksphereAdapter().fetch(id),
       getFinanceAdapter().fetch(id),
@@ -67,7 +66,6 @@ export async function GET(req: NextRequest, { params }: Params) {
     return ok({
       ...account,
       adapters: {
-        salesforce: sf.data,
         jira: {
           ...jira.data,
           sprintVelocity: jira.data.activeSprint?.velocity ?? 0,

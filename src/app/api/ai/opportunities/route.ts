@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
-import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
 import { getRoleFromRequest, ok, badRequest, notFound, serverError, guard } from "@/lib/api";
 
 function scoreOutOfFiveLabel(score: number | null | undefined) {
@@ -36,8 +35,8 @@ export async function POST(req: NextRequest) {
     });
     if (!account) return notFound("Account");
 
-    const sf = await getSalesforceAdapter().fetch(accountId);
     const score = account.kamScores[0];
+    const existingOpportunities = account.kycVersions[0]?.expansionOpportunity ?? "";
 
     const prompt = `You are a DotKAM engine. Identify 3-5 realistic expansion or upsell opportunities for the account below.
 
@@ -70,10 +69,9 @@ ${account.kpiDimensions.slice(0, 8).map((k) => `  ${k.name}: ${k.value}${k.unit 
 
 ${account.kycVersions[0]?.strategicGoals ? `Strategic Goals: ${account.kycVersions[0].strategicGoals}` : ""}
 ${account.kycVersions[0]?.businessModel  ? `Business Model: ${account.kycVersions[0].businessModel}`   : ""}
+${existingOpportunities ? `Existing expansion notes: ${existingOpportunities}` : ""}
 
-Existing Salesforce Opportunities: ${sf.data.opportunities.map((o) => `${o.name} ($${o.amount.toLocaleString()}, ${o.stage})`).join(", ") || "None"}
-
-Focus on services adjacent to current engagement, white space in the account, and signals of unmet needs. Do not duplicate existing Salesforce opportunities.`;
+Focus on services adjacent to current engagement, white space in the account, and signals of unmet needs. Do not duplicate existing expansion notes or active opportunities in the account context.`;
 
     const aiResponse = await complete({
       accountId,

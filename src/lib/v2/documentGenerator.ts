@@ -546,7 +546,7 @@ Rules:
 ${v2AgentBehaviorPrompt}
 
 Document-specific rules:
-- Support any reasonable KAM/account-management document type, including QBR, KYC, account brief, executive update, renewal plan, risk memo, meeting brief, escalation note, action plan, stakeholder map, onboarding brief, and follow-up email.
+- Support any reasonable KAM/account-management document type, including QBR, KYC, account brief, executive update, renewal plan, meeting brief, escalation note, action plan, stakeholder map, onboarding brief, and follow-up email.
 - Do not include any placeholder sections or placeholder phrases.
 - If the user asks for an email, write it as a send-ready email draft with subject, recipients if known, and body.
 - If the user asks for slides or a PPTX, structure the Markdown with one heading per slide and concise bullets beneath it. Put speaker notes as normal paragraphs below the bullets.

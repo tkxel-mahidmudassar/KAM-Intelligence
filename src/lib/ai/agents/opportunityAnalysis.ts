@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { complete } from "@/lib/ai";
-import { getSalesforceAdapter } from "@/lib/adapters/salesforce";
 import { makeStep, type AgentResult, type AgentStep, type AgentSource } from "./types";
 import type { Opportunity } from "@prisma/client";
 
@@ -31,25 +30,21 @@ export async function runOpportunityAnalysisAgent(
   const agentStart = Date.now();
   const steps: AgentStep[] = [];
 
-  const [account, sf] = await Promise.all([
-    prisma.account.findUnique({
-      where: { id: accountId },
-      include: {
-        kamScores:   { orderBy: { computedAt: "desc" }, take: 1 },
-        kpiDimensions: { orderBy: { recordedAt: "desc" } },
-        signals:     { where: { isResolved: false }, take: 8 },
-        kycVersions: { orderBy: { version: "desc" }, take: 1, select: { strategicGoals: true, businessModel: true, expansionOpportunity: true } },
-        opportunities: { where: { status: { not: "LOST" } }, select: { serviceLine: true } },
-      },
-    }),
-    getSalesforceAdapter().fetch(accountId),
-  ]);
+  const account = await prisma.account.findUnique({
+    where: { id: accountId },
+    include: {
+      kamScores:   { orderBy: { computedAt: "desc" }, take: 1 },
+      kpiDimensions: { orderBy: { recordedAt: "desc" } },
+      signals:     { where: { isResolved: false }, take: 8 },
+      kycVersions: { orderBy: { version: "desc" }, take: 1, select: { strategicGoals: true, businessModel: true, expansionOpportunity: true } },
+      opportunities: { where: { status: { not: "LOST" } }, select: { serviceLine: true } },
+    },
+  });
 
   if (!account) return { output: [], sources: [], steps, model: "skipped", totalLatencyMs: 0 };
 
   const existingLines = account.opportunities.map((o) => o.serviceLine).join(", ") || "none";
   const score = account.kamScores[0];
-  const sfOpps = sf.data.opportunities.map((o) => `${o.name} ($${o.amount?.toLocaleString() ?? 0}, ${o.stage})`).join(", ") || "none";
 
   // Build sources list from fetched DB data
   const sources: AgentSource[] = [
@@ -60,7 +55,6 @@ export async function runOpportunityAnalysisAgent(
     ...account.kpiDimensions.slice(0, 6).map((k): AgentSource => ({ type: "kpi", label: k.name, value: `${k.value}${k.unit ?? ""}` })),
     ...(account.kycVersions[0]?.strategicGoals ? [{ type: "kyc" as const, label: "Strategic goals", value: account.kycVersions[0].strategicGoals?.slice(0, 80) }] : []),
     ...(existingLines !== "none" ? [{ type: "opportunity" as const, label: "Existing service lines", value: existingLines }] : []),
-    ...(sfOpps !== "none" ? [{ type: "adapter" as const, label: "Salesforce opportunities", value: sfOpps.slice(0, 100) }] : []),
   ];
 
   // Step A: identify expansion vectors
@@ -74,7 +68,7 @@ KPIs: ${account.kpiDimensions.slice(0, 6).map((k) => `${k.name}: ${k.value}${k.u
 Strategic goals: ${account.kycVersions[0]?.strategicGoals ?? "N/A"}
 Business model: ${account.kycVersions[0]?.businessModel ?? "N/A"}
 Existing service lines: ${existingLines}
-Existing Salesforce opps: ${sfOpps}
+Existing expansion notes: ${account.kycVersions[0]?.expansionOpportunity ?? "N/A"}
 
 Identify 4-6 realistic expansion vectors. Return JSON array only:
 [{ "serviceLine": "short name", "hypothesis": "1-2 sentences on why this fits", "signals": ["supporting signal 1"] }]`;

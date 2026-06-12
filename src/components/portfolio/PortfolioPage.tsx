@@ -266,6 +266,8 @@ interface QbrPromptDraft {
 }
 
 const documentGenerationFieldCopy: Record<string, {
+  audienceLabel: string;
+  audiencePlaceholder: string;
   periodLabel: string;
   periodPlaceholder: string;
   goalsLabel: string;
@@ -276,6 +278,8 @@ const documentGenerationFieldCopy: Record<string, {
   asksPlaceholder: string;
 }> = {
   QBR: {
+    audienceLabel: "QBR audience",
+    audiencePlaceholder: "Client sponsor, delivery leadership, Tkxel account team",
     periodLabel: "Quarter",
     periodPlaceholder: "Q2 2026",
     goalsLabel: "QBR goals",
@@ -286,6 +290,8 @@ const documentGenerationFieldCopy: Record<string, {
     asksPlaceholder: "Approvals, next-step commitments, executive asks",
   },
   MBR: {
+    audienceLabel: "MBR audience",
+    audiencePlaceholder: "Client operating team, delivery owners, KAM",
     periodLabel: "Month",
     periodPlaceholder: "June 2026",
     goalsLabel: "Monthly review focus",
@@ -296,6 +302,8 @@ const documentGenerationFieldCopy: Record<string, {
     asksPlaceholder: "Requests for the client, Tkxel team, or sponsor",
   },
   DBR: {
+    audienceLabel: "DBR audience",
+    audiencePlaceholder: "Delivery leads, product owners, project stakeholders",
     periodLabel: "Delivery period",
     periodPlaceholder: "Sprint 14 or current delivery window",
     goalsLabel: "Delivery review focus",
@@ -306,6 +314,8 @@ const documentGenerationFieldCopy: Record<string, {
     asksPlaceholder: "Decisions needed from delivery owners or client stakeholders",
   },
   EBR: {
+    audienceLabel: "Executive audience",
+    audiencePlaceholder: "C-suite sponsor, executive steering committee, Tkxel leadership",
     periodLabel: "Executive period",
     periodPlaceholder: "H1 2026 or executive steering cycle",
     goalsLabel: "Executive storyline",
@@ -316,6 +326,8 @@ const documentGenerationFieldCopy: Record<string, {
     asksPlaceholder: "Steering asks, escalation decisions, growth approvals",
   },
   KYC: {
+    audienceLabel: "KYC reviewer",
+    audiencePlaceholder: "KAM, associate, delivery lead, or executive reviewer",
     periodLabel: "KYC purpose",
     periodPlaceholder: "New account onboarding or renewal refresh",
     goalsLabel: "KYC sections to emphasize",
@@ -326,6 +338,8 @@ const documentGenerationFieldCopy: Record<string, {
     asksPlaceholder: "What the reviewer should confirm before approving",
   },
   "Account Brief": {
+    audienceLabel: "Brief recipient",
+    audiencePlaceholder: "Internal leadership, KAM handoff, delivery pod, executive sponsor",
     periodLabel: "Brief purpose",
     periodPlaceholder: "Exec handoff, internal account review, pre-meeting prep",
     goalsLabel: "Briefing focus",
@@ -336,6 +350,8 @@ const documentGenerationFieldCopy: Record<string, {
     asksPlaceholder: "Actions the reader should take after reading the brief",
   },
   "Renewal Plan": {
+    audienceLabel: "Renewal audience",
+    audiencePlaceholder: "Commercial sponsor, procurement, account leadership",
     periodLabel: "Renewal window",
     periodPlaceholder: "90 days before renewal",
     goalsLabel: "Renewal objectives",
@@ -346,6 +362,8 @@ const documentGenerationFieldCopy: Record<string, {
     asksPlaceholder: "Approvals, evidence, or conversations needed to close renewal",
   },
   "Executive Summary": {
+    audienceLabel: "Summary audience",
+    audiencePlaceholder: "Executive leadership, sponsor, or internal review group",
     periodLabel: "Summary purpose",
     periodPlaceholder: "Leadership update, board note, account snapshot",
     goalsLabel: "Summary focus",
@@ -3835,8 +3853,8 @@ function GenerateDocumentDialog({
               </select>
             </label>
             <label>
-              <FieldLabel required>Audience</FieldLabel>
-              <input className={inputClass} value={draft.audience} disabled={generating} onChange={(event) => onDraftChange({ ...draft, audience: event.target.value })} placeholder="Client leadership, internal execs" />
+              <FieldLabel required>{copy.audienceLabel}</FieldLabel>
+              <input className={inputClass} value={draft.audience} disabled={generating} onChange={(event) => onDraftChange({ ...draft, audience: event.target.value })} placeholder={copy.audiencePlaceholder} />
             </label>
             <label>
               <FieldLabel required>{copy.periodLabel}</FieldLabel>
