@@ -158,6 +158,42 @@ async function extractWord(filePath: string): Promise<PlaybookExtractedChunk[]> 
   return chunkTextBySections(result.value ?? "", "Document");
 }
 
+async function extractPowerPoint(filePath: string): Promise<PlaybookExtractedChunk[]> {
+  const JSZip = (await import("jszip")).default;
+  const buffer = await readFile(filePath);
+  const zip = await JSZip.loadAsync(buffer);
+  const slideFiles = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const aNum = Number(a.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+      const bNum = Number(b.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+      return aNum - bNum;
+    });
+
+  const decode = (value: string) =>
+    value
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+
+  const chunks: PlaybookExtractedChunk[] = [];
+  for (const slideFile of slideFiles) {
+    const slideNumber = Number(slideFile.match(/slide(\d+)\.xml$/)?.[1] ?? chunks.length + 1);
+    const xml = await zip.file(slideFile)?.async("string");
+    if (!xml) continue;
+    const text = Array.from(xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g))
+      .map((match) => decode(match[1]).trim())
+      .filter(Boolean)
+      .join("\n");
+    if (text) chunks.push({ text, locator: { section: `Slide ${slideNumber}`, page: slideNumber } });
+  }
+
+  return chunks;
+}
+
 async function extractPlainText(filePath: string, fallbackSection: string): Promise<PlaybookExtractedChunk[]> {
   const buffer = await readFile(filePath);
   return chunkTextBySections(buffer.toString("utf-8"), fallbackSection);
@@ -230,6 +266,12 @@ export async function extractPlaybookText(input: {
     fileName.endsWith(".docx")
   ) {
     chunks = await extractWord(filePath);
+  } else if (
+    fileType === "PPTX" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    fileName.endsWith(".pptx")
+  ) {
+    chunks = await extractPowerPoint(filePath);
   } else if (
     ["TXT", "MD", "MARKDOWN"].includes(fileType) ||
     mimeType === "text/plain" ||

@@ -1,7 +1,7 @@
 /**
  * Playbook file parser.
  *
- * Extracts text chunks from PDF, DOCX, TXT, Markdown, and Excel files.
+ * Extracts text chunks from PDF, DOCX, PPTX, TXT, Markdown, and Excel files.
  * Each chunk carries source locator metadata (page, section, sheet) for
  * citation purposes in extracted rules and recommendations.
  *
@@ -70,6 +70,53 @@ async function parseDocx(buffer: Buffer): Promise<ParseResult> {
   });
 
   return { chunks, totalChunks: chunks.length };
+}
+
+// ─── PPTX ─────────────────────────────────────────────────────────────────────
+
+function decodeXmlText(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
+
+async function parsePptx(buffer: Buffer): Promise<ParseResult> {
+  const JSZip = require("jszip");
+  const zip = await JSZip.loadAsync(buffer);
+  const slideFiles = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const aNum = Number(a.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+      const bNum = Number(b.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+      return aNum - bNum;
+    });
+
+  const chunks: ParsedChunk[] = [];
+
+  for (const slideFile of slideFiles) {
+    const slideNumber = Number(slideFile.match(/slide(\d+)\.xml$/)?.[1] ?? chunks.length + 1);
+    const xml = await zip.file(slideFile)?.async("string");
+    if (!xml) continue;
+    const textRuns = Array.from(xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g))
+      .map((match) => decodeXmlText(match[1]).trim())
+      .filter(Boolean);
+    const text = textRuns.join("\n").trim();
+    if (text) {
+      chunks.push({
+        text,
+        sourceSection: `Slide ${slideNumber}`,
+        sourcePage: slideNumber,
+      });
+    }
+  }
+
+  return chunks.length > 0
+    ? { chunks, totalChunks: chunks.length }
+    : { chunks: [], totalChunks: 0, error: "No readable PPTX slide text could be extracted from this file." };
 }
 
 // ─── Excel ────────────────────────────────────────────────────────────────────
@@ -169,6 +216,13 @@ export async function parsePlaybookFile(
       ext === "doc"
     ) {
       return await parseDocx(buffer);
+    }
+
+    if (
+      mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+      ext === "pptx"
+    ) {
+      return await parsePptx(buffer);
     }
 
     if (

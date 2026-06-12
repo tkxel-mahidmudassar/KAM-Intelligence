@@ -4,12 +4,13 @@ import { extname, join } from "path";
 
 export const PLAYBOOK_MAX_BYTES = 20 * 1024 * 1024;
 
-const ALLOWED_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".txt", ".md", ".markdown", ".xls", ".xlsx"]);
+const ALLOWED_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".pptx", ".txt", ".md", ".markdown", ".xls", ".xlsx"]);
 
 const ALLOWED_MIMES = new Set([
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "text/plain",
   "text/markdown",
   "application/vnd.ms-excel",
@@ -22,7 +23,7 @@ export function validatePlaybookFile(file: File): string | null {
   const extAllowed = ALLOWED_EXTENSIONS.has(ext);
 
   if (!mimeAllowed && !extAllowed) {
-    return "Unsupported file type. Upload PDF, DOCX, TXT, Markdown, XLS, or XLSX.";
+    return "Unsupported file type. Upload PDF, DOCX, PPTX, TXT, Markdown, XLS, or XLSX.";
   }
 
   if (file.size > PLAYBOOK_MAX_BYTES) {
@@ -37,6 +38,7 @@ export function fileTypeLabel(fileName: string, mimeType?: string | null) {
   if (ext) return ext.toUpperCase();
   if (mimeType?.includes("pdf")) return "PDF";
   if (mimeType?.includes("word")) return "DOCX";
+  if (mimeType?.includes("powerpoint") || mimeType?.includes("presentation")) return "PPTX";
   if (mimeType?.includes("sheet") || mimeType?.includes("excel")) return "XLSX";
   if (mimeType?.includes("markdown")) return "MD";
   if (mimeType?.includes("text")) return "TXT";

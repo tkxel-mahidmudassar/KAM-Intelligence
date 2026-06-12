@@ -6,7 +6,7 @@ import { parseV2AccountDocument } from "@/lib/v2/documentParser";
 export const runtime = "nodejs";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".txt", ".md", ".xlsx", ".xls"]);
+const ALLOWED_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".pptx", ".txt", ".md", ".xlsx", ".xls"]);
 
 function compactText(value: string) {
   return value.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();

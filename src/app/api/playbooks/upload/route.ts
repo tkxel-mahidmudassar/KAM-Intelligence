@@ -14,16 +14,17 @@ const ALLOWED_MIMES = [
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "text/plain",
   "text/markdown",
 ];
 
-const ALLOWED_EXTS = ["pdf", "doc", "docx", "xls", "xlsx", "txt", "md"];
+const ALLOWED_EXTS = ["pdf", "doc", "docx", "pptx", "xls", "xlsx", "txt", "md"];
 
 const FILE_TYPE_LABEL: Record<string, string> = {
-  pdf: "pdf", doc: "docx", docx: "docx",
+  pdf: "pdf", doc: "docx", docx: "docx", pptx: "pptx",
   xls: "xlsx", xlsx: "xlsx", txt: "txt", md: "md",
 };
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     const ext = extname(file.name).replace(".", "").toLowerCase();
     if (!ALLOWED_EXTS.includes(ext) && !ALLOWED_MIMES.includes(file.type)) {
-      return badRequest(`Unsupported file type. Allowed: PDF, DOCX, TXT, MD, XLSX.`);
+      return badRequest(`Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX.`);
     }
     if (file.size > 25 * 1024 * 1024) {
       return badRequest("File too large. Maximum size is 25 MB.");

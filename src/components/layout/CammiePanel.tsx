@@ -493,7 +493,7 @@ export function CammiePanel() {
                 type="file"
                 multiple
                 className="hidden"
-                accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
+                accept=".pdf,.doc,.docx,.pptx,.txt,.md,.xlsx,.xls"
                 onChange={(event) => void attachFiles(event.target.files)}
               />
               <button

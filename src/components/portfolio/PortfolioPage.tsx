@@ -599,47 +599,41 @@ function saveAccountRuntimeMetadata(account: Pick<PortfolioAccount, "id" | "name
 const baseKpiOverviewRows: KpiOverviewRow[] = [
   {
     id: "relationship",
-    name: "Relationship Health",
-    weight: "20%",
-    rationale: "Measures relationship strength and stakeholder penetration.",
+    name: "Relationship Score",
+    weight: "15%",
+    rationale: "Depth and breadth of stakeholder penetration and executive access.",
     score: 4,
     trend: "up",
     subParameters: [
-      { name: "Executive Engagement", score: 4, rationale: "Monthly executive engagement is healthy; multiple executive touchpoints monthly is excellent." },
-      { name: "Stakeholder Coverage", score: 4, rationale: "Multi-department coverage is healthy; broad organizational coverage is excellent." },
-      { name: "Relationship Penetration", score: 4, rationale: "Multiple business units are covered; strong hierarchy-wide penetration is excellent." },
-      { name: "Champion Strength", score: 4, rationale: "Strong advocate is healthy; executive sponsor or champion is excellent." },
-      { name: "Engagement Cadence", score: 4, rationale: "Bi-weekly interaction is healthy; weekly structured engagement is excellent." },
+      { name: "Stakeholder depth", score: 4, rationale: "How deeply Tkxel is connected into the account's decision hierarchy." },
+      { name: "Stakeholder breadth", score: 4, rationale: "How broadly Tkxel is covered across business, product, finance, procurement, and delivery owners." },
+      { name: "Meeting cadence", score: 4, rationale: "Whether the account has a reliable operating rhythm with meaningful client touchpoints." },
+      { name: "Executive access", score: 4, rationale: "Whether senior sponsors are reachable for decisions, escalation handling, and renewal alignment." },
     ],
   },
   {
     id: "contract-health",
-    name: "Contract Health",
+    name: "Contract Health Score",
     weight: "15%",
-    rationale: "Measures commercial protection and contract stability.",
+    rationale: "Renewal risk, contractual protection, and commercial foundation.",
     score: 4,
     trend: "flat",
     subParameters: [
-      { name: "Contract Duration", score: 4, rationale: "Two-year contracts are healthy; three-plus years are excellent." },
-      { name: "Notice Period Protection", score: 4, rationale: "Sixty-day notice is healthy; ninety-plus days is excellent." },
-      { name: "Renewability", score: 4, rationale: "Renewable agreements are healthy; auto-renewable agreements are excellent." },
-      { name: "Price Uplift Protection", score: 4, rationale: "Annual review is healthy; contractual uplift mechanism is excellent." },
-      { name: "Termination Protection", score: 4, rationale: "Strong protections are healthy; highly protected/non-terminable terms are excellent." },
+      { name: "Renewal risk", score: 4, rationale: "How exposed the account is to renewal timing, unclear owners, or unproven value before contract decision." },
+      { name: "Contractual protection", score: 4, rationale: "Whether the agreement gives Tkxel enough protection around continuation, scope, notice, and commercial terms." },
+      { name: "Commercial foundation", score: 4, rationale: "Whether pricing, scope, value proof, and procurement path are clear enough to support the relationship." },
     ],
   },
   {
     id: "customer-success",
-    name: "Customer Success",
-    weight: "15%",
-    rationale: "Measures customer satisfaction and confidence.",
+    name: "CSAT Score",
+    weight: "20%",
+    rationale: "Direct client satisfaction and most important relationship-quality signal.",
     score: 4,
     trend: "up",
     subParameters: [
-      { name: "Customer Feedback", score: 4, rationale: "Promoter-level feedback is healthy; strong promoter feedback is excellent." },
-      { name: "Customer Confidence", score: 4, rationale: "Good confidence is healthy; high confidence is excellent." },
-      { name: "Delivery Satisfaction", score: 4, rationale: "Satisfied delivery feedback is healthy; highly satisfied feedback is excellent." },
-      { name: "Communication Satisfaction", score: 4, rationale: "Good communication is healthy; excellent communication is excellent." },
-      { name: "Issue Resolution", score: 4, rationale: "Timely resolution is healthy; rapid proactive resolution is excellent." },
+      { name: "Client feedback", score: 4, rationale: "Explicit client satisfaction or dissatisfaction gathered from direct feedback, surveys, or meeting notes." },
+      { name: "Stakeholder touchpoint sentiment", score: 4, rationale: "The tone and confidence observed across recent stakeholder interactions." },
     ],
   },
   {
@@ -651,9 +645,9 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
     trend: "down",
     subParameters: [
       {
-        name: "Industry Risk",
+        name: "Market risk",
         score: 3,
-        rationale: "Moderate concern requires monitoring; stable or growing market reduces account risk.",
+        rationale: "External market, regulatory, or industry pressure that could affect the account.",
         trend: "down",
         fallingWhy: {
           summary: "The account is exposed to moderate market uncertainty, so the playbook recommends confirming business continuity assumptions before renewal planning.",
@@ -661,9 +655,9 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
         },
       },
       {
-        name: "Competitive Threat",
+        name: "Relationship risk",
         score: 3,
-        rationale: "Moderate competition requires monitoring; low or no significant threat is healthier.",
+        rationale: "Risk created by weak sponsorship, low trust, poor access, or stakeholder churn.",
         trend: "down",
         fallingWhy: {
           summary: "Competitive pressure has not been ruled out, so the system should prompt for competitor exposure before assuming the account is secure.",
@@ -671,9 +665,9 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
         },
       },
       {
-        name: "Vendor Displacement Risk",
+        name: "Commercial risk",
         score: 2,
-        rationale: "Strong displacement signals are weak; no displacement signal is excellent.",
+        rationale: "Risk from pricing, procurement, budget, renewal, or contractual uncertainty.",
         trend: "down",
         fallingWhy: {
           summary: "There are unresolved signs that Tkxel could be displaced, so the corrective task should validate executive sponsorship and active value proof.",
@@ -681,9 +675,9 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
         },
       },
       {
-        name: "Delivery Risk",
+        name: "Delivery risk",
         score: 2,
-        rationale: "High delivery concerns are weak; no delivery concerns is excellent.",
+        rationale: "Risk from missed delivery expectations, unresolved blockers, poor execution, or delivery confidence gaps.",
         trend: "down",
         fallingWhy: {
           summary: "Delivery risk is below target because the current journey does not yet show a named mitigation owner for recent blockers.",
@@ -691,9 +685,9 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
         },
       },
       {
-        name: "Commercial Risk",
+        name: "Displacement signal",
         score: 2,
-        rationale: "Major commercial concern is weak; commercially secure is excellent.",
+        rationale: "Evidence that the client could replace, reduce, or deprioritize Tkxel.",
         trend: "down",
         fallingWhy: {
           summary: "Commercial risk remains weak until renewal likelihood, budget owner, and scope protection are explicitly confirmed.",
@@ -708,26 +702,25 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
   },
   {
     id: "resource-health",
-    name: "Resource Health",
+    name: "Resource Health Score",
     weight: "10%",
-    rationale: "Measures dependency and continuity risks.",
+    rationale: "Team stability, fit, turnover, and bench risk.",
     score: 3,
     trend: "down",
     subParameters: [
       {
-        name: "Resource Dependency Risk",
+        name: "Team stability",
         score: 2,
-        rationale: "High dependency is weak; no dependency risk is excellent.",
+        rationale: "Whether the delivery team is stable enough to maintain account continuity.",
         trend: "down",
         fallingWhy: {
           summary: "Resource health is soft because a critical dependency has not been covered by a named backup.",
           sources: ["Resource health scoring framework", "Account resource history", "AI rules learning log"],
         },
       },
-      { name: "Critical Resource Coverage", score: 3, rationale: "Adequate coverage is moderate; fully staffed is excellent." },
-      { name: "Team Stability", score: 3, rationale: "Moderate stability requires monitoring; highly stable team is excellent." },
-      { name: "Skill Alignment", score: 4, rationale: "Good fit is healthy; perfect fit is excellent." },
-      { name: "Backup Readiness", score: 2, rationale: "Limited backup is weak; full succession coverage is excellent.", trend: "down" },
+      { name: "Team fit", score: 3, rationale: "Whether assigned resources have the right domain, technical, and relationship fit for the account." },
+      { name: "Turnover risk", score: 3, rationale: "Whether attrition, churn, or role instability could affect continuity." },
+      { name: "Bench risk", score: 2, rationale: "Whether backup capacity exists if the account needs coverage changes or rapid support.", trend: "down" },
     ],
     why: "Resource dependency and backup readiness are below the target band.",
     task: "Create a backup coverage plan for critical resources and confirm succession ownership.",
@@ -736,35 +729,34 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
   },
   {
     id: "project-health",
-    name: "Project Health",
+    name: "Project Health Score",
     weight: "10%",
-    rationale: "Measures delivery confidence and execution stability.",
+    rationale: "Delivery execution quality and backlog/velocity health.",
     score: 3,
     trend: "down",
     subParameters: [
       {
-        name: "Delivery Performance",
+        name: "Delivery execution quality",
         score: 3,
-        rationale: "Minor delays are moderate; ahead of schedule is excellent.",
+        rationale: "How well the team is executing delivery commitments and resolving blockers.",
         trend: "down",
         fallingWhy: {
           summary: "Delivery performance is moderate because recent checkpoints do not yet show stable on-track execution.",
           sources: ["Project health scoring framework", "Account journey history", "AI rules learning log"],
         },
       },
-      { name: "Backlog Readiness", score: 3, rationale: "Two months of backlog is moderate; six-plus months visibility is excellent." },
-      { name: "Roadmap Visibility", score: 3, rationale: "Partial roadmap is moderate; long-term roadmap agreement is excellent." },
+      { name: "Backlog health", score: 3, rationale: "Whether the account has clear, validated upcoming work and committed priorities." },
+      { name: "Velocity health", score: 3, rationale: "Whether execution pace is steady enough to sustain delivery confidence." },
       {
-        name: "Escalation Status",
+        name: "Blocker control",
         score: 3,
-        rationale: "Occasional escalations are moderate; no escalations is excellent.",
+        rationale: "Whether open blockers and escalations are controlled with owners and next actions.",
         trend: "down",
         fallingWhy: {
           summary: "Escalation status is not healthy because recent account history still contains unresolved escalation signals.",
           sources: ["Project health scoring framework", "Meeting history", "AI rules learning log"],
         },
       },
-      { name: "Client Confidence", score: 3, rationale: "Neutral confidence is moderate; strong confidence is excellent." },
     ],
     why: "Delivery confidence and roadmap visibility require monitoring.",
     task: "Run a delivery governance review covering backlog, roadmap, escalations, and client confidence.",
@@ -773,17 +765,15 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
   },
   {
     id: "financial-health",
-    name: "Financial Health",
+    name: "Financial Score",
     weight: "10%",
-    rationale: "Measures commercial and financial performance.",
+    rationale: "Payment timeliness, outstanding invoices, and revenue trend.",
     score: 4,
     trend: "flat",
     subParameters: [
-      { name: "Payment Timeliness", score: 4, rationale: "Minor delays are healthy; always on-time payment is excellent." },
-      { name: "Outstanding Exposure", score: 4, rationale: "Low exposure is healthy; no exposure is excellent." },
-      { name: "Client Financial Stability", score: 4, rationale: "Stable client financials are healthy; strong financial position is excellent." },
-      { name: "Revenue Trend", score: 4, rationale: "Growing revenue is healthy; strong growth is excellent." },
-      { name: "Contract vs Billing Alignment", score: 4, rationale: "Mostly aligned billing is healthy; fully aligned is excellent." },
+      { name: "Payment timeliness", score: 4, rationale: "Whether invoices are paid on time and payment behavior is predictable." },
+      { name: "Outstanding invoices", score: 4, rationale: "Whether unpaid invoice exposure creates commercial or renewal risk." },
+      { name: "Revenue trend", score: 4, rationale: "Whether account revenue is stable, growing, or declining." },
     ],
   },
   {
@@ -794,20 +784,19 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
     score: 3,
     trend: "up",
     subParameters: [
-      { name: "Service Penetration", score: 3, rationale: "Some opportunities are moderate; significant untapped services is excellent." },
-      { name: "Cross-Sell Potential", score: 3, rationale: "Moderate cross-sell potential requires active validation." },
-      { name: "Upsell Potential", score: 3, rationale: "Moderate upsell potential requires active validation." },
+      { name: "Expansion signal", score: 3, rationale: "Whether there is visible evidence of potential expansion or new work." },
+      { name: "CSAT readiness", score: 3, rationale: "Whether client satisfaction is strong enough to support expansion conversations." },
+      { name: "Relationship readiness", score: 3, rationale: "Whether stakeholder access and sponsorship are strong enough for expansion." },
       {
-        name: "Growth Signals",
+        name: "Adoption/utilization",
         score: 3,
-        rationale: "Moderate signals should be validated; active expansion indicators are excellent.",
+        rationale: "Whether current adoption, usage, or delivery footprint supports a credible growth motion.",
         trend: "down",
         fallingWhy: {
           summary: "Growth signals have not yet been converted into an active expansion motion with sponsor, timing, and value hypothesis.",
           sources: ["Whitespace scoring framework", "Opportunity history", "AI rules learning log"],
         },
       },
-      { name: "Expansion Readiness", score: 3, rationale: "Moderate readiness needs planning; highly ready accounts can move straight into expansion." },
     ],
     why: "Growth opportunity exists but needs sponsor validation and timing clarity.",
     task: "Create an expansion validation checkpoint with the commercial sponsor.",
@@ -1025,7 +1014,7 @@ function applyBaselineScores(rows: KpiOverviewRow[], account: PortfolioAccount) 
     setSubParameterScore(
       rows,
       "contract-health",
-      "Renewability",
+      "Renewal risk",
       renewalPressure,
       "down",
       `${account.name} is ${account.renewalDays} days from renewal, so the renewal owner and commercial next step need to be confirmed.`,
@@ -1033,7 +1022,7 @@ function applyBaselineScores(rows: KpiOverviewRow[], account: PortfolioAccount) 
     setSubParameterScore(
       rows,
       "contract-health",
-      "Notice Period Protection",
+      "Contractual protection",
       Math.max(2, renewalPressure),
       "down",
       `${account.name} has a near-term contract window, making notice-period and procurement timing more important than usual.`,
@@ -1044,7 +1033,7 @@ function applyBaselineScores(rows: KpiOverviewRow[], account: PortfolioAccount) 
     setSubParameterScore(
       rows,
       "risk",
-      "Delivery Risk",
+      "Delivery risk",
       account.health === "CRITICAL" ? 1 : 2,
       "down",
       `${account.name} is marked ${healthLabel[account.health]}, and the current workstream (${account.currentWork}) has not yet been converted into a named mitigation path.`,
@@ -1052,7 +1041,7 @@ function applyBaselineScores(rows: KpiOverviewRow[], account: PortfolioAccount) 
     setSubParameterScore(
       rows,
       "project-health",
-      "Client Confidence",
+      "Delivery execution quality",
       account.health === "CRITICAL" ? 2 : 3,
       "down",
       `${account.name}'s relationship signal is "${account.relationshipSignal}", so client confidence needs direct validation in the next checkpoint.`,
@@ -1066,35 +1055,35 @@ function applyIndustrySpecificScores(rows: KpiOverviewRow[], account: PortfolioA
     setSubParameterScore(
       rows,
       "project-health",
-      "Delivery Performance",
+      "Delivery execution quality",
       account.health === "HEALTHY" ? 4 : 2,
       account.health === "HEALTHY" ? "flat" : "down",
       `${account.name}'s logistics work depends on operational reliability, so delivery performance is weighted by exception handling and platform stability.`,
     );
-    setSubParameterScore(rows, "risk", "Industry Risk", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
+    setSubParameterScore(rows, "risk", "Market risk", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
   }
   if (industry.includes("aviation") || industry.includes("energy")) {
     setSubParameterScore(
       rows,
       "risk",
-      "Commercial Risk",
+      "Commercial risk",
       account.health === "CRITICAL" ? 1 : 2,
       "down",
       `${account.name} operates in a high-governance ${account.industry} environment, so unresolved scope or sponsor pressure materially raises commercial risk.`,
     );
-    setSubParameterScore(rows, "project-health", "Escalation Status", account.health === "HEALTHY" ? 4 : 2, account.health === "HEALTHY" ? "flat" : "down");
+    setSubParameterScore(rows, "project-health", "Blocker control", account.health === "HEALTHY" ? 4 : 2, account.health === "HEALTHY" ? "flat" : "down");
   }
   if (industry.includes("banking") || industry.includes("financial") || industry.includes("payments") || industry.includes("fintech")) {
-    setSubParameterScore(rows, "contract-health", "Termination Protection", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
-    setSubParameterScore(rows, "financial-health", "Contract vs Billing Alignment", account.health === "HEALTHY" ? 5 : 3, account.health === "HEALTHY" ? "up" : "flat");
+    setSubParameterScore(rows, "contract-health", "Contractual protection", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
+    setSubParameterScore(rows, "financial-health", "Payment timeliness", account.health === "HEALTHY" ? 5 : 3, account.health === "HEALTHY" ? "up" : "flat");
   }
   if (industry.includes("pharma") || industry.includes("health")) {
-    setSubParameterScore(rows, "customer-success", "Issue Resolution", account.health === "HEALTHY" ? 5 : 3, account.health === "HEALTHY" ? "up" : "down");
-    setSubParameterScore(rows, "contract-health", "Contract Duration", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
+    setSubParameterScore(rows, "customer-success", "Client feedback", account.health === "HEALTHY" ? 5 : 3, account.health === "HEALTHY" ? "up" : "down");
+    setSubParameterScore(rows, "contract-health", "Commercial foundation", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "flat" : "down");
   }
   if (industry.includes("retail") || industry.includes("commerce")) {
-    setSubParameterScore(rows, "whitespace", "Cross-Sell Potential", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "up" : "flat");
-    setSubParameterScore(rows, "customer-success", "Communication Satisfaction", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "up" : "down");
+    setSubParameterScore(rows, "whitespace", "Expansion signal", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "up" : "flat");
+    setSubParameterScore(rows, "customer-success", "Stakeholder touchpoint sentiment", account.health === "HEALTHY" ? 4 : 3, account.health === "HEALTHY" ? "up" : "down");
   }
 }
 
@@ -1104,11 +1093,11 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "risk", 2, "down");
     setKpiScore(rows, "contract-health", 3, "down");
     setKpiScore(rows, "project-health", 2, "down");
-    setSubParameterScore(rows, "risk", "Delivery Risk", 1, "down", "Port visibility delivery timing is under review, so the blocker owner and recovery path are not yet credible.");
-    setSubParameterScore(rows, "risk", "Competitive Threat", 3, "down", "Maersk has not confirmed whether alternative logistics technology partners are being evaluated before renewal.");
-    setSubParameterScore(rows, "project-health", "Delivery Performance", 2, "down", "The current workstream is delivery-sensitive and recent checkpoints have not cleared timing concerns.");
-    setSubParameterScore(rows, "project-health", "Roadmap Visibility", 2, "down", "The next delivery checkpoint exists, but the client-facing recovery roadmap is not explicit enough.");
-    setSubParameterScore(rows, "contract-health", "Renewability", 3, "down", "The renewal window is close enough that renewal owner, value proof, and commercial path need confirmation.");
+    setSubParameterScore(rows, "risk", "Delivery risk", 1, "down", "Port visibility delivery timing is under review, so the blocker owner and recovery path are not yet credible.");
+    setSubParameterScore(rows, "risk", "Relationship risk", 3, "down", "Maersk has not confirmed whether alternative logistics technology partners are being evaluated before renewal.");
+    setSubParameterScore(rows, "project-health", "Delivery execution quality", 2, "down", "The current workstream is delivery-sensitive and recent checkpoints have not cleared timing concerns.");
+    setSubParameterScore(rows, "project-health", "Velocity health", 2, "down", "The next delivery checkpoint exists, but the client-facing recovery roadmap is not explicit enough.");
+    setSubParameterScore(rows, "contract-health", "Renewal risk", 3, "down", "The renewal window is close enough that renewal owner, value proof, and commercial path need confirmation.");
     setKpiAction(
       rows,
       "risk",
@@ -1129,10 +1118,10 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "project-health", 2, "down");
     setKpiScore(rows, "risk", 2, "down");
     setKpiScore(rows, "relationship", 3, "flat");
-    setSubParameterScore(rows, "project-health", "Backlog Readiness", 2, "down", "Scope pressure is creating uncertainty about what is actually committed for the next passenger operations release.");
-    setSubParameterScore(rows, "project-health", "Escalation Status", 2, "down", "Scope-change pressure needs a formal governance decision before it becomes an escalation.");
-    setSubParameterScore(rows, "relationship", "Champion Strength", 3, "flat", "A sponsor exists, but decision authority on scope changes is not yet clean enough.");
-    setSubParameterScore(rows, "risk", "Commercial Risk", 2, "down", "Uncontrolled scope pressure can turn into commercial leakage if change control is not locked.");
+    setSubParameterScore(rows, "project-health", "Backlog health", 2, "down", "Scope pressure is creating uncertainty about what is actually committed for the next passenger operations release.");
+    setSubParameterScore(rows, "project-health", "Blocker control", 2, "down", "Scope-change pressure needs a formal governance decision before it becomes an escalation.");
+    setSubParameterScore(rows, "relationship", "Executive access", 3, "flat", "A sponsor exists, but decision authority on scope changes is not yet clean enough.");
+    setSubParameterScore(rows, "risk", "Commercial risk", 2, "down", "Uncontrolled scope pressure can turn into commercial leakage if change control is not locked.");
     setKpiAction(
       rows,
       "project-health",
@@ -1145,10 +1134,10 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "contract-health", 2, "down");
     setKpiScore(rows, "risk", 2, "down");
     setKpiScore(rows, "whitespace", 3, "flat");
-    setSubParameterScore(rows, "contract-health", "Renewability", 1, "down", "Adidas is inside a 74-day renewal window and the renewal narrative has not been converted into a decision plan.");
-    setSubParameterScore(rows, "contract-health", "Notice Period Protection", 2, "down", "Procurement timing is tight enough that notice-period and decision-path risk need explicit tracking.");
-    setSubParameterScore(rows, "risk", "Vendor Displacement Risk", 2, "down", "A weak renewal narrative leaves room for replacement or internal reprioritization.");
-    setSubParameterScore(rows, "whitespace", "Expansion Readiness", 2, "down", "Potential commerce expansion exists, but renewal proof has to come before expansion positioning.");
+    setSubParameterScore(rows, "contract-health", "Renewal risk", 1, "down", "Adidas is inside a 74-day renewal window and the renewal narrative has not been converted into a decision plan.");
+    setSubParameterScore(rows, "contract-health", "Contractual protection", 2, "down", "Procurement timing is tight enough that notice-period and decision-path risk need explicit tracking.");
+    setSubParameterScore(rows, "risk", "Displacement signal", 2, "down", "A weak renewal narrative leaves room for replacement or internal reprioritization.");
+    setSubParameterScore(rows, "whitespace", "Relationship readiness", 2, "down", "Potential commerce expansion exists, but renewal proof has to come before expansion positioning.");
     setKpiAction(
       rows,
       "contract-health",
@@ -1162,11 +1151,11 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "relationship", 2, "down");
     setKpiScore(rows, "contract-health", 2, "down");
     setKpiScore(rows, "project-health", 2, "down");
-    setSubParameterScore(rows, "relationship", "Executive Engagement", 1, "down", "The executive conversation is currently escalation-led, not relationship-led.");
-    setSubParameterScore(rows, "relationship", "Champion Strength", 2, "down", "The account needs a credible internal sponsor who can own the recovery path.");
-    setSubParameterScore(rows, "risk", "Commercial Risk", 1, "down", "Critical health plus a 48-day renewal window creates immediate retention exposure.");
-    setSubParameterScore(rows, "risk", "Vendor Displacement Risk", 1, "down", "The open escalation creates a realistic displacement risk until executive confidence is restored.");
-    setSubParameterScore(rows, "project-health", "Escalation Status", 1, "down", "The escalation is active and must be treated as the primary account-health driver.");
+    setSubParameterScore(rows, "relationship", "Executive access", 1, "down", "The executive conversation is currently escalation-led, not relationship-led.");
+    setSubParameterScore(rows, "relationship", "Stakeholder depth", 2, "down", "The account needs a credible internal sponsor who can own the recovery path.");
+    setSubParameterScore(rows, "risk", "Commercial risk", 1, "down", "Critical health plus a 48-day renewal window creates immediate retention exposure.");
+    setSubParameterScore(rows, "risk", "Displacement signal", 1, "down", "The open escalation creates a realistic displacement risk until executive confidence is restored.");
+    setSubParameterScore(rows, "project-health", "Blocker control", 1, "down", "The escalation is active and must be treated as the primary account-health driver.");
     setKpiAction(
       rows,
       "relationship",
@@ -1187,11 +1176,11 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "project-health", 1, "down");
     setKpiScore(rows, "resource-health", 2, "down");
     setKpiScore(rows, "risk", 1, "down");
-    setSubParameterScore(rows, "project-health", "Delivery Performance", 1, "down", "Exception triage workflows are damaging delivery confidence and require a recovery cadence.");
-    setSubParameterScore(rows, "project-health", "Client Confidence", 1, "down", "The relationship signal explicitly says delivery confidence is damaged.");
-    setSubParameterScore(rows, "resource-health", "Critical Resource Coverage", 2, "down", "The recovery plan needs named owners for exception triage, delivery lead coverage, and escalation handling.");
-    setSubParameterScore(rows, "resource-health", "Backup Readiness", 2, "down", "Backup coverage must be visible because the recovery path cannot depend on one overloaded owner.");
-    setSubParameterScore(rows, "risk", "Delivery Risk", 1, "down", "Delivery risk is the core account risk, not a generic renewal issue.");
+    setSubParameterScore(rows, "project-health", "Delivery execution quality", 1, "down", "Exception triage workflows are damaging delivery confidence and require a recovery cadence.");
+    setSubParameterScore(rows, "project-health", "Velocity health", 1, "down", "The relationship signal explicitly says delivery confidence is damaged.");
+    setSubParameterScore(rows, "resource-health", "Team fit", 2, "down", "The recovery plan needs named owners for exception triage, delivery lead coverage, and escalation handling.");
+    setSubParameterScore(rows, "resource-health", "Bench risk", 2, "down", "Backup coverage must be visible because the recovery path cannot depend on one overloaded owner.");
+    setSubParameterScore(rows, "risk", "Delivery risk", 1, "down", "Delivery risk is the core account risk, not a generic renewal issue.");
     setKpiAction(
       rows,
       "project-health",
@@ -1212,9 +1201,9 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "contract-health", 3, "down");
     setKpiScore(rows, "relationship", 3, "flat");
     setKpiScore(rows, "financial-health", 3, "flat");
-    setSubParameterScore(rows, "contract-health", "Price Uplift Protection", 2, "down", "Procurement friction means commercial protections need to be reconfirmed before renewal negotiation.");
-    setSubParameterScore(rows, "financial-health", "Contract vs Billing Alignment", 3, "flat", "Commercial review requires finance and contract evidence to be aligned before account confidence improves.");
-    setSubParameterScore(rows, "relationship", "Stakeholder Coverage", 3, "flat", "The decision map needs procurement plus business owner coverage, not just delivery contacts.");
+    setSubParameterScore(rows, "contract-health", "Commercial foundation", 2, "down", "Procurement friction means commercial protections need to be reconfirmed before renewal negotiation.");
+    setSubParameterScore(rows, "financial-health", "Outstanding invoices", 3, "flat", "Commercial review requires finance and contract evidence to be aligned before account confidence improves.");
+    setSubParameterScore(rows, "relationship", "Stakeholder breadth", 3, "flat", "The decision map needs procurement plus business owner coverage, not just delivery contacts.");
     setKpiAction(
       rows,
       "contract-health",
@@ -1226,9 +1215,9 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
   } else if (name.includes("hsbc")) {
     setKpiScore(rows, "relationship", 2, "down");
     setKpiScore(rows, "risk", 2, "down");
-    setSubParameterScore(rows, "relationship", "Stakeholder Coverage", 2, "down", "HSBC has an incomplete stakeholder map, so relationship coverage is the primary weakness.");
-    setSubParameterScore(rows, "relationship", "Relationship Penetration", 2, "down", "The account needs coverage across risk, compliance, procurement, and the business sponsor.");
-    setSubParameterScore(rows, "risk", "Commercial Risk", 3, "flat", "The risk workflow modernization path is not blocked commercially yet, but stakeholder gaps can turn into renewal friction.");
+    setSubParameterScore(rows, "relationship", "Stakeholder breadth", 2, "down", "HSBC has an incomplete stakeholder map, so relationship coverage is the primary weakness.");
+    setSubParameterScore(rows, "relationship", "Stakeholder depth", 2, "down", "The account needs coverage across risk, compliance, procurement, and the business sponsor.");
+    setSubParameterScore(rows, "risk", "Commercial risk", 3, "flat", "The risk workflow modernization path is not blocked commercially yet, but stakeholder gaps can turn into renewal friction.");
     setKpiAction(
       rows,
       "relationship",
@@ -1240,9 +1229,9 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
   } else if (name.includes("barclays")) {
     setKpiScore(rows, "contract-health", 2, "down");
     setKpiScore(rows, "financial-health", 3, "flat");
-    setSubParameterScore(rows, "contract-health", "Termination Protection", 2, "down", "Commercial review is pending, so contract protection and continuation assumptions are not yet safe.");
-    setSubParameterScore(rows, "contract-health", "Price Uplift Protection", 2, "down", "Pricing or uplift protection needs confirmation before the commercial review closes.");
-    setSubParameterScore(rows, "financial-health", "Revenue Trend", 3, "flat", "Revenue is not the first failure, but commercial review can constrain growth if unresolved.");
+    setSubParameterScore(rows, "contract-health", "Contractual protection", 2, "down", "Commercial review is pending, so contract protection and continuation assumptions are not yet safe.");
+    setSubParameterScore(rows, "contract-health", "Commercial foundation", 2, "down", "Pricing or uplift protection needs confirmation before the commercial review closes.");
+    setSubParameterScore(rows, "financial-health", "Revenue trend", 3, "flat", "Revenue is not the first failure, but commercial review can constrain growth if unresolved.");
     setKpiAction(
       rows,
       "contract-health",
@@ -1255,9 +1244,9 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "project-health", 3, "down");
     setKpiScore(rows, "risk", 2, "down");
     setKpiScore(rows, "customer-success", 3, "down");
-    setSubParameterScore(rows, "project-health", "Backlog Readiness", 2, "down", "Lab systems integration blockers make backlog readiness weaker than the account average.");
-    setSubParameterScore(rows, "customer-success", "Issue Resolution", 2, "down", "Technical blockers remain active and have not been converted into resolved issue evidence.");
-    setSubParameterScore(rows, "risk", "Delivery Risk", 2, "down", "The delivery risk is technical integration risk, not renewal or procurement risk.");
+    setSubParameterScore(rows, "project-health", "Backlog health", 2, "down", "Lab systems integration blockers make backlog readiness weaker than the account average.");
+    setSubParameterScore(rows, "customer-success", "Client feedback", 2, "down", "Technical blockers remain active and have not been converted into resolved issue evidence.");
+    setSubParameterScore(rows, "risk", "Delivery risk", 2, "down", "The delivery risk is technical integration risk, not renewal or procurement risk.");
     setKpiAction(
       rows,
       "project-health",
@@ -1270,9 +1259,9 @@ function applyNamedAccountReality(rows: KpiOverviewRow[], account: PortfolioAcco
     setKpiScore(rows, "customer-success", 2, "down");
     setKpiScore(rows, "relationship", 3, "down");
     setKpiScore(rows, "risk", 2, "down");
-    setSubParameterScore(rows, "customer-success", "Customer Confidence", 2, "down", "Clinical stakeholder concerns are the dominant signal, so confidence must be recovered directly.");
-    setSubParameterScore(rows, "customer-success", "Communication Satisfaction", 2, "down", "Concerns from clinical stakeholders indicate the communication loop needs tightening.");
-    setSubParameterScore(rows, "relationship", "Champion Strength", 3, "down", "A clinical champion or sponsor needs to validate the device-data workflow value path.");
+    setSubParameterScore(rows, "customer-success", "Client feedback", 2, "down", "Clinical stakeholder concerns are the dominant signal, so confidence must be recovered directly.");
+    setSubParameterScore(rows, "customer-success", "Stakeholder touchpoint sentiment", 2, "down", "Concerns from clinical stakeholders indicate the communication loop needs tightening.");
+    setSubParameterScore(rows, "relationship", "Executive access", 3, "down", "A clinical champion or sponsor needs to validate the device-data workflow value path.");
     setKpiAction(
       rows,
       "customer-success",
@@ -1593,7 +1582,7 @@ const seededAccountDocuments: UploadedAccountDocument[] = [
     uploadedAt: "Jun 5",
     uploadedAtMs: new Date("2026-06-05T14:00:00").getTime(),
     status: "Pending review",
-    affected: "Relationship Health, Risk Score",
+    affected: "Relationship Score, Risk Score",
     url: documentPreviewUrl("Executive Sponsor Sync Notes.docx", "Meeting minutes"),
   },
 ];
@@ -1618,7 +1607,7 @@ const seededDocumentProposals: DocumentSignalProposal[] = [
   {
     id: "proposal-score",
     sourceDocument: "Executive Sponsor Sync Notes.docx",
-    field: "Relationship Health",
+    field: "Relationship Score",
     currentValue: "4",
     proposedValue: "5",
     status: "Needs review",
@@ -3975,7 +3964,7 @@ function UploadDocumentDialog({
               <FieldLabel required>File</FieldLabel>
               <input
                 type="file"
-                accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
+                accept=".pdf,.doc,.docx,.pptx,.txt,.md,.xlsx,.xls"
                 disabled={saving}
                 className="mt-3 block w-full text-[13px] font-bold text-[#25352E] file:mr-3 file:rounded-full file:border-0 file:bg-[#25352E] file:px-4 file:py-2 file:text-[13px] file:font-bold file:text-[#FFF9EF]"
                 onChange={(event) => {
@@ -6812,7 +6801,7 @@ function AccountSourceUploadDialog({
             </span>
             <input
               type="file"
-              accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
+              accept=".pdf,.doc,.docx,.pptx,.txt,.md,.xlsx,.xls"
               multiple
               className="mt-3 block w-full text-[13px] font-bold text-[#25352E] file:mr-3 file:rounded-full file:border-0 file:bg-[#25352E] file:px-4 file:py-2 file:text-[13px] file:font-bold file:text-[#FFF9EF]"
               onChange={(event) => {
@@ -7549,7 +7538,7 @@ function PendingAccountCreationDialog({
                           <Plus className="h-4 w-4" />
                           <input
                             type="file"
-                            accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
+                            accept=".pdf,.doc,.docx,.pptx,.txt,.md,.xlsx,.xls"
                             className="sr-only"
                             onChange={(event) => {
                               const file = event.target.files?.[0];
@@ -7727,7 +7716,7 @@ function PendingAccountCreationDialog({
                     <Plus className="h-4 w-4" />
                     <input
                       type="file"
-                      accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
+                      accept=".pdf,.doc,.docx,.pptx,.txt,.md,.xlsx,.xls"
                       className="sr-only"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
@@ -8342,7 +8331,7 @@ function AccountOnboardingWorkspace({
                           <Plus className="h-4 w-4" />
                           <input
                             type="file"
-                            accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
+                            accept=".pdf,.doc,.docx,.pptx,.txt,.md,.xlsx,.xls"
                             className="sr-only"
                             onChange={(event) => {
                               const file = event.target.files?.[0];
@@ -8502,7 +8491,7 @@ function AccountOnboardingWorkspace({
                     <Plus className="h-4 w-4" />
                     <input
                       type="file"
-                      accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls"
+                      accept=".pdf,.doc,.docx,.pptx,.txt,.md,.xlsx,.xls"
                       className="sr-only"
                       onChange={(event) => {
                         const file = event.target.files?.[0];

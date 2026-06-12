@@ -604,7 +604,7 @@ export function SettingsPage() {
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#D8C7B4] bg-[#FFF8ED] px-3 py-2 text-[12px] font-black text-[#25352E]">
                 {playbookUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                 {playbookUploading ? "Uploading..." : "Upload playbook"}
-                <input type="file" className="hidden" disabled={playbookUploading} accept=".pdf,.doc,.docx,.txt,.md,.xls,.xlsx" onChange={(event) => {
+                <input type="file" className="hidden" disabled={playbookUploading} accept=".pdf,.doc,.docx,.pptx,.txt,.md,.xls,.xlsx" onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.currentTarget.value = "";
                   if (file) void uploadPlaybook(file);
@@ -619,7 +619,7 @@ export function SettingsPage() {
               {displayedPlaybooks.length === 0 ? (
                 <div className="rounded-2xl border border-[#E1D3C2] bg-[#FFF8ED] p-3 text-[13px] font-bold text-[#75685A]">
                   {showArchived
-                    ? "Upload PDF, DOCX, TXT, Markdown, XLS, or XLSX playbooks. Global playbooks apply to all accounts automatically."
+                    ? "Upload PDF, DOCX, PPTX, TXT, Markdown, XLS, or XLSX playbooks. Global playbooks apply to all accounts automatically."
                     : "No active playbooks are available. Turn on Show archived only if you need to review archived uploads."}
                 </div>
               ) : null}

@@ -6,7 +6,7 @@
  *   • Creates new Signal records when a KPI falls below a threshold
  *   • Escalates WARNING → CRITICAL when a score deteriorates further
  *   • Resolves existing signals when the KPI recovers above all thresholds
- *   • Creates an UPSELL_OPPORTUNITY INFO signal when whitespace + customer success are high
+ *   • Creates an UPSELL_OPPORTUNITY INFO signal when whitespace + CSAT are high
  *
  * All operations are idempotent — duplicate signals are never created.
  */
@@ -60,8 +60,8 @@ const RULES: TriggerRule[] = [
     signalType:         "NPS_DECLINE",
     criticalThreshold:  40,
     warningThreshold:   62,
-    titleFn: (s) => `Customer success at risk (${scoreOutOfFiveLabel(s)}/5)`,
-    descFn:  (s) => `Customer Success scored ${scoreOutOfFiveLabel(s)}/5 — customer feedback, confidence, delivery satisfaction, communication satisfaction, or issue resolution is below benchmark.`,
+    titleFn: (s) => `CSAT score at risk (${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `CSAT Score is ${scoreOutOfFiveLabel(s)}/5. Review direct client feedback and stakeholder touchpoint sentiment before proposing corrective action.`,
   },
   {
     kpiKey:             "risk",
@@ -100,8 +100,8 @@ const RULES: TriggerRule[] = [
     signalType:         "RELATIONSHIP_CHANGE",
     criticalThreshold:  null,
     warningThreshold:   50,
-    titleFn: (s) => `Relationship health needs attention (${scoreOutOfFiveLabel(s)}/5)`,
-    descFn:  (s) => `Relationship Health scored ${scoreOutOfFiveLabel(s)}/5. Review executive engagement, stakeholder coverage, relationship penetration, champion strength, and engagement cadence.`,
+    titleFn: (s) => `Relationship score needs attention (${scoreOutOfFiveLabel(s)}/5)`,
+    descFn:  (s) => `Relationship Score is ${scoreOutOfFiveLabel(s)}/5. Review stakeholder depth, stakeholder breadth, meeting cadence, and executive access.`,
   },
   {
     kpiKey:             "resourceHealth",
@@ -109,7 +109,7 @@ const RULES: TriggerRule[] = [
     criticalThreshold:  null,
     warningThreshold:   50,
     titleFn: (s) => `Resource health below benchmark (${scoreOutOfFiveLabel(s)}/5)`,
-    descFn:  (s) => `Resource Health scored ${scoreOutOfFiveLabel(s)}/5. Review dependency risk, critical coverage, team stability, skill alignment, and backup readiness.`,
+    descFn:  (s) => `Resource Health Score is ${scoreOutOfFiveLabel(s)}/5. Review team stability, team fit, turnover risk, and bench risk.`,
   },
 ];
 

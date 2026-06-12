@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "application/vnd.ms-excel",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "text/plain",
@@ -35,8 +36,22 @@ export async function POST(req: NextRequest) {
       "image/png",
       "image/jpeg",
     ];
-    if (!allowedMimes.includes(file.type)) {
-      return badRequest(`Unsupported file type: ${file.type}. Allowed: PDF, Word, Excel, TXT, CSV, images.`);
+    const allowedExtensions = [
+      ".pdf",
+      ".doc",
+      ".docx",
+      ".pptx",
+      ".xls",
+      ".xlsx",
+      ".txt",
+      ".csv",
+      ".png",
+      ".jpg",
+      ".jpeg",
+    ];
+    const ext = extname(file.name).toLowerCase();
+    if (!allowedMimes.includes(file.type) && !allowedExtensions.includes(ext)) {
+      return badRequest(`Unsupported file type: ${file.type}. Allowed: PDF, Word, PowerPoint, Excel, TXT, CSV, images.`);
     }
 
     // Max 20 MB
@@ -45,8 +60,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Write to public/uploads/<uuid><ext>
-    const ext      = extname(file.name) || ".bin";
-    const filename = `${randomUUID()}${ext}`;
+    const filename = `${randomUUID()}${ext || ".bin"}`;
     const uploadsDir = join(process.cwd(), "public", "uploads");
     await mkdir(uploadsDir, { recursive: true });
     const destPath = join(uploadsDir, filename);
