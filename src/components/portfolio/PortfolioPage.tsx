@@ -600,7 +600,7 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
   {
     id: "relationship",
     name: "Relationship Score",
-    weight: "15%",
+    weight: "20%",
     rationale: "Depth and breadth of stakeholder penetration and executive access.",
     score: 4,
     trend: "up",
@@ -627,7 +627,7 @@ const baseKpiOverviewRows: KpiOverviewRow[] = [
   {
     id: "customer-success",
     name: "CSAT Score",
-    weight: "20%",
+    weight: "15%",
     rationale: "Direct client satisfaction and most important relationship-quality signal.",
     score: 4,
     trend: "up",
@@ -1968,36 +1968,31 @@ const kycDraftSections: KycDraftSection[] = [
   },
 ];
 
-const onboardingScoreDrafts: OnboardingScoreDraft[] = defaultKpiWeights.map((kpi, index) => ({
+const onboardingScoreDrafts: OnboardingScoreDraft[] = defaultKpiWeights.map((kpi) => ({
   id: kpi.id,
   name: kpi.name,
   weight: kpi.weight,
-  score: [4.1, 3.8, 3.6, 3.2, 3.4, 3.7, 4.0, 3.1][index] ?? 3.5,
-  source: "Source files + user-confirmed context",
+  score: 3,
+  source: "Neutral baseline until source-backed evidence exists",
   why: {
     relationship:
-      "Proposed from the visible sponsor/contact evidence, current draft ownership fields, and any meeting or stakeholder references found in the source package. This score should stay above average only if the account has named executive access, more than one functional stakeholder, a clear internal champion, and a repeatable engagement cadence. If those contacts are not confirmed, the score should be reduced because relationship coverage would be too dependent on assumptions.",
+      "Defaulted to 3/5 because the setup has not yet confirmed executive engagement, stakeholder coverage, relationship penetration, champion strength, or engagement cadence with source-backed evidence. This should only move above neutral when uploaded documents or user-confirmed notes name the relevant stakeholders, cadence, and sponsor access. It should move below neutral if the evidence shows weak coverage, poor cadence, stakeholder churn, or no champion.",
     "contract-health":
-      "Proposed from renewal timing, contract/source-file references, and any commercial terms visible in the draft. The score reflects whether the account has enough contractual protection: duration, notice period, renewability, pricing/uplift language, and termination safeguards. If the uploaded files do not prove those terms, this should be treated as a provisional score until the SOW/MSA or signed contract evidence confirms them.",
+      "Defaulted to 3/5 because contract duration, notice-period protection, renewability, price-uplift protection, and termination protection are not fully proven yet. A signed contract, SOW, MSA, or user confirmation should drive this score instead of filename or ARR assumptions. Increase it only when protections are clear; reduce it when renewal terms, notice, pricing, or termination exposure are weak or missing.",
     "customer-success":
-      "Proposed from client feedback signals, issue-resolution notes, communication cadence, and delivery satisfaction evidence found in the onboarding context. A healthy score requires explicit signs that the client is satisfied and responsive, not just an absence of complaints. If feedback is indirect or missing, the score should remain conservative until a sponsor or recent meeting note confirms confidence.",
+      "Defaulted to 3/5 because NPS, customer confidence, delivery satisfaction, communication satisfaction, and issue-resolution evidence have not been confirmed. A healthy CSAT score requires explicit client feedback, survey results, sponsor sentiment, or meeting notes, not silence. Keep it neutral until the source package or user confirms satisfaction signals.",
     risk:
-      "Proposed from the strongest downside signals in the source package: market/industry exposure, competitor or replacement risk, delivery concerns, commercial friction, and stakeholder uncertainty. This score is intentionally conservative because risk should not be inferred away without evidence. It can improve once the setup confirms named risk owners, mitigation path, renewal path, and whether any delivery or commercial blocker is already resolved.",
+      "Defaulted to 3/5 because industry risk, competitive threat, vendor-displacement risk, delivery risk, and commercial risk have not been evidenced strongly enough to score up or down. Do not infer that risk is low just because no issue was found. Move this only when documents or user input confirm specific blockers, mitigations, competitors, commercial exposure, or delivery confidence.",
     "resource-health":
-      "Proposed from the available Tkxel team/resource information, role coverage, skill fit, backup readiness, and whether delivery depends on one critical person. If the uploaded material names only partial team coverage or does not prove continuity, the score should stay mid-range even when the rest of the account looks healthy. Strong named backups, stable staffing, and clear ownership would justify increasing it.",
+      "Defaulted to 3/5 because resource dependency, critical coverage, team stability, skill alignment, and backup readiness are not source-backed yet. This score should not use deterministic mock staffing assumptions. Raise it only when named resources, SOW roles, stability, and backup coverage are confirmed; lower it when single-person dependency or skill gaps are visible.",
     "project-health":
-      "Proposed from delivery scope, backlog/roadmap clarity, active escalation signals, and whether the account journey already includes a near-term governance checkpoint. The score is not just about whether work exists; it reflects whether delivery is controlled, visible, and trusted by the client. Missing roadmap, unresolved escalations, or vague delivery ownership should keep this score lower until confirmed.",
+      "Defaulted to 3/5 because delivery performance, backlog readiness, roadmap visibility, escalation status, and client delivery confidence are not yet proven. The account needs delivery notes, project docs, Jira evidence, or user confirmation before the score can become healthy or weak. Missing roadmap and escalation evidence should remain neutral, not guessed.",
     "financial-health":
-      "Proposed from ARR, payment/commercial references, invoice exposure, revenue trend, and contract-to-billing alignment evidence. A high score needs source-backed signs that revenue is stable, invoices are current, and commercial terms match what is being billed. If finance evidence is only inferred from ARR or filename context, the score should remain provisional rather than pretending payment health is known.",
+      "Defaulted to 3/5 because payment timeliness, outstanding exposure, client financial stability, revenue trend, and contract-to-billing alignment are not confirmed. ARR alone is not evidence of payment health. Increase this only with invoice, finance, or commercial records; reduce it when overdue exposure, declining revenue, or billing mismatches are proven.",
     whitespace:
-      "Proposed from expansion clues such as unsold services, cross-sell/upsell references, sponsor appetite, and whether the current work creates a credible next buying motion. This score can be positive even when overall health is not perfect, but only if there is evidence of a real expansion path. If the source package does not identify a sponsor, need, or next commercial step, the score should stay conservative and trigger validation rather than automatic optimism.",
-  }[kpi.id] ?? "Proposed from uploaded source files and the current account draft. Keep this score provisional unless the underlying sub-parameters have source-backed evidence or user confirmation.",
-  proposedTask:
-    index === 3
-      ? "Confirm risk owner and mitigation path before onboarding handoff."
-      : index === 7
-        ? "Validate expansion paths with the commercial sponsor."
-        : "",
+      "Defaulted to 3/5 because service penetration, cross-sell potential, upsell potential, growth signals, and expansion readiness are not yet backed by evidence. Do not infer opportunity from ARR or brand name alone. Move it up only when a sponsor, business need, buying signal, or next commercial step is visible; move it down if no expansion path exists.",
+  }[kpi.id] ?? "Defaulted to 3/5 because this KPI does not yet have enough source-backed evidence. Keep it neutral until the relevant sub-parameters are confirmed by documents or user input.",
+  proposedTask: "",
 }));
 
 function onboardingSteps(sourceFileCount: number, draft: AccountDraft, suggestions: OnboardingSuggestion[], documents: OnboardingDocument[], journey: OnboardingJourneyDraftItem[]): Array<{ label: string; status: OnboardingStepStatus }> {
